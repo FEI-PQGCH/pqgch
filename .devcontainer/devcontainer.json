@@ -5,7 +5,10 @@
     "vscode": {
       "settings": {
         "terminal.integrated.shell.linux": "/bin/bash"
-      }
+      },
+      "extensions": [
+        "golang.go" // Add the Go extension here
+      ]
     }
   }
 }
