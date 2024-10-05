@@ -1,0 +1,6 @@
+{
+  "go.toolsEnvVars": {
+    "CC": "gcc-9",
+    "CGO_CFLAGS_ALLOW": "-fwrapv"
+  }
+}
