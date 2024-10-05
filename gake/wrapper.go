@@ -33,8 +33,6 @@ import (
 	"unsafe"
 )
 
-const numParties = 3
-
 type KemKeyPair struct {
 	Pk [1184]byte
 	Sk [2400]byte
@@ -57,7 +55,7 @@ type Commitment struct {
 	Tag           [16]byte
 }
 
-func PrintParty(p Party) {
+func PrintParty(p Party, numParties int) {
 	fmt.Println("pk: ", p.Pk)
 	fmt.Println("sk: ", p.Sk)
 	fmt.Println("key_left: ", p.KeyLeft)
