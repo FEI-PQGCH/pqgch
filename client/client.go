@@ -8,79 +8,168 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"pqgch-client/shared"
 
 	"github.com/google/uuid"
+	"golang.org/x/term"
 )
 
 type Message struct {
-    ID      string `json:"id"`
-    Sender  string `json:"sender"`
-    Content string `json:"content"`
+	ID       string `json:"id"`
+	Sender   string `json:"sender"`
+	Content  string `json:"content"`
+	ClientID string `json:"client_id"` // Add this field to identify the sender.
 }
 
+var (
+	mu         sync.Mutex
+	clientID   string
+	clientName string
+)
+
 func main() {
-    // Parse command-line flags
-    configFlag := flag.String("config", "", "path to configuration file")
-    flag.Parse()
+	// Parse command-line flags.
+	configFlag := flag.String("config", "", "path to configuration file")
+	nameFlag := flag.String("name", "", "name of the client")
+	flag.Parse()
 
-    // Load configuration
-    var config shared.Config
-    if *configFlag != "" {
-        config = shared.GetConfigFromPath(*configFlag)
-    } else {
-        fmt.Println("Please provide a configuration file using the -config flag.")
-        return
-    }
+	// Load configuration.
+	var config shared.Config
+	if *configFlag != "" {
+		config = shared.GetConfigFromPath(*configFlag)
+	} else {
+		fmt.Println("Please provide a configuration file using the -config flag.")
+		return
+	}
 
-    // Seed the random number generator
-    rand.Seed(time.Now().UnixNano())
+	// Check for a provided client name or prompt the user.
+	if *nameFlag != "" {
+		clientName = *nameFlag
+	} else {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("Enter your name: ")
+		name, _ := reader.ReadString('\n')
+		clientName = strings.TrimSpace(name)
+	}
 
-    reader := bufio.NewReader(os.Stdin)
-    for {
-        fmt.Print("Enter message: ")
-        text, _ := reader.ReadString('\n')
+	// Generate a unique client ID.
+	clientID = uuid.New().String()
 
-        // Create a message with a unique ID
-        msg := Message{
-            ID:      uuid.New().String(),
-            Sender:  "Client",
-            Content: text,
-        }
+	// Seed the random number generator.
+	rand.Seed(time.Now().UnixNano())
 
-        // Randomly select a server to send the message to
-        serverConfig := config.Servers[rand.Intn(len(config.Servers))]
-        address := fmt.Sprintf("%s:%d", serverConfig.Address, serverConfig.Port)
+	// Randomly select a server to connect to.
+	serverConfig := config.Servers[rand.Intn(len(config.Servers))]
+	address := fmt.Sprintf("%s:%d", serverConfig.Address, serverConfig.Port)
 
-        // Connect to the server
-        conn, err := net.Dial("tcp", address)
-        if err != nil {
-            fmt.Printf("Error connecting to server %s: %v\n", address, err)
-            continue
-        }
-        fmt.Printf("Connected to server %s\n", address)
+	// Connect to the server.
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		fmt.Printf("Error connecting to server %s: %v\n", address, err)
+		return
+	}
+	defer conn.Close()
+	fmt.Printf("Connected to server %s\n", address)
 
-        // Send the message
-        // Existing code to marshal the message
-				msgData, err := json.Marshal(msg)
-				if err != nil {
-						fmt.Println("Error marshaling message:", err)
-						conn.Close()
-						continue
-				}
+	// Start a goroutine to listen for messages from the server.
+	go receiveMessages(conn)
 
-				// Append a newline character
-				msgData = append(msgData, '\n')
+	// Read messages from stdin and send them to the server.
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("Enter message: ")
+		text, _ := reader.ReadString('\n')
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
 
-				// Send the message
-				_, err = conn.Write(msgData)
-				if err != nil {
-						fmt.Println("Error sending message:", err)
-						conn.Close()
-						continue
-				}
+		// Create a message with a unique ID and the client ID.
+		msg := Message{
+			ID:       uuid.New().String(),
+			Sender:   clientName,
+			Content:  text,
+			ClientID: clientID,
+		}
 
-						}
+		// Send the message.
+		sendMessage(conn, msg)
+	}
+}
+
+// receiveMessages reads messages from the server and prints them.
+func receiveMessages(conn net.Conn) {
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		var msg Message
+		err := json.Unmarshal(scanner.Bytes(), &msg)
+		if err != nil {
+			fmt.Println("Error unmarshaling received message:", err)
+			continue
+		}
+
+		// Ignore messages from the same client.
+		if msg.ClientID == clientID {
+			continue
+		}
+
+		// Print the message, ensuring it doesn't interfere with user input.
+		printMessage(msg)
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading from server:", err)
+	}
+
+	fmt.Println("Disconnected from server")
+}
+
+// sendMessage sends a message to the server.
+func sendMessage(conn net.Conn, msg Message) {
+	msgData, err := json.Marshal(msg)
+	if err != nil {
+		fmt.Println("Error marshaling message:", err)
+		return
+	}
+
+	// Append a newline character.
+	msgData = append(msgData, '\n')
+
+	// Send the message.
+	_, err = conn.Write(msgData)
+	if err != nil {
+		fmt.Println("Error sending message:", err)
+	}
+}
+
+// printMessage handles displaying messages in a thread-safe way.
+func printMessage(msg Message) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Get the current state of terminal input.
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		state, err := term.GetState(fd)
+		if err != nil {
+			fmt.Println("Error getting terminal state:", err)
+			return
+		}
+
+		// Clear the current line.
+		fmt.Print("\r") // Move cursor to the beginning of the line.
+		fmt.Printf("%s: %s\n", msg.Sender, msg.Content)
+
+		// Restore the input prompt.
+		fmt.Print("Enter message: ")
+
+		// Restore terminal input state if the user was typing.
+		term.Restore(fd, state)
+	} else {
+		fmt.Printf("%s: %s\n", msg.Sender, msg.Content)
+	}
 }
