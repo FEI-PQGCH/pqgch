@@ -26,11 +26,9 @@ type Message struct {
 }
 
 func main() {
-	// Parse command-line flags
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
-	// Load configuration
 	var config shared.Config
 	if *configFlag != "" {
 		config = shared.GetConfigFromPath(*configFlag)
@@ -38,7 +36,6 @@ func main() {
 		config = shared.GetConfig()
 	}
 
-	// Get the port from command-line arguments or from config
 	_, selfPort, err := net.SplitHostPort(config.SelfAddress)
 	if err != nil {
 		fmt.Println("Error parsing self address from config:", err)
@@ -46,10 +43,8 @@ func main() {
 	}
 	port := selfPort
 
-	// Server address and port
 	address := fmt.Sprintf(":%s", port)
 
-	// Start listening for incoming connections
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		fmt.Println("Error starting TCP server:", err)
@@ -59,28 +54,23 @@ func main() {
 	fmt.Println("Server listening on", address)
 
 	for {
-		// Accept incoming connection
 		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection:", err)
 			continue
 		}
 
-		// Add the new client to the clients map
 		muClients.Lock()
 		clients[conn] = true
 		muClients.Unlock()
 		fmt.Println("New client connected:", conn.RemoteAddr())
 
-		// Handle connection in a new goroutine
 		go handleConnection(conn, config)
 	}
 }
 
-// handleConnection handles TCP connections and processes incoming messages.
 func handleConnection(conn net.Conn, config shared.Config) {
 	defer func() {
-		// Remove the client from the clients map on disconnect.
 		muClients.Lock()
 		delete(clients, conn)
 		muClients.Unlock()
@@ -99,23 +89,18 @@ func handleConnection(conn net.Conn, config shared.Config) {
 			continue
 		}
 
-		// Check if the message has been received before.
 		mu.Lock()
 		if receivedMessages[msg.ID] {
 			mu.Unlock()
 			continue
 		}
-		// Mark the message as received.
 		receivedMessages[msg.ID] = true
 		mu.Unlock()
 
-		// Process the message.
 		fmt.Printf("Received message from %s: %s\n", msg.Sender, msg.Content)
 
-		// Broadcast the message to all connected clients except the sender.
 		broadcastMessage(msg, conn)
 
-		// Forward the message to the left neighbor.
 		forwardMessage(msg, config.LeftNeighbor)
 	}
 	if err := scanner.Err(); err != nil {
@@ -124,13 +109,11 @@ func handleConnection(conn net.Conn, config shared.Config) {
 }
 
 
-// broadcastMessage sends the given message to all connected clients.
 func broadcastMessage(msg Message, senderConn net.Conn) {
 	muClients.Lock()
 	defer muClients.Unlock()
 
 	for client := range clients {
-		// Skip the client that originally sent the message.
 		if client == senderConn {
 			continue
 		}
@@ -141,7 +124,6 @@ func broadcastMessage(msg Message, senderConn net.Conn) {
 			continue
 		}
 
-		// Send message to the client.
 		_, err = client.Write(append(msgData, '\n'))
 		if err != nil {
 			fmt.Println("Error sending message to client:", err)
@@ -152,7 +134,6 @@ func broadcastMessage(msg Message, senderConn net.Conn) {
 	fmt.Printf("Broadcasted message from %s: %s\n", msg.Sender, msg.Content)
 }
 
-// forwardMessage forwards the message to the left neighbor over TCP.
 func forwardMessage(msg Message, neighborAddress string) {
 	conn, err := net.Dial("tcp", neighborAddress)
 	if err != nil {
@@ -167,7 +148,6 @@ func forwardMessage(msg Message, neighborAddress string) {
 		return
 	}
 
-	// Append a newline character
 	msgData = append(msgData, '\n')
 
 	_, err = conn.Write(msgData)
