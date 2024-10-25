@@ -151,5 +151,5 @@ func printMessage(msg Message) {
 
 	fmt.Printf("\r\033[K%s: %s\n", msg.Sender, msg.Content)
 
-	fmt.Print("Enter message: ")
+	fmt.Print("You: ")
 }

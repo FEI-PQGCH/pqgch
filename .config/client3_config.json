@@ -1,0 +1,8 @@
+{
+  "servers": [
+    {
+      "address": "localhost",
+      "port": 9002
+    }
+  ]
+}

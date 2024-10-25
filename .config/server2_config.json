@@ -21,6 +21,6 @@
     }
   ],
   "self_address": "localhost:9001",
-  "left_neighbor": "localhost:9000",
+  "left_neighbor": "localhost:9002",
   "right_neighbor": "localhost:9000"
 }
