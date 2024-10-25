@@ -15,14 +15,13 @@ import (
 	"pqgch-client/shared"
 
 	"github.com/google/uuid"
-	"golang.org/x/term"
 )
 
 type Message struct {
 	ID       string `json:"id"`
 	Sender   string `json:"sender"`
 	Content  string `json:"content"`
-	ClientID string `json:"client_id"` // Add this field to identify the sender.
+	ClientID string `json:"client_id"`
 }
 
 var (
@@ -66,7 +65,7 @@ func main() {
 	serverConfig := config.Servers[rand.Intn(len(config.Servers))]
 	address := fmt.Sprintf("%s:%d", serverConfig.Address, serverConfig.Port)
 
-	// Connect to the server.
+	// Connect to the server once.
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		fmt.Printf("Error connecting to server %s: %v\n", address, err)
@@ -117,7 +116,7 @@ func receiveMessages(conn net.Conn) {
 			continue
 		}
 
-		// Print the message, ensuring it doesn't interfere with user input.
+		// Print the message.
 		printMessage(msg)
 	}
 
@@ -146,33 +145,11 @@ func sendMessage(conn net.Conn, msg Message) {
 	}
 }
 
-// printMessage handles displaying messages in a thread-safe way.
-// printMessage handles displaying messages in a thread-safe way.
 func printMessage(msg Message) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	// Get the current state of terminal input.
-	fd := int(os.Stdin.Fd())
-	if term.IsTerminal(fd) {
-		// Save the current state of the terminal.
-		state, err := term.GetState(fd)
-		if err != nil {
-			fmt.Println("Error getting terminal state:", err)
-			return
-		}
+	fmt.Printf("\r\033[K%s: %s\n", msg.Sender, msg.Content)
 
-		// Clear the current input line.
-		fmt.Print("\r") // Move cursor to the beginning of the line.
-		fmt.Printf("%s: %s       \n", msg.Sender, msg.Content)
-
-		// Restore the input prompt.
-		fmt.Print("Enter message: ")
-
-		// Restore terminal input state if the user was typing.
-		term.Restore(fd, state)
-	} else {
-		fmt.Printf("%s: %s       \n", msg.Sender, msg.Content)
-	}
+	fmt.Print("Enter message: ")
 }
-
