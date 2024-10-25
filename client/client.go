@@ -147,6 +147,7 @@ func sendMessage(conn net.Conn, msg Message) {
 }
 
 // printMessage handles displaying messages in a thread-safe way.
+// printMessage handles displaying messages in a thread-safe way.
 func printMessage(msg Message) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -154,15 +155,16 @@ func printMessage(msg Message) {
 	// Get the current state of terminal input.
 	fd := int(os.Stdin.Fd())
 	if term.IsTerminal(fd) {
+		// Save the current state of the terminal.
 		state, err := term.GetState(fd)
 		if err != nil {
 			fmt.Println("Error getting terminal state:", err)
 			return
 		}
 
-		// Clear the current line.
+		// Clear the current input line.
 		fmt.Print("\r") // Move cursor to the beginning of the line.
-		fmt.Printf("%s: %s\n", msg.Sender, msg.Content)
+		fmt.Printf("%s: %s       \n", msg.Sender, msg.Content)
 
 		// Restore the input prompt.
 		fmt.Print("Enter message: ")
@@ -170,6 +172,7 @@ func printMessage(msg Message) {
 		// Restore terminal input state if the user was typing.
 		term.Restore(fd, state)
 	} else {
-		fmt.Printf("%s: %s\n", msg.Sender, msg.Content)
+		fmt.Printf("%s: %s       \n", msg.Sender, msg.Content)
 	}
 }
+
