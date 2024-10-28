@@ -1,26 +1,4 @@
 {
-  "database": {
-    "host": "localhost",
-    "password": "password",
-    "user": "user",
-    "port": 5432
-  },
-  "token": "your_token",
-  "servers": [
-    {
-      "address": "localhost",
-      "port": 9000
-    },
-    {
-      "address": "localhost",
-      "port": 9001
-    },
-    {
-      "address": "localhost",
-      "port": 9002
-    }
-  ],
-  "self_address": "localhost:9000",
-  "left_neighbor": "localhost:9001",
-  "right_neighbor": "localhost:9002"
+  "servers": ["localhost:9000", "localhost:9001", "localhost:9002"],
+  "index": 0
 }

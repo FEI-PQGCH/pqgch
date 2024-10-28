@@ -14,11 +14,11 @@ import (
 
 var (
 	receivedMessages = make(map[string]bool)
-	mu               sync.Mutex
+	muReceivedMessages               sync.Mutex
 	clients          = make(map[net.Conn]bool)
 	muClients        sync.Mutex
 	neighborConn     net.Conn
-	neighborConnMu   sync.Mutex
+	muNeighborConn   sync.Mutex
 )
 
 type Message struct {
@@ -32,14 +32,15 @@ func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
-	var config shared.Config
+	var config shared.ServConfig
 	if *configFlag != "" {
-		config = shared.GetConfigFromPath(*configFlag)
+		config = shared.GetServConfig(*configFlag)
 	} else {
-		config = shared.GetConfig()
+		fmt.Println("Please provide a configuration file using the -config flag.")
+		return
 	}
 
-	_, selfPort, err := net.SplitHostPort(config.SelfAddress)
+	_, selfPort, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
 		fmt.Println("Error parsing self address from config:", err)
 		return
@@ -56,7 +57,7 @@ func main() {
 	defer listener.Close()
 	fmt.Println("Server listening on", address)
 
-	go maintainNeighborConnection(config.LeftNeighbor)
+	go connectNeighbor(config.GetLeftNeighbor())
 
 	for {
 		conn, err := listener.Accept()
@@ -74,22 +75,22 @@ func main() {
 	}
 }
 
-func maintainNeighborConnection(neighborAddress string) {
+func connectNeighbor(neighborAddress string) {
 	for {
-		neighborConnMu.Lock()
+		muNeighborConn.Lock()
 		if neighborConn == nil {
 			fmt.Printf("Connecting to left neighbor at %s\n", neighborAddress)
 			conn, err := net.Dial("tcp", neighborAddress)
 			if err != nil {
 				fmt.Printf("Error connecting to left neighbor: %v. Retrying...\n", err)
-				neighborConnMu.Unlock()
+				muNeighborConn.Unlock()
 				time.Sleep(2 * time.Second)
 				continue
 			}
 			neighborConn = conn
 			fmt.Printf("Connected to left neighbor (%s)\n", neighborAddress)
 		}
-		neighborConnMu.Unlock()
+		muNeighborConn.Unlock()
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -114,13 +115,13 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 
-		mu.Lock()
+		muReceivedMessages.Lock()
 		if receivedMessages[msg.ID] {
-			mu.Unlock()
+			muReceivedMessages.Unlock()
 			continue
 		}
 		receivedMessages[msg.ID] = true
-		mu.Unlock()
+		muReceivedMessages.Unlock()
 
 		fmt.Printf("Received message from %s: %s\n", msg.Sender, msg.Content)
 
@@ -158,8 +159,8 @@ func broadcastMessage(msg Message, senderConn net.Conn) {
 }
 
 func forwardMessage(msg Message) {
-	neighborConnMu.Lock()
-	defer neighborConnMu.Unlock()
+	muNeighborConn.Lock()
+	defer muNeighborConn.Unlock()
 
 	if neighborConn == nil {
 		fmt.Println("No connection to left neighbor; message not forwarded.")
@@ -178,7 +179,7 @@ func forwardMessage(msg Message) {
 	if err != nil {
 		fmt.Printf("Error forwarding message to left neighbor: %v\n", err)
 		neighborConn.Close()
-		neighborConn = nil 
+		neighborConn = nil
 	} else {
 		fmt.Printf("Message forwarded to left neighbor\n")
 	}

@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"pqgch-client/shared"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -31,40 +29,28 @@ var (
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
-	nameFlag := flag.String("name", "", "name of the client")
 	flag.Parse()
 
-	var config shared.Config
+	var config shared.UserConfig
 	if *configFlag != "" {
-		config = shared.GetConfigFromPath(*configFlag)
+		config = shared.GetUserConfig(*configFlag)
 	} else {
 		fmt.Println("Please provide a configuration file using the -config flag.")
 		return
 	}
 
-	if *nameFlag != "" {
-		clientName = *nameFlag
-	} else {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Enter your name: ")
-		name, _ := reader.ReadString('\n')
-		clientName = strings.TrimSpace(name)
-	}
-
 	clientID = uuid.New().String()
 
-	rand.Seed(time.Now().UnixNano())
+	servAddr := config.LeadAddr
+	clientName = config.Name
 
-	serverConfig := config.Servers[rand.Intn(len(config.Servers))]
-	address := fmt.Sprintf("%s:%d", serverConfig.Address, serverConfig.Port)
-
-	conn, err := net.Dial("tcp", address)
+	conn, err := net.Dial("tcp", servAddr)
 	if err != nil {
-		fmt.Printf("Error connecting to server %s: %v\n", address, err)
+		fmt.Printf("Error connecting to server %s: %v\n", servAddr, err)
 		return
 	}
 	defer conn.Close()
-	fmt.Printf("Connected to server %s\n", address)
+	fmt.Printf("Connected to server %s\n", servAddr)
 
 	go receiveMessages(conn)
 

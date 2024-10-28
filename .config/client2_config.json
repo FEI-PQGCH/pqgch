@@ -1,8 +1,4 @@
 {
-  "servers": [
-    {
-      "address": "localhost",
-      "port": 9001
-    }
-  ]
+  "leadAddr": "localhost:9001",
+  "name": "Bob"
 }
