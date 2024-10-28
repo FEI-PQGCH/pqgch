@@ -8,11 +8,10 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"pqgch-client/shared"
 	"strings"
 	"sync"
 	"time"
-
-	"pqgch-client/shared"
 
 	"github.com/google/uuid"
 )

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"pqgch-client/shared"
 )
@@ -16,13 +17,15 @@ var (
 	mu               sync.Mutex
 	clients          = make(map[net.Conn]bool)
 	muClients        sync.Mutex
+	neighborConn     net.Conn
+	neighborConnMu   sync.Mutex
 )
 
 type Message struct {
 	ID       string `json:"id"`
 	Sender   string `json:"sender"`
 	Content  string `json:"content"`
-	ClientID string `json:"client_id"` 
+	ClientID string `json:"client_id"`
 }
 
 func main() {
@@ -53,6 +56,8 @@ func main() {
 	defer listener.Close()
 	fmt.Println("Server listening on", address)
 
+	go maintainNeighborConnection(config.LeftNeighbor)
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -65,11 +70,31 @@ func main() {
 		muClients.Unlock()
 		fmt.Println("New client connected:", conn.RemoteAddr())
 
-		go handleConnection(conn, config)
+		go handleConnection(conn)
 	}
 }
 
-func handleConnection(conn net.Conn, config shared.Config) {
+func maintainNeighborConnection(neighborAddress string) {
+	for {
+		neighborConnMu.Lock()
+		if neighborConn == nil {
+			fmt.Printf("Connecting to left neighbor at %s\n", neighborAddress)
+			conn, err := net.Dial("tcp", neighborAddress)
+			if err != nil {
+				fmt.Printf("Error connecting to left neighbor: %v. Retrying...\n", err)
+				neighborConnMu.Unlock()
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			neighborConn = conn
+			fmt.Printf("Connected to left neighbor (%s)\n", neighborAddress)
+		}
+		neighborConnMu.Unlock()
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func handleConnection(conn net.Conn) {
 	defer func() {
 		muClients.Lock()
 		delete(clients, conn)
@@ -100,14 +125,12 @@ func handleConnection(conn net.Conn, config shared.Config) {
 		fmt.Printf("Received message from %s: %s\n", msg.Sender, msg.Content)
 
 		broadcastMessage(msg, conn)
-
-		forwardMessage(msg, config.LeftNeighbor)
+		forwardMessage(msg)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Println("Error reading from client:", err)
 	}
 }
-
 
 func broadcastMessage(msg Message, senderConn net.Conn) {
 	muClients.Lock()
@@ -134,13 +157,14 @@ func broadcastMessage(msg Message, senderConn net.Conn) {
 	fmt.Printf("Broadcasted message from %s: %s\n", msg.Sender, msg.Content)
 }
 
-func forwardMessage(msg Message, neighborAddress string) {
-	conn, err := net.Dial("tcp", neighborAddress)
-	if err != nil {
-		fmt.Printf("Error connecting to left neighbor (%s): %v\n", neighborAddress, err)
+func forwardMessage(msg Message) {
+	neighborConnMu.Lock()
+	defer neighborConnMu.Unlock()
+
+	if neighborConn == nil {
+		fmt.Println("No connection to left neighbor; message not forwarded.")
 		return
 	}
-	defer conn.Close()
 
 	msgData, err := json.Marshal(msg)
 	if err != nil {
@@ -150,10 +174,12 @@ func forwardMessage(msg Message, neighborAddress string) {
 
 	msgData = append(msgData, '\n')
 
-	_, err = conn.Write(msgData)
+	_, err = neighborConn.Write(msgData)
 	if err != nil {
-		fmt.Println("Error forwarding message to left neighbor:", err)
+		fmt.Printf("Error forwarding message to left neighbor: %v\n", err)
+		neighborConn.Close()
+		neighborConn = nil 
 	} else {
-		fmt.Printf("Message forwarded to left neighbor (%s)\n", neighborAddress)
+		fmt.Printf("Message forwarded to left neighbor\n")
 	}
 }

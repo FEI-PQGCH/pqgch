@@ -1,0 +1,7 @@
+go run server.go -config="../.config/server1_config.json"
+go run server.go -config="../.config/server2_config.json"
+go run server.go -config="../.config/server3_config.json"
+
+go run client.go -config="../.config/client1_config.json" -name="Alice"
+go run client.go -config="../.config/client2_config.json" -name="Bob"
+go run client.go -config="../.config/client3_config.json" -name="Oscar"

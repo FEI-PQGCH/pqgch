@@ -20,9 +20,9 @@ type Config struct {
     } `json:"database"`
     Token         string         `json:"token"`
     Servers       []ServerConfig `json:"servers"`
-    SelfAddress   string         `json:"self_address"`   // Address of this server
-    LeftNeighbor  string         `json:"left_neighbor"`  // Left neighbor's address
-    RightNeighbor string         `json:"right_neighbor"` // Right neighbor's address
+    SelfAddress   string         `json:"self_address"`  
+    LeftNeighbor  string         `json:"left_neighbor"`  
+    RightNeighbor string         `json:"right_neighbor"` 
 }
 
 func GetConfig() Config {
