@@ -14,16 +14,8 @@ import (
 	"github.com/google/uuid"
 )
 
-type Message struct {
-	ID       string `json:"id"`
-	Sender   string `json:"sender"`
-	Content  string `json:"content"`
-	ClientID string `json:"client_id"`
-}
-
 var (
 	mu         sync.Mutex
-	clientID   string
 	clientName string
 )
 
@@ -39,10 +31,8 @@ func main() {
 		return
 	}
 
-	clientID = uuid.New().String()
-
 	servAddr := config.LeadAddr
-	clientName = config.Name
+	clientName = config.Names[config.Index]
 
 	conn, err := net.Dial("tcp", servAddr)
 	if err != nil {
@@ -51,6 +41,15 @@ func main() {
 	}
 	defer conn.Close()
 	fmt.Printf("Connected to server %s\n", servAddr)
+
+	loginMsg := shared.Message{
+		MsgID:      uuid.New().String(),
+		SenderID:   config.Index,
+		SenderName: clientName,
+		MsgType:    shared.MsgLogin,
+	}
+
+	sendMessage(conn, loginMsg)
 
 	go receiveMessages(conn)
 
@@ -63,11 +62,16 @@ func main() {
 			continue
 		}
 
-		msg := Message{
-			ID:       uuid.New().String(),
-			Sender:   clientName,
-			Content:  text,
-			ClientID: clientID,
+		msg := shared.Message{
+			MsgID:      uuid.New().String(),
+			SenderID:   config.Index,
+			SenderName: clientName,
+			Content:    text,
+			MsgType:    shared.MsgBroadcast,
+
+			// For specific client:
+			//MsgType:    shared.MsgIntra,
+			//ReceiverID: 1,
 		}
 		sendMessage(conn, msg)
 	}
@@ -76,14 +80,10 @@ func main() {
 func receiveMessages(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
-		var msg Message
+		var msg shared.Message
 		err := json.Unmarshal(scanner.Bytes(), &msg)
 		if err != nil {
 			fmt.Println("Error unmarshaling received message:", err)
-			continue
-		}
-
-		if msg.ClientID == clientID {
 			continue
 		}
 
@@ -97,7 +97,7 @@ func receiveMessages(conn net.Conn) {
 	fmt.Println("Disconnected from server")
 }
 
-func sendMessage(conn net.Conn, msg Message) {
+func sendMessage(conn net.Conn, msg shared.Message) {
 	msgData, err := json.Marshal(msg)
 	if err != nil {
 		fmt.Println("Error marshaling message:", err)
@@ -110,9 +110,9 @@ func sendMessage(conn net.Conn, msg Message) {
 	}
 }
 
-func printMessage(msg Message) {
+func printMessage(msg shared.Message) {
 	mu.Lock()
 	defer mu.Unlock()
-	fmt.Printf("\r\033[K%s: %s\n", msg.Sender, msg.Content)
+	fmt.Printf("\r\033[K%s: %s\n", msg.SenderName, msg.Content)
 	fmt.Print("You: ")
 }

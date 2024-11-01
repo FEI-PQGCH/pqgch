@@ -7,8 +7,9 @@ import (
 )
 
 type UserConfig struct {
-	LeadAddr string `json:"leadAddr"`
-	Name     string `json:"name"`
+	LeadAddr string   `json:"leadAddr"`
+	Names    []string `json:"names"`
+	Index    int      `json:"index"`
 }
 
 type ServConfig struct {

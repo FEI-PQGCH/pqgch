@@ -6,33 +6,33 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"pqgch-client/shared"
 	"sync"
 	"time"
 
-	"pqgch-client/shared"
+	"github.com/google/uuid"
 )
+
+type Client struct {
+	name  string
+	conn  net.Conn
+	index int
+}
 
 var (
-	receivedMessages = make(map[string]bool)
-	muReceivedMessages               sync.Mutex
-	clients          = make(map[net.Conn]bool)
-	muClients        sync.Mutex
-	neighborConn     net.Conn
-	muNeighborConn   sync.Mutex
+	receivedMessages   = make(map[string]bool)
+	muReceivedMessages sync.Mutex
+	clients            = make(map[Client]bool)
+	muClients          sync.Mutex
+	neighborConn       net.Conn
+	muNeighborConn     sync.Mutex
+	config             shared.ServConfig
 )
-
-type Message struct {
-	ID       string `json:"id"`
-	Sender   string `json:"sender"`
-	Content  string `json:"content"`
-	ClientID string `json:"client_id"`
-}
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
-	var config shared.ServConfig
 	if *configFlag != "" {
 		config = shared.GetServConfig(*configFlag)
 	} else {
@@ -66,13 +66,36 @@ func main() {
 			continue
 		}
 
-		muClients.Lock()
-		clients[conn] = true
-		muClients.Unlock()
-		fmt.Println("New client connected:", conn.RemoteAddr())
-
-		go handleConnection(conn)
+		clientLogin(conn)
 	}
+}
+
+func clientLogin(conn net.Conn) {
+	fmt.Println("New client connected:", conn.RemoteAddr())
+
+	scanner := bufio.NewScanner(conn)
+	scanner.Scan()
+	msgData := scanner.Bytes()
+
+	var msg shared.Message
+	err := json.Unmarshal(msgData, &msg)
+	if err != nil {
+		fmt.Println("Error unmarshaling message:", err)
+		conn.Close()
+	}
+
+	if msg.MsgType != shared.MsgLogin {
+		fmt.Println("Client did not send login message")
+		conn.Close()
+	}
+
+	client := Client{name: msg.SenderName, conn: conn, index: msg.SenderID}
+
+	muClients.Lock()
+	clients[client] = true
+	muClients.Unlock()
+
+	go handleConnection(client)
 }
 
 func connectNeighbor(neighborAddress string) {
@@ -89,26 +112,46 @@ func connectNeighbor(neighborAddress string) {
 			}
 			neighborConn = conn
 			fmt.Printf("Connected to left neighbor (%s)\n", neighborAddress)
+			loginMsg := shared.Message{
+				MsgID:      uuid.New().String(),
+				SenderID:   -1,
+				SenderName: "server",
+				MsgType:    shared.MsgLogin,
+			}
+
+			msgData, err := json.Marshal(loginMsg)
+			if err != nil {
+				fmt.Println("Error marshaling message:", err)
+				muNeighborConn.Unlock()
+				continue
+			}
+
+			_, err = neighborConn.Write(append(msgData, '\n'))
+			if err != nil {
+				fmt.Printf("Error sending login message to left neighbor: %v\n", err)
+				neighborConn.Close()
+				neighborConn = nil
+			}
 		}
 		muNeighborConn.Unlock()
 		time.Sleep(5 * time.Second)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(client Client) {
 	defer func() {
 		muClients.Lock()
-		delete(clients, conn)
+		delete(clients, client)
 		muClients.Unlock()
-		conn.Close()
-		fmt.Println("Client disconnected:", conn.RemoteAddr())
+		client.conn.Close()
+		fmt.Println("Client disconnected:", client.conn.RemoteAddr())
 	}()
 
-	scanner := bufio.NewScanner(conn)
+	scanner := bufio.NewScanner(client.conn)
 	for scanner.Scan() {
 		msgData := scanner.Bytes()
 
-		var msg Message
+		var msg shared.Message
 		err := json.Unmarshal(msgData, &msg)
 		if err != nil {
 			fmt.Println("Error unmarshaling message:", err)
@@ -116,29 +159,60 @@ func handleConnection(conn net.Conn) {
 		}
 
 		muReceivedMessages.Lock()
-		if receivedMessages[msg.ID] {
+		if receivedMessages[msg.MsgID] {
 			muReceivedMessages.Unlock()
 			continue
 		}
-		receivedMessages[msg.ID] = true
+		receivedMessages[msg.MsgID] = true
 		muReceivedMessages.Unlock()
 
-		fmt.Printf("Received message from %s: %s\n", msg.Sender, msg.Content)
+		fmt.Printf("Received message from %s: %s\n", msg.SenderName, msg.Content)
 
-		broadcastMessage(msg, conn)
-		forwardMessage(msg)
+		if msg.MsgType == shared.MsgBroadcast {
+			broadcastMessage(msg, client)
+			forwardMessage(msg)
+		}
+
+		if msg.MsgType == shared.MsgIntra {
+			sendMsgToClient(msg)
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Println("Error reading from client:", err)
 	}
 }
 
-func broadcastMessage(msg Message, senderConn net.Conn) {
+func sendMsgToClient(msg shared.Message) {
 	muClients.Lock()
 	defer muClients.Unlock()
 
 	for client := range clients {
-		if client == senderConn {
+		if client.index == msg.ReceiverID && client.index != msg.SenderID {
+			msgData, err := json.Marshal(msg)
+			if err != nil {
+				fmt.Println("Error marshaling message:", err)
+				continue
+			}
+
+			_, err = client.conn.Write(append(msgData, '\n'))
+			if err != nil {
+				fmt.Println("Error sending message to client:", err)
+				client.conn.Close()
+				delete(clients, client)
+			}
+			fmt.Printf("Sent message to %s: %s\n", client.name, msg.Content)
+			return
+		}
+	}
+	fmt.Printf("Not sending message: either did not find client, or sender is receiver\n")
+}
+
+func broadcastMessage(msg shared.Message, sender Client) {
+	muClients.Lock()
+	defer muClients.Unlock()
+
+	for client := range clients {
+		if client == sender {
 			continue
 		}
 
@@ -148,17 +222,17 @@ func broadcastMessage(msg Message, senderConn net.Conn) {
 			continue
 		}
 
-		_, err = client.Write(append(msgData, '\n'))
+		_, err = client.conn.Write(append(msgData, '\n'))
 		if err != nil {
 			fmt.Println("Error sending message to client:", err)
-			client.Close()
+			client.conn.Close()
 			delete(clients, client)
 		}
 	}
-	fmt.Printf("Broadcasted message from %s: %s\n", msg.Sender, msg.Content)
+	fmt.Printf("Broadcasted message from %s: %s\n", msg.SenderName, msg.Content)
 }
 
-func forwardMessage(msg Message) {
+func forwardMessage(msg shared.Message) {
 	muNeighborConn.Lock()
 	defer muNeighborConn.Unlock()
 

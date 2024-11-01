@@ -1,4 +1,5 @@
 {
   "leadAddr": "localhost:9001",
-  "name": "Bob"
+  "names": ["Bob"],
+  "index": 0
 }
