@@ -17,3 +17,11 @@ run: build
 	@./$(BINARY_NAME)
 	@echo "make: Removing the binary after execution..."
 	@rm -f $(BINARY_NAME)
+
+c%:
+	@echo "make: Running client$*..."
+	@go run client/client.go -config=".config/c$*conf.json"
+
+s%:
+	@echo "make: Running server$*..."
+	@go run server/server.go -config=".config/s$*conf.json"
