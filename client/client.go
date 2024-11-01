@@ -49,7 +49,7 @@ func main() {
 		MsgType:    shared.MsgLogin,
 	}
 
-	sendMessage(conn, loginMsg)
+	shared.SendMessage(conn, loginMsg)
 
 	go receiveMessages(conn)
 
@@ -73,7 +73,7 @@ func main() {
 			//MsgType:    shared.MsgIntra,
 			//ReceiverID: 1,
 		}
-		sendMessage(conn, msg)
+		shared.SendMessage(conn, msg)
 	}
 }
 
@@ -95,19 +95,6 @@ func receiveMessages(conn net.Conn) {
 	}
 
 	fmt.Println("Disconnected from server")
-}
-
-func sendMessage(conn net.Conn, msg shared.Message) {
-	msgData, err := json.Marshal(msg)
-	if err != nil {
-		fmt.Println("Error marshaling message:", err)
-		return
-	}
-	msgData = append(msgData, '\n')
-	_, err = conn.Write(msgData)
-	if err != nil {
-		fmt.Println("Error sending message:", err)
-	}
 }
 
 func printMessage(msg shared.Message) {

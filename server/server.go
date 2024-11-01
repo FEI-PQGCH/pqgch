@@ -119,14 +119,7 @@ func connectNeighbor(neighborAddress string) {
 				MsgType:    shared.MsgLogin,
 			}
 
-			msgData, err := json.Marshal(loginMsg)
-			if err != nil {
-				fmt.Println("Error marshaling message:", err)
-				muNeighborConn.Unlock()
-				continue
-			}
-
-			_, err = neighborConn.Write(append(msgData, '\n'))
+			err = shared.SendMessage(neighborConn, loginMsg)
 			if err != nil {
 				fmt.Printf("Error sending login message to left neighbor: %v\n", err)
 				neighborConn.Close()
@@ -188,18 +181,13 @@ func sendMsgToClient(msg shared.Message) {
 
 	for client := range clients {
 		if client.index == msg.ReceiverID && client.index != msg.SenderID {
-			msgData, err := json.Marshal(msg)
-			if err != nil {
-				fmt.Println("Error marshaling message:", err)
-				continue
-			}
-
-			_, err = client.conn.Write(append(msgData, '\n'))
+			err := shared.SendMessage(client.conn, msg)
 			if err != nil {
 				fmt.Println("Error sending message to client:", err)
 				client.conn.Close()
 				delete(clients, client)
 			}
+
 			fmt.Printf("Sent message to %s: %s\n", client.name, msg.Content)
 			return
 		}
@@ -216,19 +204,15 @@ func broadcastMessage(msg shared.Message, sender Client) {
 			continue
 		}
 
-		msgData, err := json.Marshal(msg)
-		if err != nil {
-			fmt.Println("Error marshaling message:", err)
-			continue
-		}
-
-		_, err = client.conn.Write(append(msgData, '\n'))
+		err := shared.SendMessage(client.conn, msg)
 		if err != nil {
 			fmt.Println("Error sending message to client:", err)
 			client.conn.Close()
 			delete(clients, client)
+			return
 		}
 	}
+
 	fmt.Printf("Broadcasted message from %s: %s\n", msg.SenderName, msg.Content)
 }
 
@@ -241,20 +225,13 @@ func forwardMessage(msg shared.Message) {
 		return
 	}
 
-	msgData, err := json.Marshal(msg)
+	err := shared.SendMessage(neighborConn, msg)
 	if err != nil {
-		fmt.Println("Error marshaling message:", err)
+		fmt.Println("Error forwarding message to left neighbor:", err)
+		neighborConn.Close()
+		neighborConn = nil
 		return
 	}
 
-	msgData = append(msgData, '\n')
-
-	_, err = neighborConn.Write(msgData)
-	if err != nil {
-		fmt.Printf("Error forwarding message to left neighbor: %v\n", err)
-		neighborConn.Close()
-		neighborConn = nil
-	} else {
-		fmt.Printf("Message forwarded to left neighbor\n")
-	}
+	fmt.Printf("Forwarded message from %s: %s\n", msg.SenderName, msg.Content)
 }
