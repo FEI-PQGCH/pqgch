@@ -2,10 +2,10 @@ package shared
 
 type Message struct {
 	// Routing metadata
-	MsgID      string `json:"msg_id"`
-	SenderID   int    `json:"send_id"`
-	ReceiverID int    `json:"recv_id"`
-	MsgType    int    `json:"msg_type"`
+	MsgID      string `json:"msgId"`
+	SenderID   int    `json:"sendId"`
+	ReceiverID int    `json:"recvId"`
+	MsgType    int    `json:"msgType"`
 	// Message content for user
 	SenderName string `json:"sender"`
 	Content    string `json:"content"`
