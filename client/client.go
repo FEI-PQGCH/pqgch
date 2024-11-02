@@ -15,91 +15,98 @@ import (
 )
 
 var (
-	mu         sync.Mutex
-	clientName string
+	mu        sync.Mutex
+	config    shared.UserConfig
+	tkRight   []byte
+	eskaRight []byte
+	keyLeft   [32]byte
+	keyRight  [32]byte
+	Xs        [][32]byte
 )
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
-	var config shared.UserConfig
 	if *configFlag != "" {
 		config = shared.GetUserConfig(*configFlag)
 	} else {
-		fmt.Println("Please provide a configuration file using the -config flag.")
+		fmt.Println("please provide a configuration file using the -config flag")
 		return
 	}
 
 	servAddr := config.LeadAddr
-	clientName = config.Names[config.Index]
-
 	conn, err := net.Dial("tcp", servAddr)
 	if err != nil {
-		fmt.Printf("Error connecting to server %s: %v\n", servAddr, err)
+		fmt.Printf("error connecting to server %s: %v\n", servAddr, err)
 		return
 	}
 	defer conn.Close()
-	fmt.Printf("Connected to server %s\n", servAddr)
+	fmt.Printf("connected to server %s\n", servAddr)
 
+	Xs = make([][32]byte, len(config.Names))
 	loginMsg := shared.Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
-		SenderName: clientName,
+		SenderName: config.GetName(),
 		MsgType:    shared.MsgLogin,
 	}
+	shared.SendMsg(conn, loginMsg)
 
-	shared.SendMessage(conn, loginMsg)
-
-	go receiveMessages(conn)
+	go receiveMsgs(conn)
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("You: ")
 		text, _ := reader.ReadString('\n')
 		text = strings.TrimSpace(text)
-		if text == "" {
+
+		switch text {
+		case "":
 			continue
+		case "init":
+			initProtocol(conn)
+		default:
+			broadcastMsg(conn, text)
 		}
-
-		msg := shared.Message{
-			MsgID:      uuid.New().String(),
-			SenderID:   config.Index,
-			SenderName: clientName,
-			Content:    text,
-			MsgType:    shared.MsgBroadcast,
-
-			// For specific client:
-			//MsgType:    shared.MsgIntra,
-			//ReceiverID: 1,
-		}
-		shared.SendMessage(conn, msg)
 	}
 }
 
-func receiveMessages(conn net.Conn) {
+func initProtocol(conn net.Conn) {
+	fmt.Println("initiating the protocol")
+	msg := GetAkeInitAMsg()
+	fmt.Println("sending AKE A message")
+	shared.SendMsg(conn, msg)
+}
+
+func broadcastMsg(conn net.Conn, text string) {
+	msg := shared.Message{
+		MsgID:      uuid.New().String(),
+		SenderID:   config.Index,
+		SenderName: config.GetName(),
+		Content:    text,
+		MsgType:    shared.MsgBroadcast,
+	}
+	shared.SendMsg(conn, msg)
+}
+
+func receiveMsgs(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
 		var msg shared.Message
 		err := json.Unmarshal(scanner.Bytes(), &msg)
 		if err != nil {
-			fmt.Println("Error unmarshaling received message:", err)
+			fmt.Println("error unmarshaling received message:", err)
 			continue
 		}
 
-		printMessage(msg)
+		handler := GetHandler(msg.MsgType)
+		handler.HandleMessage(conn, msg)
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Println("Error reading from server:", err)
+		fmt.Println("error reading from server:", err)
 	}
 
-	fmt.Println("Disconnected from server")
-}
-
-func printMessage(msg shared.Message) {
-	mu.Lock()
-	defer mu.Unlock()
-	fmt.Printf("\r\033[K%s: %s\n", msg.SenderName, msg.Content)
-	fmt.Print("You: ")
+	fmt.Println("disconnected from server")
 }

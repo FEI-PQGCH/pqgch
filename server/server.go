@@ -29,6 +29,9 @@ var (
 	config             shared.ServConfig
 )
 
+// TODO: make server a part of intra cluster gake
+// TODO: refactor to use factory pattern for handling messages
+
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
@@ -119,7 +122,7 @@ func connectNeighbor(neighborAddress string) {
 				MsgType:    shared.MsgLogin,
 			}
 
-			err = shared.SendMessage(neighborConn, loginMsg)
+			err = shared.SendMsg(neighborConn, loginMsg)
 			if err != nil {
 				fmt.Printf("Error sending login message to left neighbor: %v\n", err)
 				neighborConn.Close()
@@ -159,14 +162,22 @@ func handleConnection(client Client) {
 		receivedMessages[msg.MsgID] = true
 		muReceivedMessages.Unlock()
 
-		fmt.Printf("Received message from %s: %s\n", msg.SenderName, msg.Content)
-
-		if msg.MsgType == shared.MsgBroadcast {
+		fmt.Printf("From %s ", msg.SenderName)
+		if msg.MsgType == shared.MsgIntraBroadcast {
+			fmt.Println("received intra-broadcast message")
 			broadcastMessage(msg, client)
-			forwardMessage(msg)
+			continue
 		}
 
-		if msg.MsgType == shared.MsgIntra {
+		if msg.MsgType == shared.MsgBroadcast {
+			fmt.Println("received broadcast message")
+			broadcastMessage(msg, client)
+			forwardMessage(msg)
+			continue
+		}
+
+		if msg.MsgType == shared.MsgAkeSendA || msg.MsgType == shared.MsgAkeSendB {
+			fmt.Println("received AKE message")
 			sendMsgToClient(msg)
 		}
 	}
@@ -181,7 +192,7 @@ func sendMsgToClient(msg shared.Message) {
 
 	for client := range clients {
 		if client.index == msg.ReceiverID && client.index != msg.SenderID {
-			err := shared.SendMessage(client.conn, msg)
+			err := shared.SendMsg(client.conn, msg)
 			if err != nil {
 				fmt.Println("Error sending message to client:", err)
 				client.conn.Close()
@@ -204,7 +215,7 @@ func broadcastMessage(msg shared.Message, sender Client) {
 			continue
 		}
 
-		err := shared.SendMessage(client.conn, msg)
+		err := shared.SendMsg(client.conn, msg)
 		if err != nil {
 			fmt.Println("Error sending message to client:", err)
 			client.conn.Close()
@@ -225,7 +236,7 @@ func forwardMessage(msg shared.Message) {
 		return
 	}
 
-	err := shared.SendMessage(neighborConn, msg)
+	err := shared.SendMsg(neighborConn, msg)
 	if err != nil {
 		fmt.Println("Error forwarding message to left neighbor:", err)
 		neighborConn.Close()

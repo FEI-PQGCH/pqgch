@@ -92,7 +92,7 @@ func GetKemKeyPair() KemKeyPair {
 	return KemKeyPair{pk, sk}
 }
 
-func KexAkeInitA(pkb []byte) ([]byte, []byte, []byte) {
+func KexAkeInitA(pkb [1184]byte) ([]byte, []byte, []byte) {
 	var ake_senda [2272]byte
 	var tk [32]byte
 	var eska [2400]byte
@@ -106,7 +106,7 @@ func KexAkeInitA(pkb []byte) ([]byte, []byte, []byte) {
 	return ake_senda[:], tk[:], eska[:]
 }
 
-func KexAkeSharedB(ake_senda []byte, skb []byte, pka []byte) ([]byte, []byte) {
+func KexAkeSharedB(ake_senda []byte, skb []byte, pka [1184]byte) ([]byte, [32]byte) {
 	var ake_sendb [2176]byte
 	var kb [32]byte
 
@@ -117,10 +117,10 @@ func KexAkeSharedB(ake_senda []byte, skb []byte, pka []byte) ([]byte, []byte) {
 		(*C.uchar)(unsafe.Pointer(&skb[0])),
 		(*C.uchar)(unsafe.Pointer(&pka[0])))
 
-	return ake_sendb[:], kb[:]
+	return ake_sendb[:], kb
 }
 
-func KexAkeSharedA(ake_sendb []byte, tk []byte, eska []byte, ska []byte) []byte {
+func KexAkeSharedA(ake_sendb []byte, tk []byte, eska []byte, ska []byte) [32]byte {
 	var ka [32]byte
 
 	C.kex_ake_sharedA(
@@ -130,7 +130,7 @@ func KexAkeSharedA(ake_sendb []byte, tk []byte, eska []byte, ska []byte) []byte 
 		(*C.uchar)(unsafe.Pointer(&eska[0])),
 		(*C.uchar)(unsafe.Pointer(&ska[0])))
 
-	return ka[:]
+	return ka
 }
 
 func ComputeXsCommitment(
@@ -182,7 +182,7 @@ func CheckCommitments() {
 
 }
 
-func ComputerMasterKey(numParties int, partyIndex int, key_left [32]byte, xs [][32]byte) [][32]byte {
+func ComputeMasterKey(numParties int, partyIndex int, key_left [32]byte, xs [][32]byte) [][32]byte {
 	masterKey := make([][32]byte, numParties)
 
 	copy(masterKey[partyIndex][:], key_left[:])

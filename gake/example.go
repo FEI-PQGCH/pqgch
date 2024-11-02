@@ -27,13 +27,13 @@ func Example() [64]byte {
 	for i := 0; i < numParties; i++ {
 		var right = (i + 1) % numParties
 		var left = (i - 1 + numParties) % numParties
-		ake_senda, tk, eska := KexAkeInitA(parties[right].Pk[:])
-		ake_sendb, kb := KexAkeSharedB(ake_senda, parties[right].Sk[:], parties[i].Pk[:])
+		ake_senda, tk, eska := KexAkeInitA(parties[right].Pk)
+		ake_sendb, kb := KexAkeSharedB(ake_senda, parties[right].Sk[:], parties[i].Pk)
 		ka := KexAkeSharedA(ake_sendb, tk, eska, parties[i].Sk[:])
 		copy(parties[i].KeyRight[:], ka[:])
 		copy(parties[right].KeyLeft[:], kb[:])
-		ake_senda2, tk2, eska2 := KexAkeInitA(parties[left].Pk[:])
-		ake_sendb2, kb2 := KexAkeSharedB(ake_senda2, parties[left].Sk[:], parties[i].Pk[:])
+		ake_senda2, tk2, eska2 := KexAkeInitA(parties[left].Pk)
+		ake_sendb2, kb2 := KexAkeSharedB(ake_senda2, parties[left].Sk[:], parties[i].Pk)
 		ka2 := KexAkeSharedA(ake_sendb2, tk2, eska2, parties[i].Sk[:])
 		copy(parties[i].KeyLeft[:], ka2[:])
 		copy(parties[left].KeyRight[:], kb2[:])
@@ -55,7 +55,7 @@ func Example() [64]byte {
 	}
 	// Computer Master keys
 	for i := 0; i < numParties; i++ {
-		masterkey := ComputerMasterKey(numParties, i, parties[i].KeyLeft, parties[i].Xs)
+		masterkey := ComputeMasterKey(numParties, i, parties[i].KeyLeft, parties[i].Xs)
 		copy(parties[i].MasterKey, masterkey)
 	}
 	for i := 0; i < numParties; i++ {

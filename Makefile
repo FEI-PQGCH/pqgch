@@ -20,8 +20,8 @@ run: build
 
 c%:
 	@echo "make: Running client$*..."
-	@go run client/client.go -config=".config/c$*conf.json"
+	@cd client && CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go -config="../.config/c$*conf.json"
 
 s%:
 	@echo "make: Running server$*..."
-	@go run server/server.go -config=".config/s$*conf.json"
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run server/server.go -config=".config/s$*conf.json"

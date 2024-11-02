@@ -1,18 +1,22 @@
 package shared
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"log"
 	"os"
 )
 
 type UserConfig struct {
-	LeadAddr string   `json:"leadAddr"`
-	Names    []string `json:"names"`
-	Index    int      `json:"index"`
+	LeadAddr   string   `json:"leadAddr"`
+	Names      []string `json:"names"`
+	Index      int      `json:"index"`
+	PublicKeys []string `json:"publicKeys"`
+	SecretKey  string   `json:"secretKey"`
 }
 
 type ServConfig struct {
+	Names     []string `json:"names"`
 	ServAddrs []string `json:"servers"`
 	Index     int      `json:"index"`
 }
@@ -33,6 +37,22 @@ func GetUserConfig(path string) UserConfig {
 	}
 
 	return config
+}
+
+func (c *UserConfig) GetName() string {
+	return c.Names[c.Index]
+}
+
+func (c *UserConfig) GetDecodedSecretKey() []byte {
+	decodedSecretKey, _ := base64.StdEncoding.DecodeString(c.SecretKey)
+	return decodedSecretKey
+}
+
+func (c *UserConfig) GetDecodedPublicKey(index int) [1184]byte {
+	decodedPublicKey := [1184]byte{}
+	decodedPubKey, _ := base64.StdEncoding.DecodeString(c.PublicKeys[index])
+	copy(decodedPublicKey[:], decodedPubKey)
+	return decodedPublicKey
 }
 
 func GetServConfig(path string) ServConfig {

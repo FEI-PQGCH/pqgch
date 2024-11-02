@@ -19,11 +19,13 @@ type Message struct {
 
 const (
 	MsgLogin = iota
-	MsgIntra
+	MsgIntraBroadcast
 	MsgBroadcast
+	MsgAkeSendA
+	MsgAkeSendB
 )
 
-func SendMessage(conn net.Conn, msg Message) error {
+func SendMsg(conn net.Conn, msg Message) error {
 	msgData, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("error marshaling message: %w", err)
