@@ -10,6 +10,7 @@ import (
 )
 
 // TODO: refactor protocol.go to not use global variables
+// TODO: use AES-GCM for encrypting messages after successful protocol execution
 
 func CheckLeftRightKeys() (bool, shared.Message) {
 	if keyRight != [32]byte{} && keyLeft != [32]byte{} {
