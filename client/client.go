@@ -15,13 +15,14 @@ import (
 )
 
 var (
-	mu        sync.Mutex
-	config    shared.UserConfig
-	tkRight   []byte
-	eskaRight []byte
-	keyLeft   [32]byte
-	keyRight  [32]byte
-	Xs        [][32]byte
+	mu           sync.Mutex
+	config       shared.UserConfig
+	tkRight      []byte
+	eskaRight    []byte
+	keyLeft      [32]byte
+	keyRight     [32]byte
+	Xs           [][32]byte
+	sharedSecret [32]byte
 )
 
 func main() {
@@ -80,11 +81,22 @@ func initProtocol(conn net.Conn) {
 }
 
 func broadcastMsg(conn net.Conn, text string) {
+	if sharedSecret == [32]byte{} {
+		fmt.Println("no shared secret, skipping")
+		return
+	}
+
+	var cipherText, err = EncryptAesGcm(text, sharedSecret)
+	if err != nil {
+		fmt.Println("error encrypting message")
+		return
+	}
+
 	msg := shared.Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		Content:    text,
+		Content:    cipherText,
 		MsgType:    shared.MsgBroadcast,
 	}
 	shared.SendMsg(conn, msg)

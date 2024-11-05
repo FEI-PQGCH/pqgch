@@ -65,6 +65,13 @@ func printMessage(msg shared.Message) {
 }
 
 func (h *DefaultHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+	var plainText, err = DecryptAesGcm(msg.Content, sharedSecret[:])
+	if err != nil {
+		fmt.Println("error decrypting message")
+		return
+	}
+
+	msg.Content = plainText
 	printMessage(msg)
 }
 
