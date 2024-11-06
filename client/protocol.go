@@ -15,7 +15,6 @@ import (
 )
 
 // TODO: refactor protocol.go to not use global variables
-// TODO: use AES-GCM for encrypting messages after successful protocol execution
 
 func CheckLeftRightKeys() (bool, shared.Message) {
 	if keyRight != [32]byte{} && keyLeft != [32]byte{} {
@@ -28,7 +27,7 @@ func CheckLeftRightKeys() (bool, shared.Message) {
 }
 
 func GetXiMsg() shared.Message {
-	xi, _, _ := gake.ComputeXsCommitment(
+	xi, _, _ /* TODO: mi1, mi2 */ := gake.ComputeXsCommitment(
 		config.Index,
 		keyRight,
 		keyLeft,
