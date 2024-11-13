@@ -21,10 +21,10 @@ type DefaultHandler struct{}
 
 func (h *AkeSendAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 	fmt.Println("received AKE A message")
-	responseMsg := GetAkeSharedBMsg(msg)
+	responseMsg := shared.GetAkeSharedBMsg(msg, config, keyLeft)
 	fmt.Println("sending AKE B message")
 	shared.SendMsg(conn, responseMsg)
-	ok, msg := CheckLeftRightKeys()
+	ok, msg := shared.CheckLeftRightKeys(keyRight, keyLeft, Xs, config, &sharedSecret)
 
 	if ok {
 		fmt.Println("sending Xi")
@@ -37,7 +37,7 @@ func (h *AkeSendBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	keyRight = gake.KexAkeSharedA(akeSendB, tkRight, eskaRight, config.GetDecodedSecretKey())
 	fmt.Println("established shared key with right neighbor")
-	ok, msg := CheckLeftRightKeys()
+	ok, msg := shared.CheckLeftRightKeys(keyRight, keyLeft, Xs, config, &sharedSecret)
 
 	if ok {
 		fmt.Println("sending Xi")
@@ -54,7 +54,7 @@ func (h *IntraBroadcastHandler) HandleMessage(conn net.Conn, msg shared.Message)
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
 	Xs[msg.SenderID] = xiArr
-	CheckXs()
+	shared.CheckXs(Xs, config, keyLeft, &sharedSecret)
 }
 
 func printMessage(msg shared.Message) {
@@ -65,7 +65,7 @@ func printMessage(msg shared.Message) {
 }
 
 func (h *DefaultHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	var plainText, err = DecryptAesGcm(msg.Content, sharedSecret[:])
+	var plainText, err = shared.DecryptAesGcm(msg.Content, sharedSecret[:])
 	if err != nil {
 		fmt.Println("error decrypting message")
 		return

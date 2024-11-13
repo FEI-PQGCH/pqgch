@@ -75,18 +75,19 @@ func main() {
 
 func initProtocol(conn net.Conn) {
 	fmt.Println("initiating the protocol")
-	msg := GetAkeInitAMsg()
+	msg := shared.GetAkeInitAMsg(config, &tkRight, &eskaRight)
 	fmt.Println("sending AKE A message")
 	shared.SendMsg(conn, msg)
 }
 
 func broadcastMsg(conn net.Conn, text string) {
+
 	if sharedSecret == [32]byte{} {
 		fmt.Println("no shared secret, skipping")
 		return
 	}
 
-	var cipherText, err = EncryptAesGcm(text, sharedSecret)
+	var cipherText, err = shared.EncryptAesGcm(text, &sharedSecret)
 	if err != nil {
 		fmt.Println("error encrypting message")
 		return

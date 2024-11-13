@@ -1,4 +1,4 @@
-package main
+package shared
 
 import (
 	"crypto/aes"
@@ -9,24 +9,23 @@ import (
 	"fmt"
 	"io"
 	"pqgch-client/gake"
-	"pqgch-client/shared"
 
 	"github.com/google/uuid"
 )
 
 // TODO: refactor protocol.go to not use global variables
 
-func CheckLeftRightKeys() (bool, shared.Message) {
+func CheckLeftRightKeys(keyRight [32]byte, keyLeft [32]byte, Xs [][32]byte, config UserConfig, sharedSecret *[32]byte) (bool, Message) {
 	if keyRight != [32]byte{} && keyLeft != [32]byte{} {
 		fmt.Println("established shared keys with both neighbors")
-		msg := GetXiMsg()
-		CheckXs()
+		msg := GetXiMsg(keyRight, keyLeft, config, Xs)
+		CheckXs(Xs, config, keyLeft, sharedSecret)
 		return true, msg
 	}
-	return false, shared.Message{}
+	return false, Message{}
 }
 
-func GetXiMsg() shared.Message {
+func GetXiMsg(keyRight [32]byte, keyLeft [32]byte, config UserConfig, Xs [][32]byte) Message {
 	xi, _, _ /* TODO: mi1, mi2 */ := gake.ComputeXsCommitment(
 		config.Index,
 		keyRight,
@@ -36,18 +35,18 @@ func GetXiMsg() shared.Message {
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
 	Xs[config.Index] = xiArr
-	msg := shared.Message{
+	msg := Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    shared.MsgIntraBroadcast,
+		MsgType:    MsgIntraBroadcast,
 		Content:    base64.StdEncoding.EncodeToString(xi[:]),
 	}
 
 	return msg
 }
 
-func CheckXs() {
+func CheckXs(Xs [][32]byte, config UserConfig, keyLeft [32]byte, sharedSecret *[32]byte) {
 	for i := 0; i < len(Xs); i++ {
 		if Xs[i] == [32]byte{} {
 			return
@@ -65,19 +64,20 @@ func CheckXs() {
 	skSid := gake.ComputeSkSid(len(config.Names), masterKey, dummyPids)
 	fmt.Printf("sksid%d: %02x\n", config.Index, skSid)
 
+	fmt.Println("skSid : %d: %02x\n", skSid)
 	copy(sharedSecret[:], skSid[:32])
 }
 
-func GetAkeInitAMsg() shared.Message {
+func GetAkeInitAMsg(config UserConfig, tkRight *[]byte, eskaRight *[]byte) Message {
 	var rightIndex = (config.Index + 1) % len(config.Names)
 	var akeSendARight []byte
-	akeSendARight, tkRight, eskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
+	akeSendARight, *tkRight, *eskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
 
-	msg := shared.Message{
+	msg := Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    shared.MsgAkeSendA,
+		MsgType:    MsgAkeSendA,
 		ReceiverID: rightIndex,
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
@@ -85,7 +85,7 @@ func GetAkeInitAMsg() shared.Message {
 	return msg
 }
 
-func GetAkeSharedBMsg(msg shared.Message) shared.Message {
+func GetAkeSharedBMsg(msg Message, config UserConfig, keyLeft [32]byte) Message {
 	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
 
 	var akeSendB []byte
@@ -96,11 +96,11 @@ func GetAkeSharedBMsg(msg shared.Message) shared.Message {
 
 	fmt.Println("established shared key with left neighbor")
 
-	msg = shared.Message{
+	msg = Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    shared.MsgAkeSendB,
+		MsgType:    MsgAkeSendB,
 		ReceiverID: msg.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
@@ -108,7 +108,7 @@ func GetAkeSharedBMsg(msg shared.Message) shared.Message {
 	return msg
 }
 
-func EncryptAesGcm(plaintext string, key [32]byte) (string, error) {
+func EncryptAesGcm(plaintext string, sharedSecret *[32]byte) (string, error) {
 	block, err := aes.NewCipher(sharedSecret[:])
 	if err != nil {
 		return "", err
