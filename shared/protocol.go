@@ -64,7 +64,6 @@ func CheckXs(Xs *[][32]byte, config UserConfig, keyLeft *[32]byte, sharedSecret 
 	skSid := gake.ComputeSkSid(len(config.Names), masterKey, dummyPids)
 	fmt.Printf("sksid%d: %02x\n", config.Index, skSid)
 
-	fmt.Println("skSid : %d: %02x\n", skSid)
 	copy(sharedSecret[:], skSid[:32])
 }
 
