@@ -15,8 +15,8 @@ import (
 
 // TODO: refactor protocol.go to not use global variables
 
-func CheckLeftRightKeys(keyRight [32]byte, keyLeft [32]byte, Xs [][32]byte, config UserConfig, sharedSecret *[32]byte) (bool, Message) {
-	if keyRight != [32]byte{} && keyLeft != [32]byte{} {
+func CheckLeftRightKeys(keyRight *[32]byte, keyLeft *[32]byte, Xs *[][32]byte, config UserConfig, sharedSecret *[32]byte) (bool, Message) {
+	if *keyRight != [32]byte{} && *keyLeft != [32]byte{} {
 		fmt.Println("established shared keys with both neighbors")
 		msg := GetXiMsg(keyRight, keyLeft, config, Xs)
 		CheckXs(Xs, config, keyLeft, sharedSecret)
@@ -25,16 +25,16 @@ func CheckLeftRightKeys(keyRight [32]byte, keyLeft [32]byte, Xs [][32]byte, conf
 	return false, Message{}
 }
 
-func GetXiMsg(keyRight [32]byte, keyLeft [32]byte, config UserConfig, Xs [][32]byte) Message {
+func GetXiMsg(keyRight *[32]byte, keyLeft *[32]byte, config UserConfig, Xs *[][32]byte) Message {
 	xi, _, _ /* TODO: mi1, mi2 */ := gake.ComputeXsCommitment(
 		config.Index,
-		keyRight,
-		keyLeft,
+		*keyRight,
+		*keyLeft,
 		config.GetDecodedPublicKey((config.Index+1)%len(config.Names)))
 
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
-	Xs[config.Index] = xiArr
+	(*Xs)[config.Index] = xiArr
 	msg := Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
@@ -46,20 +46,20 @@ func GetXiMsg(keyRight [32]byte, keyLeft [32]byte, config UserConfig, Xs [][32]b
 	return msg
 }
 
-func CheckXs(Xs [][32]byte, config UserConfig, keyLeft [32]byte, sharedSecret *[32]byte) {
-	for i := 0; i < len(Xs); i++ {
-		if Xs[i] == [32]byte{} {
+func CheckXs(Xs *[][32]byte, config UserConfig, keyLeft *[32]byte, sharedSecret *[32]byte) {
+	for i := 0; i < len(*Xs); i++ {
+		if (*Xs)[i] == [32]byte{} {
 			return
 		}
 	}
 
 	fmt.Println("received all Xs")
-	for i := 0; i < len(Xs); i++ {
-		fmt.Printf("X%d: %02x\n", i, Xs[i])
+	for i := 0; i < len(*Xs); i++ {
+		fmt.Printf("X%d: %02x\n", i, (*Xs)[i])
 	}
 	dummyPids := make([][20]byte, len(config.Names)) // TODO: replace with actual pids
 
-	masterKey := gake.ComputeMasterKey(len(config.Names), config.Index, keyLeft, Xs)
+	masterKey := gake.ComputeMasterKey(len(config.Names), config.Index, *keyLeft, *Xs)
 	fmt.Printf("masterkey%d: %02x\n", config.Index, masterKey)
 	skSid := gake.ComputeSkSid(len(config.Names), masterKey, dummyPids)
 	fmt.Printf("sksid%d: %02x\n", config.Index, skSid)
@@ -85,11 +85,11 @@ func GetAkeInitAMsg(config UserConfig, tkRight *[]byte, eskaRight *[]byte) Messa
 	return msg
 }
 
-func GetAkeSharedBMsg(msg Message, config UserConfig, keyLeft [32]byte) Message {
+func GetAkeSharedBMsg(msg Message, config UserConfig, keyLeft *[32]byte) Message {
 	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
 
 	var akeSendB []byte
-	akeSendB, keyLeft = gake.KexAkeSharedB(
+	akeSendB, *keyLeft = gake.KexAkeSharedB(
 		akeSendA,
 		config.GetDecodedSecretKey(),
 		config.GetDecodedPublicKey(msg.SenderID))
