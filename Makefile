@@ -25,3 +25,11 @@ c%:
 s%:
 	@echo "make: Running server$*..."
 	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run server/server.go -config=".config/s$*conf.json"
+
+gen:
+	@echo "make: Generating the KEM keypairs..."
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run gakeutil/gake.go -p gen -c $(or $(n),1)
+
+test: build
+	@echo "make: Running GAKE test..."
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run gakeutil/gake.go -p test
