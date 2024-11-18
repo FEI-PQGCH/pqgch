@@ -67,7 +67,8 @@ func CheckXs(Xs *[][32]byte, config UserConfig, keyLeft *[32]byte, sharedSecret 
 	copy(sharedSecret[:], skSid[:32])
 }
 
-func GetAkeInitAMsg(config UserConfig, tkRight *[]byte, eskaRight *[]byte) Message {
+// TODO refactor config to take each variable separetly, and pass struct session here
+func GetAkeInitAMsg(config BaseConfig, tkRight *[]byte, eskaRight *[]byte) Message {
 	var rightIndex = (config.Index + 1) % len(config.Names)
 	var akeSendARight []byte
 	akeSendARight, *tkRight, *eskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))

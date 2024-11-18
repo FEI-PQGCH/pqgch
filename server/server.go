@@ -27,6 +27,11 @@ var (
 	neighborConn       net.Conn
 	muNeighborConn     sync.Mutex
 	config             shared.ServConfig
+	tkRight            []byte
+	eskaRight          []byte
+	keyLeft            [32]byte
+	keyRight           [32]byte
+	Xs                 [][32]byte
 )
 
 // TODO: make server a part of intra cluster gake
@@ -93,6 +98,13 @@ func clientLogin(conn net.Conn) {
 	}
 
 	client := Client{name: msg.SenderName, conn: conn, index: msg.SenderID}
+
+	if len(clients) == len(config.Names)-1 {
+
+		shared.GetAkeInitAMsg(config.BaseConfig, &tkRight, &eskaRight)
+
+		//TODO handle message pre server
+	}
 
 	muClients.Lock()
 	clients[client] = true
@@ -202,6 +214,7 @@ func sendMsgToClient(msg shared.Message) {
 			fmt.Printf("Sent message to %s: %s\n", client.name, msg.Content)
 			return
 		}
+
 	}
 	fmt.Printf("Not sending message: either did not find client, or sender is receiver\n")
 }

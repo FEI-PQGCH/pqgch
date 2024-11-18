@@ -7,18 +7,32 @@ import (
 	"os"
 )
 
-type UserConfig struct {
-	LeadAddr   string   `json:"leadAddr"`
+type BaseConfig struct {
 	Names      []string `json:"names"`
 	Index      int      `json:"index"`
 	PublicKeys []string `json:"publicKeys"`
-	SecretKey  string   `json:"secretKey"`
+}
+
+type UserConfig struct {
+	BaseConfig
+	LeadAddr  string `json:"leadAddr"`
+	SecretKey string `json:"secretKey"`
 }
 
 type ServConfig struct {
-	Names     []string `json:"names"`
+	BaseConfig
 	ServAddrs []string `json:"servers"`
-	Index     int      `json:"index"`
+}
+
+type SessionInfo struct {
+	ConfigUser   UserConfig
+	ConfigServer ServConfig
+	TkRight      []byte
+	EskaRight    []byte
+	KeyLeft      [32]byte
+	KeyRight     [32]byte
+	Xs           [][32]byte
+	SharedSecret [32]byte
 }
 
 func GetUserConfig(path string) UserConfig {
@@ -39,7 +53,7 @@ func GetUserConfig(path string) UserConfig {
 	return config
 }
 
-func (c *UserConfig) GetName() string {
+func (c *BaseConfig) GetName() string {
 	return c.Names[c.Index]
 }
 
@@ -48,7 +62,7 @@ func (c *UserConfig) GetDecodedSecretKey() []byte {
 	return decodedSecretKey
 }
 
-func (c *UserConfig) GetDecodedPublicKey(index int) [1184]byte {
+func (c *BaseConfig) GetDecodedPublicKey(index int) [1184]byte {
 	decodedPublicKey := [1184]byte{}
 	decodedPubKey, _ := base64.StdEncoding.DecodeString(c.PublicKeys[index])
 	copy(decodedPublicKey[:], decodedPubKey)

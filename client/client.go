@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	mu           sync.Mutex
-	config       shared.UserConfig
+	mu     sync.Mutex
+	config shared.UserConfig
+	// TODO session struct
 	tkRight      []byte
 	eskaRight    []byte
 	keyLeft      [32]byte
@@ -75,7 +76,7 @@ func main() {
 
 func initProtocol(conn net.Conn) {
 	fmt.Println("initiating the protocol")
-	msg := shared.GetAkeInitAMsg(config, &tkRight, &eskaRight)
+	msg := shared.GetAkeInitAMsg(config.BaseConfig, &tkRight, &eskaRight)
 	fmt.Println("sending AKE A message")
 	shared.SendMsg(conn, msg)
 }
