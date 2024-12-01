@@ -45,7 +45,7 @@ func main() {
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    shared.MsgLogin,
+		MsgType:    shared.LoginMsg,
 	}
 	shared.SendMsg(conn, loginMsg)
 
@@ -69,9 +69,9 @@ func main() {
 }
 
 func initProtocol(conn net.Conn) {
-	fmt.Println("initiating the protocol")
+	fmt.Println("CRYPTO: initiating the protocol")
 	msg := shared.GetAkeInitAMsg(&session, config.ClusterConfig)
-	fmt.Println("sending AKE A message")
+	fmt.Println("CRYPTO: sending AKE A message")
 	shared.SendMsg(conn, msg)
 }
 
@@ -92,7 +92,7 @@ func broadcastMsg(conn net.Conn, text string) {
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		Content:    cipherText,
-		MsgType:    shared.MsgBroadcast,
+		MsgType:    shared.BroadcastMsg,
 	}
 	shared.SendMsg(conn, msg)
 }
@@ -107,6 +107,7 @@ func receiveMsgs(conn net.Conn) {
 			continue
 		}
 
+		fmt.Printf("RECEIVED: %s from %s\n", msg.MsgTypeName(), msg.SenderName)
 		handler := GetHandler(msg.MsgType)
 		handler.HandleMessage(conn, msg)
 	}

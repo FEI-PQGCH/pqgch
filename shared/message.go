@@ -17,12 +17,24 @@ type Message struct {
 	Content    string `json:"content"`
 }
 
+var MessageTypeNames = map[int]string{
+	LoginMsg:     "LoginMsg",
+	BroadcastMsg: "BroadcastMsg",
+	AkeAMsg:      "AkeAMsg",
+	AkeBMsg:      "AkeBMsg",
+	XiMsg:        "XiMsg",
+}
+
+func (m Message) MsgTypeName() string {
+	return MessageTypeNames[m.MsgType]
+}
+
 const (
-	MsgLogin = iota
-	MsgIntraBroadcast
-	MsgBroadcast
-	MsgAkeSendA
-	MsgAkeSendB
+	LoginMsg = iota
+	BroadcastMsg
+	AkeAMsg
+	AkeBMsg
+	XiMsg
 )
 
 func SendMsg(conn net.Conn, msg Message) error {

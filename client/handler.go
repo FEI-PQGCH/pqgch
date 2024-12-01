@@ -12,42 +12,42 @@ type MessageHandler interface {
 	HandleMessage(conn net.Conn, msg shared.Message)
 }
 
-type AkeSendAHandler struct{}
-type AkeSendBHandler struct{}
-type IntraBroadcastHandler struct{}
+type AkeAHandler struct{}
+type AkeBHandler struct{}
+type XiHandler struct{}
 type DefaultHandler struct{}
 
-func (h *AkeSendAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	fmt.Println("received AKE A message")
+func (h *AkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+	fmt.Println("CRYPTO: received AKE A message")
 	responseMsg := shared.GetAkeSharedBMsg(&session, msg, config.ClusterConfig)
-	fmt.Println("sending AKE B message")
+	fmt.Println("CRYPTO: sending AKE B message")
 	shared.SendMsg(conn, responseMsg)
 	ok, msg := shared.CheckLeftRightKeys(&session, config.ClusterConfig)
 
 	if ok {
-		fmt.Println("sending Xi")
+		fmt.Println("CRYPTO: sending Xi")
 		shared.SendMsg(conn, msg)
 	}
 }
 
-func (h *AkeSendBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	fmt.Println("received AKE B message")
+func (h *AkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+	fmt.Println("CRYPTO: received AKE B message")
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
-	fmt.Println("established shared key with right neighbor")
+	fmt.Println("CRYPTO: established shared key with right neighbor")
 	ok, msg := shared.CheckLeftRightKeys(&session, config.ClusterConfig)
 
 	if ok {
-		fmt.Println("sending Xi")
+		fmt.Println("CRYPTO: sending Xi")
 		shared.SendMsg(conn, msg)
 	}
 }
 
-func (h *IntraBroadcastHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 	if msg.SenderID == config.Index {
 		return
 	}
-	fmt.Println("received Xi")
+	fmt.Println("CRYPTO: received Xi")
 	xi, _ := base64.StdEncoding.DecodeString(msg.Content)
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
@@ -75,12 +75,12 @@ func (h *DefaultHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 
 func GetHandler(msgType int) MessageHandler {
 	switch msgType {
-	case shared.MsgAkeSendA:
-		return &AkeSendAHandler{}
-	case shared.MsgAkeSendB:
-		return &AkeSendBHandler{}
-	case shared.MsgIntraBroadcast:
-		return &IntraBroadcastHandler{}
+	case shared.AkeAMsg:
+		return &AkeAHandler{}
+	case shared.AkeBMsg:
+		return &AkeBHandler{}
+	case shared.XiMsg:
+		return &XiHandler{}
 	default:
 		return &DefaultHandler{}
 	}

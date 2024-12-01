@@ -11,52 +11,49 @@ type MessageHandler interface {
 	HandleMessage(msg shared.Message)
 }
 
-type AkeSendAHandler struct{}
-type AkeSendBHandler struct{}
-type IntraBroadcastHandler struct{}
+type AkeAHandler struct{}
+type AkeBHandler struct{}
+type XiHandler struct{}
 type BroadcastHandler struct{}
 type SpecificClientHandler struct{}
 type DefaultHandler struct{}
 
-func (h *AkeSendAHandler) HandleMessage(msg shared.Message) {
-	fmt.Println("received AKE A message")
+func (h *AkeAHandler) HandleMessage(msg shared.Message) {
+	fmt.Println("CRYPTO: received AKE A message")
 	responseMsg := shared.GetAkeSharedBMsg(&session, msg, config.ClusterConfig)
-	fmt.Println("sending AKE B message")
+	fmt.Println("CRYPTO: sending AKE B message")
 	sendMsgToClient(responseMsg)
 	ok, msg := shared.CheckLeftRightKeys(&session, config.ClusterConfig)
 
 	if ok {
-		fmt.Println("sending Xi")
+		fmt.Println("CRYPTO: sending Xi")
 		broadcastMessage(msg)
 	}
 }
 
-func (h *AkeSendBHandler) HandleMessage(msg shared.Message) {
-	fmt.Println("received AKE B message")
+func (h *AkeBHandler) HandleMessage(msg shared.Message) {
+	fmt.Println("CRYPTO: received AKE B message")
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
-	fmt.Println("established shared key with right neighbor")
+	fmt.Println("CRYPTO: established shared key with right neighbor")
 	ok, msg := shared.CheckLeftRightKeys(&session, config.ClusterConfig)
 
 	if ok {
-		fmt.Println("sending Xi")
+		fmt.Println("CRYPTO: sending Xi")
 		broadcastMessage(msg)
 	}
 }
 
-func (h *IntraBroadcastHandler) HandleMessage(msg shared.Message) {
-	fmt.Println("received intra-broadcast message")
+func (h *XiHandler) HandleMessage(msg shared.Message) {
 	if msg.SenderID == config.ClusterConfig.Index {
 		return
 	}
-	fmt.Println("received Xi")
+	fmt.Println("CRYPTO: received Xi")
 	xi, _ := base64.StdEncoding.DecodeString(msg.Content)
-	fmt.Printf("xi: %02x\n", xi)
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
 	session.Xs[msg.SenderID] = xiArr
 	shared.CheckXs(&session, config.ClusterConfig)
-	fmt.Printf("sharedSecret: %02x\n", session.SharedSecret)
 	broadcastMessage(msg)
 }
 
@@ -89,23 +86,23 @@ func printMessage(msg shared.Message) {
 
 func GetHandler(msg shared.Message) MessageHandler {
 	if msg.ReceiverID == config.ClusterConfig.Index {
-		if msg.MsgType == shared.MsgAkeSendA {
-			return &AkeSendAHandler{}
+		if msg.MsgType == shared.AkeAMsg {
+			return &AkeAHandler{}
 		}
-		if msg.MsgType == shared.MsgAkeSendB {
-			return &AkeSendBHandler{}
+		if msg.MsgType == shared.AkeBMsg {
+			return &AkeBHandler{}
 		}
 	}
 
-	if msg.MsgType == shared.MsgIntraBroadcast {
-		return &IntraBroadcastHandler{}
+	if msg.MsgType == shared.XiMsg {
+		return &XiHandler{}
 	}
 
-	if msg.MsgType == shared.MsgBroadcast {
+	if msg.MsgType == shared.BroadcastMsg {
 		return &BroadcastHandler{}
 	}
 
-	if msg.MsgType == shared.MsgAkeSendA || msg.MsgType == shared.MsgAkeSendB {
+	if msg.MsgType == shared.AkeAMsg || msg.MsgType == shared.AkeBMsg {
 		return &SpecificClientHandler{}
 	}
 

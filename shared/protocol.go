@@ -24,7 +24,7 @@ type Session struct {
 
 func CheckLeftRightKeys(session *Session, config ClusterConfig) (bool, Message) {
 	if session.KeyRight != [32]byte{} && session.KeyLeft != [32]byte{} {
-		fmt.Println("established shared keys with both neighbors")
+		fmt.Println("CRYPTO: established shared keys with both neighbors")
 		msg := GetXiMsg(session, config)
 		CheckXs(session, config)
 		return true, msg
@@ -46,7 +46,7 @@ func GetXiMsg(session *Session, config ClusterConfig) Message {
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    MsgIntraBroadcast,
+		MsgType:    XiMsg,
 		Content:    base64.StdEncoding.EncodeToString(xi[:]),
 	}
 
@@ -60,16 +60,16 @@ func CheckXs(session *Session, config ClusterConfig) {
 		}
 	}
 
-	fmt.Println("received all Xs")
+	fmt.Println("CRYPTO: received all Xs")
 	for i := 0; i < len(session.Xs); i++ {
-		fmt.Printf("X%d: %02x\n", i, (session.Xs)[i])
+		fmt.Printf("CRYPTO: X%d: %02x\n", i, (session.Xs)[i])
 	}
 	dummyPids := make([][20]byte, len(config.Names)) // TODO: replace with actual pids
 
 	masterKey := gake.ComputeMasterKey(len(config.Names), config.Index, session.KeyLeft, session.Xs)
-	fmt.Printf("masterkey%d: %02x\n", config.Index, masterKey)
+	fmt.Printf("CRYPTO: MasterKey%d: %02x\n", config.Index, masterKey)
 	skSid := gake.ComputeSkSid(len(config.Names), masterKey, dummyPids)
-	fmt.Printf("sksid%d: %02x\n", config.Index, skSid)
+	fmt.Printf("CRYPTO: SkSid%d: %02x\n", config.Index, skSid)
 
 	copy(session.SharedSecret[:], skSid[:32])
 }
@@ -83,7 +83,7 @@ func GetAkeInitAMsg(session *Session, config ClusterConfig) Message {
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    MsgAkeSendA,
+		MsgType:    AkeAMsg,
 		ReceiverID: rightIndex,
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
@@ -100,13 +100,13 @@ func GetAkeSharedBMsg(session *Session, msg Message, config ClusterConfig) Messa
 		config.GetDecodedSecretKey(),
 		config.GetDecodedPublicKey(msg.SenderID))
 
-	fmt.Println("established shared key with left neighbor")
+	fmt.Println("CRYPTO: established shared key with left neighbor")
 
 	msg = Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    MsgAkeSendB,
+		MsgType:    AkeBMsg,
 		ReceiverID: msg.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
