@@ -22,7 +22,7 @@ type Session struct {
 	SharedSecret [32]byte
 }
 
-func CheckLeftRightKeys(session *Session, config ClusterConfig) (bool, Message) {
+func CheckLeftRightKeys(session *Session, config ConfigAccessor) (bool, Message) {
 	if session.KeyRight != [32]byte{} && session.KeyLeft != [32]byte{} {
 		fmt.Println("CRYPTO: established shared keys with both neighbors")
 		msg := GetXiMsg(session, config)
@@ -32,28 +32,29 @@ func CheckLeftRightKeys(session *Session, config ClusterConfig) (bool, Message) 
 	return false, Message{}
 }
 
-func GetXiMsg(session *Session, config ClusterConfig) Message {
+func GetXiMsg(session *Session, config ConfigAccessor) Message {
 	xi, _, _ /* TODO: mi1, mi2 */ := gake.ComputeXsCommitment(
-		config.Index,
+		config.GetIndex(),
 		session.KeyRight,
 		session.KeyLeft,
-		config.GetDecodedPublicKey((config.Index+1)%len(config.Names)))
+		config.GetDecodedPublicKey((config.GetIndex()+1)%len(config.GetNamesOrAddrs())))
 
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
-	(session.Xs)[config.Index] = xiArr
+
+	(session.Xs)[config.GetIndex()] = xiArr
 	msg := Message{
 		ID:         uuid.New().String(),
-		SenderID:   config.Index,
+		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
-		Type:       XiMsg,
+		Type:       config.GetMessageType(XiMsg),
 		Content:    base64.StdEncoding.EncodeToString(xi[:]),
 	}
 
 	return msg
 }
 
-func CheckXs(session *Session, config ClusterConfig) {
+func CheckXs(session *Session, config ConfigAccessor) {
 	for i := 0; i < len(session.Xs); i++ {
 		if (session.Xs)[i] == [32]byte{} {
 			return
@@ -64,26 +65,26 @@ func CheckXs(session *Session, config ClusterConfig) {
 	for i := 0; i < len(session.Xs); i++ {
 		fmt.Printf("CRYPTO: X%d: %02x\n", i, (session.Xs)[i])
 	}
-	dummyPids := make([][20]byte, len(config.Names)) // TODO: replace with actual pids
+	dummyPids := make([][20]byte, len(config.GetNamesOrAddrs())) // TODO: replace with actual pids
 
-	masterKey := gake.ComputeMasterKey(len(config.Names), config.Index, session.KeyLeft, session.Xs)
-	fmt.Printf("CRYPTO: MasterKey%d: %02x\n", config.Index, masterKey)
-	skSid := gake.ComputeSkSid(len(config.Names), masterKey, dummyPids)
-	fmt.Printf("CRYPTO: SkSid%d: %02x\n", config.Index, skSid)
+	masterKey := gake.ComputeMasterKey(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs)
+	fmt.Printf("CRYPTO: MasterKey%d: %02x\n", config.GetIndex(), masterKey)
+	skSid := gake.ComputeSkSid(len(config.GetNamesOrAddrs()), masterKey, dummyPids)
+	fmt.Printf("CRYPTO: SkSid%d: %02x\n", config.GetIndex(), skSid)
 
 	copy(session.SharedSecret[:], skSid[:32])
 }
 
-func GetAkeInitAMsg(session *Session, config ClusterConfig) Message {
-	var rightIndex = (config.Index + 1) % len(config.Names)
+func GetAkeAMsg(session *Session, config ConfigAccessor) Message {
+	var rightIndex = (config.GetIndex() + 1) % len(config.GetNamesOrAddrs())
 	var akeSendARight []byte
 	akeSendARight, session.TkRight, session.EskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
 
 	msg := Message{
 		ID:         uuid.New().String(),
-		SenderID:   config.Index,
+		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
-		Type:       AkeAMsg,
+		Type:       config.GetMessageType(AkeAMsg),
 		ReceiverID: rightIndex,
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
@@ -91,7 +92,7 @@ func GetAkeInitAMsg(session *Session, config ClusterConfig) Message {
 	return msg
 }
 
-func GetAkeSharedBMsg(session *Session, msg Message, config ClusterConfig) Message {
+func GetAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
 	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
 
 	var akeSendB []byte
@@ -104,9 +105,9 @@ func GetAkeSharedBMsg(session *Session, msg Message, config ClusterConfig) Messa
 
 	msg = Message{
 		ID:         uuid.New().String(),
-		SenderID:   config.Index,
+		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
-		Type:       AkeBMsg,
+		Type:       config.GetMessageType(AkeBMsg),
 		ReceiverID: msg.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}

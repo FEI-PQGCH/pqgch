@@ -20,10 +20,10 @@ type DefaultHandler struct{}
 
 func (h *AkeAHandler) HandleMessage(msg shared.Message) {
 	fmt.Println("CRYPTO: received AKE A message")
-	responseMsg := shared.GetAkeSharedBMsg(&clusterSession, msg, config.ClusterConfig)
+	responseMsg := shared.GetAkeBMsg(&clusterSession, msg, &config.ClusterConfig)
 	fmt.Println("CRYPTO: sending AKE B message")
 	sendMsgToClient(responseMsg)
-	ok, msg := shared.CheckLeftRightKeys(&clusterSession, config.ClusterConfig)
+	ok, msg := shared.CheckLeftRightKeys(&clusterSession, &config.ClusterConfig)
 
 	if ok {
 		fmt.Println("CRYPTO: sending Xi")
@@ -34,9 +34,9 @@ func (h *AkeAHandler) HandleMessage(msg shared.Message) {
 func (h *AkeBHandler) HandleMessage(msg shared.Message) {
 	fmt.Println("CRYPTO: received AKE B message")
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
-	clusterSession.KeyRight = gake.KexAkeSharedA(akeSendB, clusterSession.TkRight, clusterSession.EskaRight, config.GetDecodedSecretKey())
+	clusterSession.KeyRight = gake.KexAkeSharedA(akeSendB, clusterSession.TkRight, clusterSession.EskaRight, config.ClusterConfig.GetDecodedSecretKey())
 	fmt.Println("CRYPTO: established shared key with right neighbor")
-	ok, msg := shared.CheckLeftRightKeys(&clusterSession, config.ClusterConfig)
+	ok, msg := shared.CheckLeftRightKeys(&clusterSession, &config.ClusterConfig)
 
 	if ok {
 		fmt.Println("CRYPTO: sending Xi")
@@ -53,7 +53,7 @@ func (h *XiHandler) HandleMessage(msg shared.Message) {
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
 	clusterSession.Xs[msg.SenderID] = xiArr
-	shared.CheckXs(&clusterSession, config.ClusterConfig)
+	shared.CheckXs(&clusterSession, &config.ClusterConfig)
 	broadcastMessage(msg)
 }
 

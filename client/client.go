@@ -71,7 +71,7 @@ func main() {
 
 func initProtocol(conn net.Conn) {
 	fmt.Println("CRYPTO: initiating the protocol")
-	msg := shared.GetAkeInitAMsg(&session, config.ClusterConfig)
+	msg := shared.GetAkeAMsg(&session, &config.ClusterConfig)
 	fmt.Println("CRYPTO: sending AKE A message")
 	shared.SendMsg(conn, msg)
 }
