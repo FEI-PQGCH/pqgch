@@ -5,6 +5,7 @@ import (
 	"pqgch-client/shared"
 )
 
+// send a message to a client in this cluster
 func sendMsgToClient(msg shared.Message) {
 	muClients.Lock()
 	defer muClients.Unlock()
@@ -26,6 +27,7 @@ func sendMsgToClient(msg shared.Message) {
 	fmt.Printf("error: sending message: either did not find client, or sender is receiver\n")
 }
 
+// broadcast a message to all clients in this cluster except the sender
 func broadcastMessage(msg shared.Message) {
 	muClients.Lock()
 	defer muClients.Unlock()
@@ -47,6 +49,7 @@ func broadcastMessage(msg shared.Message) {
 	fmt.Printf("ROUTE: broadcasted message %s from %s\n", msg.MsgTypeName(), msg.SenderName)
 }
 
+// forward a message to the left neighbor.
 func forwardMessage(msg shared.Message) {
 	muNeighborConn.Lock()
 	defer muNeighborConn.Unlock()

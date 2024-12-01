@@ -20,10 +20,10 @@ type DefaultHandler struct{}
 
 func (h *AkeAHandler) HandleMessage(msg shared.Message) {
 	fmt.Println("CRYPTO: received AKE A message")
-	responseMsg := shared.GetAkeSharedBMsg(&session, msg, config.ClusterConfig)
+	responseMsg := shared.GetAkeSharedBMsg(&clusterSession, msg, config.ClusterConfig)
 	fmt.Println("CRYPTO: sending AKE B message")
 	sendMsgToClient(responseMsg)
-	ok, msg := shared.CheckLeftRightKeys(&session, config.ClusterConfig)
+	ok, msg := shared.CheckLeftRightKeys(&clusterSession, config.ClusterConfig)
 
 	if ok {
 		fmt.Println("CRYPTO: sending Xi")
@@ -34,9 +34,9 @@ func (h *AkeAHandler) HandleMessage(msg shared.Message) {
 func (h *AkeBHandler) HandleMessage(msg shared.Message) {
 	fmt.Println("CRYPTO: received AKE B message")
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
-	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
+	clusterSession.KeyRight = gake.KexAkeSharedA(akeSendB, clusterSession.TkRight, clusterSession.EskaRight, config.GetDecodedSecretKey())
 	fmt.Println("CRYPTO: established shared key with right neighbor")
-	ok, msg := shared.CheckLeftRightKeys(&session, config.ClusterConfig)
+	ok, msg := shared.CheckLeftRightKeys(&clusterSession, config.ClusterConfig)
 
 	if ok {
 		fmt.Println("CRYPTO: sending Xi")
@@ -52,8 +52,8 @@ func (h *XiHandler) HandleMessage(msg shared.Message) {
 	xi, _ := base64.StdEncoding.DecodeString(msg.Content)
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
-	session.Xs[msg.SenderID] = xiArr
-	shared.CheckXs(&session, config.ClusterConfig)
+	clusterSession.Xs[msg.SenderID] = xiArr
+	shared.CheckXs(&clusterSession, config.ClusterConfig)
 	broadcastMessage(msg)
 }
 
@@ -63,7 +63,7 @@ func (h *BroadcastHandler) HandleMessage(msg shared.Message) {
 }
 
 func (h *DefaultHandler) HandleMessage(msg shared.Message) {
-	var plainText, err = shared.DecryptAesGcm(msg.Content, &session)
+	var plainText, err = shared.DecryptAesGcm(msg.Content, &clusterSession)
 	if err != nil {
 		fmt.Println("error decrypting message")
 		return
@@ -86,23 +86,23 @@ func printMessage(msg shared.Message) {
 
 func GetHandler(msg shared.Message) MessageHandler {
 	if msg.ReceiverID == config.ClusterConfig.Index {
-		if msg.MsgType == shared.AkeAMsg {
+		if msg.Type == shared.AkeAMsg {
 			return &AkeAHandler{}
 		}
-		if msg.MsgType == shared.AkeBMsg {
+		if msg.Type == shared.AkeBMsg {
 			return &AkeBHandler{}
 		}
 	}
 
-	if msg.MsgType == shared.XiMsg {
+	if msg.Type == shared.XiMsg {
 		return &XiHandler{}
 	}
 
-	if msg.MsgType == shared.BroadcastMsg {
+	if msg.Type == shared.BroadcastMsg {
 		return &BroadcastHandler{}
 	}
 
-	if msg.MsgType == shared.AkeAMsg || msg.MsgType == shared.AkeBMsg {
+	if msg.Type == shared.AkeAMsg || msg.Type == shared.AkeBMsg {
 		return &SpecificClientHandler{}
 	}
 

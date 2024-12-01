@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
+	"pqgch-client/gake"
 	"pqgch-client/shared"
 	"sync"
 	"time"
@@ -27,7 +29,8 @@ var (
 	neighborConn       net.Conn
 	muNeighborConn     sync.Mutex
 	config             shared.ServConfig
-	session            shared.Session
+	clusterSession     shared.Session
+	mainSession        shared.Session
 )
 
 func main() {
@@ -57,9 +60,9 @@ func main() {
 	}
 	defer listener.Close()
 	fmt.Println("server listening on", address)
-	session.Xs = make([][32]byte, len(config.Names))
+	clusterSession.Xs = make([][32]byte, len(config.Names))
 
-	go connectNeighbor(config.GetLeftNeighbor())
+	go connectNeighbor(config.GetRightNeighbor())
 
 	for {
 		conn, err := listener.Accept()
@@ -86,7 +89,7 @@ func clientLogin(conn net.Conn) {
 		conn.Close()
 	}
 
-	if msg.MsgType != shared.LoginMsg {
+	if msg.Type != shared.LoginMsg {
 		fmt.Println("client did not send login message")
 		conn.Close()
 	}
@@ -105,7 +108,7 @@ func clientLogin(conn net.Conn) {
 	}
 
 	if clusterClientCount == len(config.Names)-1 {
-		msg := shared.GetAkeInitAMsg(&session, config.ClusterConfig)
+		msg := shared.GetAkeInitAMsg(&clusterSession, config.ClusterConfig)
 		sendMsgToClient(msg)
 	}
 
@@ -116,32 +119,61 @@ func connectNeighbor(neighborAddress string) {
 	for {
 		muNeighborConn.Lock()
 		if neighborConn == nil {
-			fmt.Printf("connecting to left neighbor at %s\n", neighborAddress)
+			fmt.Printf("connecting to right neighbor at %s\n", neighborAddress)
 			conn, err := net.Dial("tcp", neighborAddress)
 			if err != nil {
-				fmt.Printf("error connecting to left neighbor: %v. Retrying...\n", err)
+				fmt.Printf("error connecting to right neighbor: %v. Retrying...\n", err)
 				muNeighborConn.Unlock()
 				time.Sleep(2 * time.Second)
 				continue
 			}
 			neighborConn = conn
-			fmt.Printf("connected to left neighbor (%s)\n", neighborAddress)
+			fmt.Printf("connected to right neighbor (%s)\n", neighborAddress)
 			loginMsg := shared.Message{
-				MsgID:      uuid.New().String(),
+				ID:         uuid.New().String(),
 				SenderID:   -1,
 				SenderName: "server",
-				MsgType:    shared.LoginMsg,
+				Type:       shared.LoginMsg,
 			}
 
 			err = shared.SendMsg(neighborConn, loginMsg)
 			if err != nil {
-				fmt.Printf("error sending login message to left neighbor: %v\n", err)
+				fmt.Printf("error sending login message to right neighbor: %v\n", err)
 				neighborConn.Close()
 				neighborConn = nil
 			}
+
+			aMsg := getAkeAMsg(&mainSession, config)
+			err = shared.SendMsg(neighborConn, aMsg)
+			if err != nil {
+				fmt.Printf("error sending AkeInitA message to right neighbor: %v\n", err)
+			}
+			break
 		}
 		muNeighborConn.Unlock()
 		time.Sleep(5 * time.Second)
+	}
+
+	scanner := bufio.NewScanner(neighborConn)
+	scanner.Scan()
+	msgData := scanner.Bytes()
+
+	var msg shared.Message
+	err := json.Unmarshal(msgData, &msg)
+	if err != nil {
+		fmt.Println("error unmarshaling message:", err)
+		return
+	}
+
+	if msg.Type == shared.LeaderAkeBMsg {
+		fmt.Println("CRYPTO: received Leader AKE B message")
+		akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
+		mainSession.KeyRight = gake.KexAkeSharedA(akeSendB, mainSession.TkRight, mainSession.EskaRight, config.GetDecodedSecretKey())
+
+		fmt.Println("CRYPTO: established shared key with right neighbor")
+		fmt.Printf("CRYPTO: KeyRight%d: %02x\n", config.Index, mainSession.KeyRight)
+	} else {
+		fmt.Println("error: expected Leader AKE B message")
 	}
 }
 
@@ -166,18 +198,30 @@ func handleConnection(client Client) {
 		}
 
 		muReceivedMessages.Lock()
-		if receivedMessages[msg.MsgID] {
+		if receivedMessages[msg.ID] {
 			muReceivedMessages.Unlock()
 			continue
 		}
-		receivedMessages[msg.MsgID] = true
+		receivedMessages[msg.ID] = true
 		muReceivedMessages.Unlock()
 
 		if client.index != -1 {
 			msg.ClusterID = config.Index
 		}
 
-		fmt.Printf("RECEIVED: %s from %s\n", msg.MsgTypeName(), msg.SenderName)
+		fmt.Printf("RECEIVED: %s from %s (%d) \n", msg.MsgTypeName(), msg.SenderName, msg.SenderID)
+
+		if msg.Type == shared.LeaderAkeAMsg {
+			responseMsg := getAkeBMsg(&mainSession, msg, config)
+			shared.SendMsg(client.conn, responseMsg)
+			fmt.Println("CRYPTO: sending Leader AKE B message")
+			//ok, _ := shared.CheckLeftRightKeys(&mainSession, config.ClusterConfig)
+
+			//if ok {
+			//broadcastMessage(msg)
+			//}
+			continue
+		}
 
 		handler := GetHandler(msg)
 		handler.HandleMessage(msg)
@@ -185,4 +229,47 @@ func handleConnection(client Client) {
 	if err := scanner.Err(); err != nil {
 		fmt.Println("error reading from client:", err)
 	}
+}
+
+// -----------------------------------------------
+// TODO: refactor all of this into a separate file
+func getAkeAMsg(session *shared.Session, config shared.ServConfig) shared.Message {
+	var rightIndex = (config.Index + 1) % len(config.ServAddrs)
+	var akeSendARight []byte
+	akeSendARight, session.TkRight, session.EskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
+
+	msg := shared.Message{
+		ID:         uuid.New().String(),
+		Type:       shared.LeaderAkeAMsg,
+		SenderID:   config.Index,
+		SenderName: config.GetName(),
+		ReceiverID: rightIndex,
+		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
+	}
+
+	return msg
+}
+
+func getAkeBMsg(session *shared.Session, msg shared.Message, config shared.ServConfig) shared.Message {
+	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
+
+	var akeSendB []byte
+	akeSendB, session.KeyLeft = gake.KexAkeSharedB(
+		akeSendA,
+		config.GetDecodedSecretKey(),
+		config.GetDecodedPublicKey(msg.SenderID))
+
+	fmt.Println("CRYPTO: established shared key with left neighbor")
+	fmt.Printf("CRYPTO: KeyLeft%d: %02x\n", config.Index, mainSession.KeyLeft)
+
+	msg = shared.Message{
+		ID:         uuid.New().String(),
+		Type:       shared.LeaderAkeBMsg,
+		SenderID:   config.Index,
+		SenderName: config.GetName(),
+		ReceiverID: msg.SenderID,
+		Content:    base64.StdEncoding.EncodeToString(akeSendB),
+	}
+
+	return msg
 }

@@ -43,10 +43,10 @@ func GetXiMsg(session *Session, config ClusterConfig) Message {
 	copy(xiArr[:], xi)
 	(session.Xs)[config.Index] = xiArr
 	msg := Message{
-		MsgID:      uuid.New().String(),
+		ID:         uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    XiMsg,
+		Type:       XiMsg,
 		Content:    base64.StdEncoding.EncodeToString(xi[:]),
 	}
 
@@ -80,10 +80,10 @@ func GetAkeInitAMsg(session *Session, config ClusterConfig) Message {
 	akeSendARight, session.TkRight, session.EskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
 
 	msg := Message{
-		MsgID:      uuid.New().String(),
+		ID:         uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    AkeAMsg,
+		Type:       AkeAMsg,
 		ReceiverID: rightIndex,
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
@@ -103,10 +103,10 @@ func GetAkeSharedBMsg(session *Session, msg Message, config ClusterConfig) Messa
 	fmt.Println("CRYPTO: established shared key with left neighbor")
 
 	msg = Message{
-		MsgID:      uuid.New().String(),
+		ID:         uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    AkeBMsg,
+		Type:       AkeBMsg,
 		ReceiverID: msg.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}

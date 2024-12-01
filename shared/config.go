@@ -23,6 +23,8 @@ type ServConfig struct {
 	ClusterConfig `json:"baseConfig"`
 	Index         int      `json:"index"`
 	ServAddrs     []string `json:"servers"`
+	PublicKeys    []string `json:"publicKeys"`
+	SecretKey     string   `json:"secretKey"`
 }
 
 func GetUserConfig(path string) UserConfig {
@@ -47,16 +49,32 @@ func (c *ClusterConfig) GetName() string {
 	return c.Names[c.Index]
 }
 
-func (c *ClusterConfig) GetDecodedSecretKey() []byte {
-	decodedSecretKey, _ := base64.StdEncoding.DecodeString(c.SecretKey)
+func getDecodedSecretKey(secretKey string) []byte {
+	decodedSecretKey, _ := base64.StdEncoding.DecodeString(secretKey)
 	return decodedSecretKey
 }
 
-func (c *ClusterConfig) GetDecodedPublicKey(index int) [1184]byte {
+func (c *ClusterConfig) GetDecodedSecretKey() []byte {
+	return getDecodedSecretKey(c.SecretKey)
+}
+
+func (c *ServConfig) GetDecodedSecretKey() []byte {
+	return getDecodedSecretKey(c.SecretKey)
+}
+
+func getDecodedPublicKey(publicKeys []string, index int) [1184]byte {
 	decodedPublicKey := [1184]byte{}
-	decodedPubKey, _ := base64.StdEncoding.DecodeString(c.PublicKeys[index])
+	decodedPubKey, _ := base64.StdEncoding.DecodeString(publicKeys[index])
 	copy(decodedPublicKey[:], decodedPubKey)
 	return decodedPublicKey
+}
+
+func (c *ServConfig) GetDecodedPublicKey(index int) [1184]byte {
+	return getDecodedPublicKey(c.PublicKeys, index)
+}
+
+func (c *ClusterConfig) GetDecodedPublicKey(index int) [1184]byte {
+	return getDecodedPublicKey(c.PublicKeys, index)
 }
 
 func GetServConfig(path string) ServConfig {
@@ -76,11 +94,11 @@ func GetServConfig(path string) ServConfig {
 	return config
 }
 
-func (c *ServConfig) GetLeftNeighbor() string {
-	if c.Index == 0 {
-		return c.ServAddrs[len(c.ServAddrs)-1]
+func (c *ServConfig) GetRightNeighbor() string {
+	if c.Index == len(c.ServAddrs)-1 {
+		return c.ServAddrs[0]
 	}
-	return c.ServAddrs[c.Index-1]
+	return c.ServAddrs[c.Index+1]
 }
 
 func (c *ServConfig) GetCurrentServer() string {

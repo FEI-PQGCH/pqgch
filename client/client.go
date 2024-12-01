@@ -42,10 +42,10 @@ func main() {
 
 	session.Xs = make([][32]byte, len(config.Names))
 	loginMsg := shared.Message{
-		MsgID:      uuid.New().String(),
+		ID:         uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    shared.LoginMsg,
+		Type:       shared.LoginMsg,
 		ClusterID:  -1,
 	}
 	shared.SendMsg(conn, loginMsg)
@@ -89,11 +89,11 @@ func broadcastMsg(conn net.Conn, text string) {
 	}
 
 	msg := shared.Message{
-		MsgID:      uuid.New().String(),
+		ID:         uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		Content:    cipherText,
-		MsgType:    shared.BroadcastMsg,
+		Type:       shared.BroadcastMsg,
 	}
 	shared.SendMsg(conn, msg)
 }
@@ -109,7 +109,7 @@ func receiveMsgs(conn net.Conn) {
 		}
 
 		fmt.Printf("RECEIVED: %s from %s\n", msg.MsgTypeName(), msg.SenderName)
-		handler := GetHandler(msg.MsgType)
+		handler := GetHandler(msg.Type)
 		handler.HandleMessage(conn, msg)
 	}
 
