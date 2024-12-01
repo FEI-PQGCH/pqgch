@@ -46,6 +46,7 @@ func main() {
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		MsgType:    shared.LoginMsg,
+		ClusterID:  -1,
 	}
 	shared.SendMsg(conn, loginMsg)
 

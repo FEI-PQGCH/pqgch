@@ -97,7 +97,14 @@ func clientLogin(conn net.Conn) {
 	clients[client] = true
 	muClients.Unlock()
 
-	if len(clients) == len(config.Names)-1 {
+	clusterClientCount := 0
+	for c := range clients {
+		if c.index != -1 {
+			clusterClientCount++
+		}
+	}
+
+	if clusterClientCount == len(config.Names)-1 {
 		msg := shared.GetAkeInitAMsg(&session, config.ClusterConfig)
 		sendMsgToClient(msg)
 	}
@@ -165,6 +172,10 @@ func handleConnection(client Client) {
 		}
 		receivedMessages[msg.MsgID] = true
 		muReceivedMessages.Unlock()
+
+		if client.index != -1 {
+			msg.ClusterID = config.Index
+		}
 
 		fmt.Printf("RECEIVED: %s from %s\n", msg.MsgTypeName(), msg.SenderName)
 

@@ -31,7 +31,7 @@ func broadcastMessage(msg shared.Message) {
 	defer muClients.Unlock()
 
 	for client := range clients {
-		if client.index == msg.SenderID {
+		if client.index == msg.SenderID && msg.ClusterID == config.Index {
 			continue
 		}
 

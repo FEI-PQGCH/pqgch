@@ -12,6 +12,7 @@ type Message struct {
 	SenderID   int    `json:"sendId"`
 	ReceiverID int    `json:"recvId"`
 	MsgType    int    `json:"msgType"`
+	ClusterID  int    `json:"clusterId"`
 	// Message content for user
 	SenderName string `json:"sender"`
 	Content    string `json:"content"`
