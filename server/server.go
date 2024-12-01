@@ -61,6 +61,7 @@ func main() {
 	defer listener.Close()
 	fmt.Println("server listening on", address)
 	clusterSession.Xs = make([][32]byte, len(config.Names))
+	mainSession.Xs = make([][32]byte, len(config.ServAddrs))
 
 	go connectNeighbor(config.GetRightNeighbor())
 
@@ -148,6 +149,7 @@ func connectNeighbor(neighborAddress string) {
 			if err != nil {
 				fmt.Printf("error sending AkeInitA message to right neighbor: %v\n", err)
 			}
+			muNeighborConn.Unlock()
 			break
 		}
 		muNeighborConn.Unlock()
@@ -172,6 +174,13 @@ func connectNeighbor(neighborAddress string) {
 
 		fmt.Println("CRYPTO: established shared key with right neighbor")
 		fmt.Printf("CRYPTO: KeyRight%d: %02x\n", config.Index, mainSession.KeyRight)
+
+		ok, msg := checkLeftRightKeys(&mainSession, config)
+
+		if ok {
+			fmt.Printf("CRYPTO: sending Xi\n")
+			forwardMessage(msg)
+		}
 	} else {
 		fmt.Println("error: expected Leader AKE B message")
 	}
@@ -209,17 +218,32 @@ func handleConnection(client Client) {
 			msg.ClusterID = config.Index
 		}
 
-		fmt.Printf("RECEIVED: %s from %s (%d) \n", msg.MsgTypeName(), msg.SenderName, msg.SenderID)
+		fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
 
 		if msg.Type == shared.LeaderAkeAMsg {
 			responseMsg := getAkeBMsg(&mainSession, msg, config)
 			shared.SendMsg(client.conn, responseMsg)
 			fmt.Println("CRYPTO: sending Leader AKE B message")
-			//ok, _ := shared.CheckLeftRightKeys(&mainSession, config.ClusterConfig)
+			ok, msg := checkLeftRightKeys(&mainSession, config)
 
-			//if ok {
-			//broadcastMessage(msg)
-			//}
+			if ok {
+				fmt.Printf("CRYPTO: sending Xi\n")
+				forwardMessage(msg)
+			}
+			continue
+		}
+
+		if msg.Type == shared.LeaderXiMsg {
+			fmt.Printf("CRYPTO: received Leader Xi (%d) message", msg.SenderID)
+
+			if msg.SenderID != config.Index {
+				xi, _ := base64.StdEncoding.DecodeString(msg.Content)
+				var xiArr [32]byte
+				copy(xiArr[:], xi)
+				mainSession.Xs[msg.SenderID] = xiArr
+				checkXs(&mainSession, config)
+				forwardMessage(msg)
+			}
 			continue
 		}
 
@@ -272,4 +296,56 @@ func getAkeBMsg(session *shared.Session, msg shared.Message, config shared.ServC
 	}
 
 	return msg
+}
+
+func checkLeftRightKeys(session *shared.Session, config shared.ServConfig) (bool, shared.Message) {
+	if session.KeyRight != [32]byte{} && session.KeyLeft != [32]byte{} {
+		fmt.Println("CRYPTO: established shared keys with both neighbors")
+		msg := getXiMsg(session, config)
+		checkXs(session, config)
+		return true, msg
+	}
+	return false, shared.Message{}
+}
+
+func getXiMsg(session *shared.Session, config shared.ServConfig) shared.Message {
+	xi, _, _ /* TODO: mi1, mi2 */ := gake.ComputeXsCommitment(
+		config.Index,
+		session.KeyRight,
+		session.KeyLeft,
+		config.GetDecodedPublicKey((config.Index+1)%len(config.Names)))
+
+	var xiArr [32]byte
+	copy(xiArr[:], xi)
+	(session.Xs)[config.Index] = xiArr
+	msg := shared.Message{
+		ID:         uuid.New().String(),
+		SenderID:   config.Index,
+		SenderName: config.GetName(),
+		Type:       shared.LeaderXiMsg,
+		Content:    base64.StdEncoding.EncodeToString(xi[:]),
+	}
+
+	return msg
+}
+
+func checkXs(session *shared.Session, config shared.ServConfig) {
+	for i := 0; i < len(session.Xs); i++ {
+		if (session.Xs)[i] == [32]byte{} {
+			return
+		}
+	}
+
+	fmt.Println("CRYPTO: received all Xs")
+	for i := 0; i < len(session.Xs); i++ {
+		fmt.Printf("CRYPTO: X%d: %02x\n", i, (session.Xs)[i])
+	}
+	dummyPids := make([][20]byte, len(config.Names)) // TODO: replace with actual pids
+
+	masterKey := gake.ComputeMasterKey(len(config.ServAddrs), config.Index, session.KeyLeft, session.Xs)
+	fmt.Printf("CRYPTO: MasterKey%d: %02x\n", config.Index, masterKey)
+	skSid := gake.ComputeSkSid(len(config.Names), masterKey, dummyPids)
+	fmt.Printf("CRYPTO: SkSid%d: %02x\n", config.Index, skSid)
+
+	copy(session.SharedSecret[:], skSid[:32])
 }

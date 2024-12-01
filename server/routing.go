@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"pqgch-client/shared"
+	"time"
 )
 
 // send a message to a client in this cluster
@@ -54,18 +55,25 @@ func forwardMessage(msg shared.Message) {
 	muNeighborConn.Lock()
 	defer muNeighborConn.Unlock()
 
-	if neighborConn == nil {
-		fmt.Println("no connection to left neighbor; message not forwarded.")
-		return
+	for {
+		if neighborConn == nil {
+			fmt.Println("no connection to left neighbor; waiting.")
+			muNeighborConn.Unlock()
+			time.Sleep(1 * time.Second)
+			muNeighborConn.Lock()
+			continue
+		}
+
+		err := shared.SendMsg(neighborConn, msg)
+		if err != nil {
+			fmt.Println("error forwarding message to left neighbor:", err)
+			neighborConn.Close()
+			neighborConn = nil
+			return
+		}
+
+		fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.MsgTypeName(), msg.SenderName)
+		break
 	}
 
-	err := shared.SendMsg(neighborConn, msg)
-	if err != nil {
-		fmt.Println("error forwarding message to left neighbor:", err)
-		neighborConn.Close()
-		neighborConn = nil
-		return
-	}
-
-	fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.MsgTypeName(), msg.SenderName)
 }
