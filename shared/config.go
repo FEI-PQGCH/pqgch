@@ -7,21 +7,22 @@ import (
 	"os"
 )
 
-type BaseConfig struct {
+type ClusterConfig struct {
 	Names      []string `json:"names"`
 	Index      int      `json:"index"`
 	PublicKeys []string `json:"publicKeys"`
+	SecretKey  string   `json:"secretKey"`
 }
 
 type UserConfig struct {
-	BaseConfig
-	LeadAddr  string `json:"leadAddr"`
-	SecretKey string `json:"secretKey"`
+	ClusterConfig
+	LeadAddr string `json:"leadAddr"`
 }
 
 type ServConfig struct {
-	BaseConfig
-	ServAddrs []string `json:"servers"`
+	ClusterConfig `json:"baseConfig"`
+	Index         int      `json:"index"`
+	ServAddrs     []string `json:"servers"`
 }
 
 type SessionInfo struct {
@@ -53,16 +54,16 @@ func GetUserConfig(path string) UserConfig {
 	return config
 }
 
-func (c *BaseConfig) GetName() string {
+func (c *ClusterConfig) GetName() string {
 	return c.Names[c.Index]
 }
 
-func (c *UserConfig) GetDecodedSecretKey() []byte {
+func (c *ClusterConfig) GetDecodedSecretKey() []byte {
 	decodedSecretKey, _ := base64.StdEncoding.DecodeString(c.SecretKey)
 	return decodedSecretKey
 }
 
-func (c *BaseConfig) GetDecodedPublicKey(index int) [1184]byte {
+func (c *ClusterConfig) GetDecodedPublicKey(index int) [1184]byte {
 	decodedPublicKey := [1184]byte{}
 	decodedPubKey, _ := base64.StdEncoding.DecodeString(c.PublicKeys[index])
 	copy(decodedPublicKey[:], decodedPubKey)

@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
+	"pqgch-client/gake"
 	"pqgch-client/shared"
 	"sync"
 	"time"
@@ -32,6 +34,7 @@ var (
 	keyLeft            [32]byte
 	keyRight           [32]byte
 	Xs                 [][32]byte
+	sharedSecret       [32]byte
 )
 
 // TODO: make server a part of intra cluster gake
@@ -64,6 +67,7 @@ func main() {
 	}
 	defer listener.Close()
 	fmt.Println("Server listening on", address)
+	Xs = make([][32]byte, len(config.Names))
 
 	go connectNeighbor(config.GetLeftNeighbor())
 
@@ -99,16 +103,14 @@ func clientLogin(conn net.Conn) {
 
 	client := Client{name: msg.SenderName, conn: conn, index: msg.SenderID}
 
-	if len(clients) == len(config.Names)-1 {
-
-		shared.GetAkeInitAMsg(config.BaseConfig, &tkRight, &eskaRight)
-
-		//TODO handle message pre server
-	}
-
 	muClients.Lock()
 	clients[client] = true
 	muClients.Unlock()
+
+	if len(clients) == len(config.Names)-1 {
+		msg := shared.GetAkeInitAMsg(config.ClusterConfig, &tkRight, &eskaRight)
+		sendMsgToClient(msg)
+	}
 
 	go handleConnection(client)
 }
@@ -175,15 +177,59 @@ func handleConnection(client Client) {
 		muReceivedMessages.Unlock()
 
 		fmt.Printf("From %s ", msg.SenderName)
+		if msg.ReceiverID == config.ClusterConfig.Index {
+			// tmp
+			if msg.MsgType == shared.MsgAkeSendB {
+				fmt.Println("received AKE B message")
+				akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
+				keyRight = gake.KexAkeSharedA(akeSendB, tkRight, eskaRight, config.GetDecodedSecretKey())
+				fmt.Println("established shared key with right neighbor")
+				ok, msg := shared.CheckLeftRightKeys(&keyRight, &keyLeft, &Xs, config.ClusterConfig, &sharedSecret)
+
+				if ok {
+					fmt.Println("sending Xi")
+					broadcastMessage(msg)
+				}
+			}
+
+			if msg.MsgType == shared.MsgAkeSendA {
+				fmt.Println("received AKE A message")
+				responseMsg := shared.GetAkeSharedBMsg(msg, config.ClusterConfig, &keyLeft)
+				fmt.Println("sending AKE B message")
+				sendMsgToClient(responseMsg)
+				ok, msg := shared.CheckLeftRightKeys(&keyRight, &keyLeft, &Xs, config.ClusterConfig, &sharedSecret)
+
+				if ok {
+					fmt.Println("sending Xi")
+					broadcastMessage(msg)
+				}
+			}
+			// .
+			continue
+		}
+
 		if msg.MsgType == shared.MsgIntraBroadcast {
 			fmt.Println("received intra-broadcast message")
-			broadcastMessage(msg, client)
+			//tmp
+			if msg.SenderID == config.ClusterConfig.Index {
+				continue
+			}
+			fmt.Println("received Xi")
+			xi, _ := base64.StdEncoding.DecodeString(msg.Content)
+			fmt.Printf("xi: %02x\n", xi)
+			var xiArr [32]byte
+			copy(xiArr[:], xi)
+			Xs[msg.SenderID] = xiArr
+			shared.CheckXs(&Xs, config.ClusterConfig, &keyLeft, &sharedSecret)
+			fmt.Printf("sharedSecret: %02x\n", sharedSecret)
+			// .
+			broadcastMessage(msg)
 			continue
 		}
 
 		if msg.MsgType == shared.MsgBroadcast {
 			fmt.Println("received broadcast message")
-			broadcastMessage(msg, client)
+			broadcastMessage(msg)
 			forwardMessage(msg)
 			continue
 		}
@@ -211,7 +257,7 @@ func sendMsgToClient(msg shared.Message) {
 				delete(clients, client)
 			}
 
-			fmt.Printf("Sent message to %s: %s\n", client.name, msg.Content)
+			fmt.Printf("Sent message to %s\n", client.name)
 			return
 		}
 
@@ -219,12 +265,12 @@ func sendMsgToClient(msg shared.Message) {
 	fmt.Printf("Not sending message: either did not find client, or sender is receiver\n")
 }
 
-func broadcastMessage(msg shared.Message, sender Client) {
+func broadcastMessage(msg shared.Message) {
 	muClients.Lock()
 	defer muClients.Unlock()
 
 	for client := range clients {
-		if client == sender {
+		if client.index == msg.SenderID {
 			continue
 		}
 
@@ -237,7 +283,7 @@ func broadcastMessage(msg shared.Message, sender Client) {
 		}
 	}
 
-	fmt.Printf("Broadcasted message from %s: %s\n", msg.SenderName, msg.Content)
+	fmt.Printf("Broadcasted message from %s\n", msg.SenderName)
 }
 
 func forwardMessage(msg shared.Message) {

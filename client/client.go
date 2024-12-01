@@ -76,13 +76,12 @@ func main() {
 
 func initProtocol(conn net.Conn) {
 	fmt.Println("initiating the protocol")
-	msg := shared.GetAkeInitAMsg(config.BaseConfig, &tkRight, &eskaRight)
+	msg := shared.GetAkeInitAMsg(config.ClusterConfig, &tkRight, &eskaRight)
 	fmt.Println("sending AKE A message")
 	shared.SendMsg(conn, msg)
 }
 
 func broadcastMsg(conn net.Conn, text string) {
-
 	if sharedSecret == [32]byte{} {
 		fmt.Println("no shared secret, skipping")
 		return

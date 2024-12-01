@@ -15,7 +15,7 @@ import (
 
 // TODO: refactor protocol.go to not use global variables
 
-func CheckLeftRightKeys(keyRight *[32]byte, keyLeft *[32]byte, Xs *[][32]byte, config UserConfig, sharedSecret *[32]byte) (bool, Message) {
+func CheckLeftRightKeys(keyRight *[32]byte, keyLeft *[32]byte, Xs *[][32]byte, config ClusterConfig, sharedSecret *[32]byte) (bool, Message) {
 	if *keyRight != [32]byte{} && *keyLeft != [32]byte{} {
 		fmt.Println("established shared keys with both neighbors")
 		msg := GetXiMsg(keyRight, keyLeft, config, Xs)
@@ -25,7 +25,7 @@ func CheckLeftRightKeys(keyRight *[32]byte, keyLeft *[32]byte, Xs *[][32]byte, c
 	return false, Message{}
 }
 
-func GetXiMsg(keyRight *[32]byte, keyLeft *[32]byte, config UserConfig, Xs *[][32]byte) Message {
+func GetXiMsg(keyRight *[32]byte, keyLeft *[32]byte, config ClusterConfig, Xs *[][32]byte) Message {
 	xi, _, _ /* TODO: mi1, mi2 */ := gake.ComputeXsCommitment(
 		config.Index,
 		*keyRight,
@@ -46,7 +46,7 @@ func GetXiMsg(keyRight *[32]byte, keyLeft *[32]byte, config UserConfig, Xs *[][3
 	return msg
 }
 
-func CheckXs(Xs *[][32]byte, config UserConfig, keyLeft *[32]byte, sharedSecret *[32]byte) {
+func CheckXs(Xs *[][32]byte, config ClusterConfig, keyLeft *[32]byte, sharedSecret *[32]byte) {
 	for i := 0; i < len(*Xs); i++ {
 		if (*Xs)[i] == [32]byte{} {
 			return
@@ -68,7 +68,7 @@ func CheckXs(Xs *[][32]byte, config UserConfig, keyLeft *[32]byte, sharedSecret 
 }
 
 // TODO refactor config to take each variable separetly, and pass struct session here
-func GetAkeInitAMsg(config BaseConfig, tkRight *[]byte, eskaRight *[]byte) Message {
+func GetAkeInitAMsg(config ClusterConfig, tkRight *[]byte, eskaRight *[]byte) Message {
 	var rightIndex = (config.Index + 1) % len(config.Names)
 	var akeSendARight []byte
 	akeSendARight, *tkRight, *eskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
@@ -85,7 +85,7 @@ func GetAkeInitAMsg(config BaseConfig, tkRight *[]byte, eskaRight *[]byte) Messa
 	return msg
 }
 
-func GetAkeSharedBMsg(msg Message, config UserConfig, keyLeft *[32]byte) Message {
+func GetAkeSharedBMsg(msg Message, config ClusterConfig, keyLeft *[32]byte) Message {
 	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
 
 	var akeSendB []byte
