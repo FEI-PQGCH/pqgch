@@ -27,12 +27,7 @@ var (
 	neighborConn       net.Conn
 	muNeighborConn     sync.Mutex
 	config             shared.ServConfig
-	tkRight            []byte
-	eskaRight          []byte
-	keyLeft            [32]byte
-	keyRight           [32]byte
-	Xs                 [][32]byte
-	sharedSecret       [32]byte
+	session            shared.Session
 )
 
 func main() {
@@ -62,7 +57,7 @@ func main() {
 	}
 	defer listener.Close()
 	fmt.Println("Server listening on", address)
-	Xs = make([][32]byte, len(config.Names))
+	session.Xs = make([][32]byte, len(config.Names))
 
 	go connectNeighbor(config.GetLeftNeighbor())
 
@@ -103,7 +98,7 @@ func clientLogin(conn net.Conn) {
 	muClients.Unlock()
 
 	if len(clients) == len(config.Names)-1 {
-		msg := shared.GetAkeInitAMsg(config.ClusterConfig, &tkRight, &eskaRight)
+		msg := shared.GetAkeInitAMsg(&session, config.ClusterConfig)
 		sendMsgToClient(msg)
 	}
 

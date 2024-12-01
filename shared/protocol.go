@@ -13,28 +13,35 @@ import (
 	"github.com/google/uuid"
 )
 
-// TODO: refactor protocol.go to not use global variables
+type Session struct {
+	TkRight      []byte
+	EskaRight    []byte
+	KeyLeft      [32]byte
+	KeyRight     [32]byte
+	Xs           [][32]byte
+	SharedSecret [32]byte
+}
 
-func CheckLeftRightKeys(keyRight *[32]byte, keyLeft *[32]byte, Xs *[][32]byte, config ClusterConfig, sharedSecret *[32]byte) (bool, Message) {
-	if *keyRight != [32]byte{} && *keyLeft != [32]byte{} {
+func CheckLeftRightKeys(session *Session, config ClusterConfig) (bool, Message) {
+	if session.KeyRight != [32]byte{} && session.KeyLeft != [32]byte{} {
 		fmt.Println("established shared keys with both neighbors")
-		msg := GetXiMsg(keyRight, keyLeft, config, Xs)
-		CheckXs(Xs, config, keyLeft, sharedSecret)
+		msg := GetXiMsg(session, config)
+		CheckXs(session, config)
 		return true, msg
 	}
 	return false, Message{}
 }
 
-func GetXiMsg(keyRight *[32]byte, keyLeft *[32]byte, config ClusterConfig, Xs *[][32]byte) Message {
+func GetXiMsg(session *Session, config ClusterConfig) Message {
 	xi, _, _ /* TODO: mi1, mi2 */ := gake.ComputeXsCommitment(
 		config.Index,
-		*keyRight,
-		*keyLeft,
+		session.KeyRight,
+		session.KeyLeft,
 		config.GetDecodedPublicKey((config.Index+1)%len(config.Names)))
 
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
-	(*Xs)[config.Index] = xiArr
+	(session.Xs)[config.Index] = xiArr
 	msg := Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
@@ -46,32 +53,31 @@ func GetXiMsg(keyRight *[32]byte, keyLeft *[32]byte, config ClusterConfig, Xs *[
 	return msg
 }
 
-func CheckXs(Xs *[][32]byte, config ClusterConfig, keyLeft *[32]byte, sharedSecret *[32]byte) {
-	for i := 0; i < len(*Xs); i++ {
-		if (*Xs)[i] == [32]byte{} {
+func CheckXs(session *Session, config ClusterConfig) {
+	for i := 0; i < len(session.Xs); i++ {
+		if (session.Xs)[i] == [32]byte{} {
 			return
 		}
 	}
 
 	fmt.Println("received all Xs")
-	for i := 0; i < len(*Xs); i++ {
-		fmt.Printf("X%d: %02x\n", i, (*Xs)[i])
+	for i := 0; i < len(session.Xs); i++ {
+		fmt.Printf("X%d: %02x\n", i, (session.Xs)[i])
 	}
 	dummyPids := make([][20]byte, len(config.Names)) // TODO: replace with actual pids
 
-	masterKey := gake.ComputeMasterKey(len(config.Names), config.Index, *keyLeft, *Xs)
+	masterKey := gake.ComputeMasterKey(len(config.Names), config.Index, session.KeyLeft, session.Xs)
 	fmt.Printf("masterkey%d: %02x\n", config.Index, masterKey)
 	skSid := gake.ComputeSkSid(len(config.Names), masterKey, dummyPids)
 	fmt.Printf("sksid%d: %02x\n", config.Index, skSid)
 
-	copy(sharedSecret[:], skSid[:32])
+	copy(session.SharedSecret[:], skSid[:32])
 }
 
-// TODO refactor config to take each variable separetly, and pass struct session here
-func GetAkeInitAMsg(config ClusterConfig, tkRight *[]byte, eskaRight *[]byte) Message {
+func GetAkeInitAMsg(session *Session, config ClusterConfig) Message {
 	var rightIndex = (config.Index + 1) % len(config.Names)
 	var akeSendARight []byte
-	akeSendARight, *tkRight, *eskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
+	akeSendARight, session.TkRight, session.EskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
 
 	msg := Message{
 		MsgID:      uuid.New().String(),
@@ -85,11 +91,11 @@ func GetAkeInitAMsg(config ClusterConfig, tkRight *[]byte, eskaRight *[]byte) Me
 	return msg
 }
 
-func GetAkeSharedBMsg(msg Message, config ClusterConfig, keyLeft *[32]byte) Message {
+func GetAkeSharedBMsg(session *Session, msg Message, config ClusterConfig) Message {
 	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
 
 	var akeSendB []byte
-	akeSendB, *keyLeft = gake.KexAkeSharedB(
+	akeSendB, session.KeyLeft = gake.KexAkeSharedB(
 		akeSendA,
 		config.GetDecodedSecretKey(),
 		config.GetDecodedPublicKey(msg.SenderID))
@@ -108,8 +114,8 @@ func GetAkeSharedBMsg(msg Message, config ClusterConfig, keyLeft *[32]byte) Mess
 	return msg
 }
 
-func EncryptAesGcm(plaintext string, sharedSecret *[32]byte) (string, error) {
-	block, err := aes.NewCipher(sharedSecret[:])
+func EncryptAesGcm(plaintext string, session *Session) (string, error) {
+	block, err := aes.NewCipher(session.SharedSecret[:])
 	if err != nil {
 		return "", err
 	}
@@ -129,13 +135,13 @@ func EncryptAesGcm(plaintext string, sharedSecret *[32]byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(cipherText), nil
 }
 
-func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
+func DecryptAesGcm(encryptedText string, session *Session) (string, error) {
 	cipherText, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(key)
+	block, err := aes.NewCipher(session.SharedSecret[:])
 	if err != nil {
 		return "", err
 	}

@@ -15,15 +15,9 @@ import (
 )
 
 var (
-	mu     sync.Mutex
-	config shared.UserConfig
-	// TODO session struct
-	tkRight      []byte
-	eskaRight    []byte
-	keyLeft      [32]byte
-	keyRight     [32]byte
-	Xs           [][32]byte
-	sharedSecret [32]byte
+	mu      sync.Mutex
+	config  shared.UserConfig
+	session shared.Session
 )
 
 func main() {
@@ -46,7 +40,7 @@ func main() {
 	defer conn.Close()
 	fmt.Printf("connected to server %s\n", servAddr)
 
-	Xs = make([][32]byte, len(config.Names))
+	session.Xs = make([][32]byte, len(config.Names))
 	loginMsg := shared.Message{
 		MsgID:      uuid.New().String(),
 		SenderID:   config.Index,
@@ -76,18 +70,18 @@ func main() {
 
 func initProtocol(conn net.Conn) {
 	fmt.Println("initiating the protocol")
-	msg := shared.GetAkeInitAMsg(config.ClusterConfig, &tkRight, &eskaRight)
+	msg := shared.GetAkeInitAMsg(&session, config.ClusterConfig)
 	fmt.Println("sending AKE A message")
 	shared.SendMsg(conn, msg)
 }
 
 func broadcastMsg(conn net.Conn, text string) {
-	if sharedSecret == [32]byte{} {
+	if session.SharedSecret == [32]byte{} {
 		fmt.Println("no shared secret, skipping")
 		return
 	}
 
-	var cipherText, err = shared.EncryptAesGcm(text, &sharedSecret)
+	var cipherText, err = shared.EncryptAesGcm(text, &session)
 	if err != nil {
 		fmt.Println("error encrypting message")
 		return
