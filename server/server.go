@@ -2,12 +2,10 @@ package main
 
 import (
 	"bufio"
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
-	"pqgch-client/gake"
 	"pqgch-client/shared"
 	"sync"
 	"time"
@@ -36,9 +34,6 @@ var (
 	Xs                 [][32]byte
 	sharedSecret       [32]byte
 )
-
-// TODO: make server a part of intra cluster gake
-// TODO: refactor to use factory pattern for handling messages
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
@@ -177,131 +172,11 @@ func handleConnection(client Client) {
 		muReceivedMessages.Unlock()
 
 		fmt.Printf("From %s ", msg.SenderName)
-		if msg.ReceiverID == config.ClusterConfig.Index {
-			// tmp
-			if msg.MsgType == shared.MsgAkeSendB {
-				fmt.Println("received AKE B message")
-				akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
-				keyRight = gake.KexAkeSharedA(akeSendB, tkRight, eskaRight, config.GetDecodedSecretKey())
-				fmt.Println("established shared key with right neighbor")
-				ok, msg := shared.CheckLeftRightKeys(&keyRight, &keyLeft, &Xs, config.ClusterConfig, &sharedSecret)
 
-				if ok {
-					fmt.Println("sending Xi")
-					broadcastMessage(msg)
-				}
-			}
-
-			if msg.MsgType == shared.MsgAkeSendA {
-				fmt.Println("received AKE A message")
-				responseMsg := shared.GetAkeSharedBMsg(msg, config.ClusterConfig, &keyLeft)
-				fmt.Println("sending AKE B message")
-				sendMsgToClient(responseMsg)
-				ok, msg := shared.CheckLeftRightKeys(&keyRight, &keyLeft, &Xs, config.ClusterConfig, &sharedSecret)
-
-				if ok {
-					fmt.Println("sending Xi")
-					broadcastMessage(msg)
-				}
-			}
-			// .
-			continue
-		}
-
-		if msg.MsgType == shared.MsgIntraBroadcast {
-			fmt.Println("received intra-broadcast message")
-			//tmp
-			if msg.SenderID == config.ClusterConfig.Index {
-				continue
-			}
-			fmt.Println("received Xi")
-			xi, _ := base64.StdEncoding.DecodeString(msg.Content)
-			fmt.Printf("xi: %02x\n", xi)
-			var xiArr [32]byte
-			copy(xiArr[:], xi)
-			Xs[msg.SenderID] = xiArr
-			shared.CheckXs(&Xs, config.ClusterConfig, &keyLeft, &sharedSecret)
-			fmt.Printf("sharedSecret: %02x\n", sharedSecret)
-			// .
-			broadcastMessage(msg)
-			continue
-		}
-
-		if msg.MsgType == shared.MsgBroadcast {
-			fmt.Println("received broadcast message")
-			broadcastMessage(msg)
-			forwardMessage(msg)
-			continue
-		}
-
-		if msg.MsgType == shared.MsgAkeSendA || msg.MsgType == shared.MsgAkeSendB {
-			fmt.Println("received AKE message")
-			sendMsgToClient(msg)
-		}
+		handler := GetHandler(msg)
+		handler.HandleMessage(msg)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Println("Error reading from client:", err)
 	}
-}
-
-func sendMsgToClient(msg shared.Message) {
-	muClients.Lock()
-	defer muClients.Unlock()
-
-	for client := range clients {
-		if client.index == msg.ReceiverID && client.index != msg.SenderID {
-			err := shared.SendMsg(client.conn, msg)
-			if err != nil {
-				fmt.Println("Error sending message to client:", err)
-				client.conn.Close()
-				delete(clients, client)
-			}
-
-			fmt.Printf("Sent message to %s\n", client.name)
-			return
-		}
-
-	}
-	fmt.Printf("Not sending message: either did not find client, or sender is receiver\n")
-}
-
-func broadcastMessage(msg shared.Message) {
-	muClients.Lock()
-	defer muClients.Unlock()
-
-	for client := range clients {
-		if client.index == msg.SenderID {
-			continue
-		}
-
-		err := shared.SendMsg(client.conn, msg)
-		if err != nil {
-			fmt.Println("Error sending message to client:", err)
-			client.conn.Close()
-			delete(clients, client)
-			return
-		}
-	}
-
-	fmt.Printf("Broadcasted message from %s\n", msg.SenderName)
-}
-
-func forwardMessage(msg shared.Message) {
-	muNeighborConn.Lock()
-	defer muNeighborConn.Unlock()
-
-	if neighborConn == nil {
-		fmt.Println("No connection to left neighbor; message not forwarded.")
-		return
-	}
-
-	err := shared.SendMsg(neighborConn, msg)
-	if err != nil {
-		fmt.Println("Error forwarding message to left neighbor:", err)
-		neighborConn.Close()
-		neighborConn = nil
-		return
-	}
-
-	fmt.Printf("Forwarded message from %s: %s\n", msg.SenderName, msg.Content)
 }
