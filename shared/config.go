@@ -25,17 +25,6 @@ type ServConfig struct {
 	ServAddrs     []string `json:"servers"`
 }
 
-type SessionInfo struct {
-	ConfigUser   UserConfig
-	ConfigServer ServConfig
-	TkRight      []byte
-	EskaRight    []byte
-	KeyLeft      [32]byte
-	KeyRight     [32]byte
-	Xs           [][32]byte
-	SharedSecret [32]byte
-}
-
 func GetUserConfig(path string) UserConfig {
 	config := UserConfig{}
 
