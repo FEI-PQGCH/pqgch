@@ -1,5 +1,0 @@
-{
-  "names": ["Alice", "Bob", "Charlie"],
-  "servers": ["localhost:9000", "localhost:9001", "localhost:9002"],
-  "index": 0
-}
