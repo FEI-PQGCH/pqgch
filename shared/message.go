@@ -8,21 +8,40 @@ import (
 
 type Message struct {
 	// Routing metadata
-	MsgID      string `json:"msgId"`
+	ID         string `json:"id"`
 	SenderID   int    `json:"sendId"`
 	ReceiverID int    `json:"recvId"`
-	MsgType    int    `json:"msgType"`
+	Type       int    `json:"type"`
+	ClusterID  int    `json:"clusterId"`
 	// Message content for user
 	SenderName string `json:"sender"`
 	Content    string `json:"content"`
 }
 
+var MessageTypeNames = map[int]string{
+	LoginMsg:      "LoginMsg",
+	BroadcastMsg:  "BroadcastMsg",
+	AkeAMsg:       "AkeAMsg",
+	AkeBMsg:       "AkeBMsg",
+	XiMsg:         "XiMsg",
+	LeaderAkeAMsg: "LeaderAkeAMsg",
+	LeaderAkeBMsg: "LeaderAkeBMsg",
+	LeaderXiMsg:   "LeaderXiMsg",
+}
+
+func (m Message) MsgTypeName() string {
+	return MessageTypeNames[m.Type]
+}
+
 const (
-	MsgLogin = iota
-	MsgIntraBroadcast
-	MsgBroadcast
-	MsgAkeSendA
-	MsgAkeSendB
+	LoginMsg = iota
+	BroadcastMsg
+	AkeAMsg
+	AkeBMsg
+	XiMsg
+	LeaderAkeAMsg
+	LeaderAkeBMsg
+	LeaderXiMsg
 )
 
 func SendMsg(conn net.Conn, msg Message) error {

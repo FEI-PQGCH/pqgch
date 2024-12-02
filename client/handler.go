@@ -8,53 +8,51 @@ import (
 	"pqgch-client/shared"
 )
 
-// TODO: refactor protocol.go to not use global variables (except for config)
-
 type MessageHandler interface {
 	HandleMessage(conn net.Conn, msg shared.Message)
 }
 
-type AkeSendAHandler struct{}
-type AkeSendBHandler struct{}
-type IntraBroadcastHandler struct{}
+type AkeAHandler struct{}
+type AkeBHandler struct{}
+type XiHandler struct{}
 type DefaultHandler struct{}
 
-func (h *AkeSendAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	fmt.Println("received AKE A message")
-	responseMsg := GetAkeSharedBMsg(msg)
-	fmt.Println("sending AKE B message")
+func (h *AkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+	fmt.Println("CRYPTO: received AKE A message")
+	responseMsg := shared.GetAkeBMsg(&session, msg, &config.ClusterConfig)
+	fmt.Println("CRYPTO: sending AKE B message")
 	shared.SendMsg(conn, responseMsg)
-	ok, msg := CheckLeftRightKeys()
+	ok, msg := shared.CheckLeftRightKeys(&session, &config.ClusterConfig)
 
 	if ok {
-		fmt.Println("sending Xi")
+		fmt.Println("CRYPTO: sending Xi")
 		shared.SendMsg(conn, msg)
 	}
 }
 
-func (h *AkeSendBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	fmt.Println("received AKE B message")
+func (h *AkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+	fmt.Println("CRYPTO: received AKE B message")
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
-	keyRight = gake.KexAkeSharedA(akeSendB, tkRight, eskaRight, config.GetDecodedSecretKey())
-	fmt.Println("established shared key with right neighbor")
-	ok, msg := CheckLeftRightKeys()
+	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
+	fmt.Println("CRYPTO: established shared key with right neighbor")
+	ok, msg := shared.CheckLeftRightKeys(&session, &config.ClusterConfig)
 
 	if ok {
-		fmt.Println("sending Xi")
+		fmt.Println("CRYPTO: sending Xi")
 		shared.SendMsg(conn, msg)
 	}
 }
 
-func (h *IntraBroadcastHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 	if msg.SenderID == config.Index {
 		return
 	}
-	fmt.Println("received Xi")
+	fmt.Println("CRYPTO: received Xi")
 	xi, _ := base64.StdEncoding.DecodeString(msg.Content)
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
-	Xs[msg.SenderID] = xiArr
-	CheckXs()
+	session.Xs[msg.SenderID] = xiArr
+	shared.CheckXs(&session, &config.ClusterConfig)
 }
 
 func printMessage(msg shared.Message) {
@@ -65,7 +63,7 @@ func printMessage(msg shared.Message) {
 }
 
 func (h *DefaultHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	var plainText, err = DecryptAesGcm(msg.Content, sharedSecret[:])
+	var plainText, err = shared.DecryptAesGcm(msg.Content, &session)
 	if err != nil {
 		fmt.Println("error decrypting message")
 		return
@@ -77,12 +75,12 @@ func (h *DefaultHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 
 func GetHandler(msgType int) MessageHandler {
 	switch msgType {
-	case shared.MsgAkeSendA:
-		return &AkeSendAHandler{}
-	case shared.MsgAkeSendB:
-		return &AkeSendBHandler{}
-	case shared.MsgIntraBroadcast:
-		return &IntraBroadcastHandler{}
+	case shared.AkeAMsg:
+		return &AkeAHandler{}
+	case shared.AkeBMsg:
+		return &AkeBHandler{}
+	case shared.XiMsg:
+		return &XiHandler{}
 	default:
 		return &DefaultHandler{}
 	}

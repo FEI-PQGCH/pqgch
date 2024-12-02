@@ -15,14 +15,9 @@ import (
 )
 
 var (
-	mu           sync.Mutex
-	config       shared.UserConfig
-	tkRight      []byte
-	eskaRight    []byte
-	keyLeft      [32]byte
-	keyRight     [32]byte
-	Xs           [][32]byte
-	sharedSecret [32]byte
+	mu      sync.Mutex
+	config  shared.UserConfig
+	session shared.Session
 )
 
 func main() {
@@ -45,12 +40,13 @@ func main() {
 	defer conn.Close()
 	fmt.Printf("connected to server %s\n", servAddr)
 
-	Xs = make([][32]byte, len(config.Names))
+	session.Xs = make([][32]byte, len(config.Names))
 	loginMsg := shared.Message{
-		MsgID:      uuid.New().String(),
+		ID:         uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		MsgType:    shared.MsgLogin,
+		Type:       shared.LoginMsg,
+		ClusterID:  -1,
 	}
 	shared.SendMsg(conn, loginMsg)
 
@@ -74,30 +70,30 @@ func main() {
 }
 
 func initProtocol(conn net.Conn) {
-	fmt.Println("initiating the protocol")
-	msg := GetAkeInitAMsg()
-	fmt.Println("sending AKE A message")
+	fmt.Println("CRYPTO: initiating the protocol")
+	msg := shared.GetAkeAMsg(&session, &config.ClusterConfig)
+	fmt.Println("CRYPTO: sending AKE A message")
 	shared.SendMsg(conn, msg)
 }
 
 func broadcastMsg(conn net.Conn, text string) {
-	if sharedSecret == [32]byte{} {
+	if session.SharedSecret == [32]byte{} {
 		fmt.Println("no shared secret, skipping")
 		return
 	}
 
-	var cipherText, err = EncryptAesGcm(text, sharedSecret)
+	var cipherText, err = shared.EncryptAesGcm(text, &session)
 	if err != nil {
 		fmt.Println("error encrypting message")
 		return
 	}
 
 	msg := shared.Message{
-		MsgID:      uuid.New().String(),
+		ID:         uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		Content:    cipherText,
-		MsgType:    shared.MsgBroadcast,
+		Type:       shared.BroadcastMsg,
 	}
 	shared.SendMsg(conn, msg)
 }
@@ -112,7 +108,8 @@ func receiveMsgs(conn net.Conn) {
 			continue
 		}
 
-		handler := GetHandler(msg.MsgType)
+		fmt.Printf("RECEIVED: %s from %s\n", msg.MsgTypeName(), msg.SenderName)
+		handler := GetHandler(msg.Type)
 		handler.HandleMessage(conn, msg)
 	}
 

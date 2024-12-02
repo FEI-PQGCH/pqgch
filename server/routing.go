@@ -1,0 +1,79 @@
+package main
+
+import (
+	"fmt"
+	"pqgch-client/shared"
+	"time"
+)
+
+// send a message to a client in this cluster
+func sendMsgToClient(msg shared.Message) {
+	muClients.Lock()
+	defer muClients.Unlock()
+
+	for client := range clients {
+		if client.index == msg.ReceiverID && client.index != msg.SenderID {
+			err := shared.SendMsg(client.conn, msg)
+			if err != nil {
+				fmt.Println("error sending message to client:", err)
+				client.conn.Close()
+				delete(clients, client)
+			}
+
+			fmt.Printf("ROUTE: sent message %s to %s\n", msg.MsgTypeName(), client.name)
+			return
+		}
+
+	}
+	fmt.Printf("error: sending message: either did not find client, or sender is receiver\n")
+}
+
+// broadcast a message to all clients in this cluster except the sender
+func broadcastMessage(msg shared.Message) {
+	muClients.Lock()
+	defer muClients.Unlock()
+
+	for client := range clients {
+		if client.index == msg.SenderID && msg.ClusterID == config.Index {
+			continue
+		}
+
+		err := shared.SendMsg(client.conn, msg)
+		if err != nil {
+			fmt.Println("error sending message to client:", err)
+			client.conn.Close()
+			delete(clients, client)
+			return
+		}
+	}
+
+	fmt.Printf("ROUTE: broadcasted message %s from %s\n", msg.MsgTypeName(), msg.SenderName)
+}
+
+// forward a message to the left neighbor.
+func forwardMessage(msg shared.Message) {
+	muNeighborConn.Lock()
+	defer muNeighborConn.Unlock()
+
+	for {
+		if neighborConn == nil {
+			fmt.Println("no connection to left neighbor; waiting.")
+			muNeighborConn.Unlock()
+			time.Sleep(1 * time.Second)
+			muNeighborConn.Lock()
+			continue
+		}
+
+		err := shared.SendMsg(neighborConn, msg)
+		if err != nil {
+			fmt.Println("error forwarding message to left neighbor:", err)
+			neighborConn.Close()
+			neighborConn = nil
+			return
+		}
+
+		fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.MsgTypeName(), msg.SenderName)
+		break
+	}
+
+}
