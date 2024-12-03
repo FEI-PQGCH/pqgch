@@ -70,10 +70,11 @@ Before running the application, you need to set up the clients and servers. Crea
 #### Client config:
 
 - `leadAddr` - the hostname of the cluster leader of the cluster this client belongs to.
-- `names` - the names, or identifiers of ALL of the cluster members of the cluster this client belongs to.
-- `index` - the index of the client in the cluster.
-- `publicKeys` - the public keys of all of the cluster members of the cluster this client belongs to.
-- `secretKey` - the secret key of this client.
+- `clusterConfig`
+  - `names` - the names, or identifiers of ALL of the cluster members of the cluster this client belongs to.
+  - `index` - the index of the client in the cluster.
+  - `publicKeys` - the public keys of all of the cluster members of the cluster this client belongs to.
+  - `secretKey` - the secret key of this client.
 
 #### Server config:
 
