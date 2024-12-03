@@ -99,8 +99,8 @@ type ClusterConfig struct {
 }
 
 type UserConfig struct {
-	ClusterConfig
-	LeadAddr string `json:"leadAddr"`
+	ClusterConfig `json:"clusterConfig"`
+	LeadAddr      string `json:"leadAddr"`
 }
 
 type ServConfig struct {
