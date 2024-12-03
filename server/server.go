@@ -146,6 +146,8 @@ func connectNeighbor(neighborAddress string) {
 
 			aMsg := shared.GetAkeAMsg(&mainSession, &config)
 			err = shared.SendMsg(neighborConn, aMsg)
+			fmt.Println("CRYPTO: sending Leader AKE A message")
+
 			if err != nil {
 				fmt.Printf("error sending AkeInitA message to right neighbor: %v\n", err)
 			}
@@ -221,6 +223,7 @@ func handleConnection(client Client) {
 		fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
 
 		if msg.Type == shared.LeaderAkeAMsg {
+			fmt.Println("CRYPTO: received Leader AKE A message")
 			responseMsg := shared.GetAkeBMsg(&mainSession, msg, &config)
 			shared.SendMsg(client.conn, responseMsg)
 			fmt.Println("CRYPTO: sending Leader AKE B message")
