@@ -76,8 +76,53 @@ func main() {
 			continue
 		}
 
-		clientLogin(conn)
+		go clientLogin(conn)
 	}
+}
+
+func connectNeighbor(neighborAddress string) {
+	for {
+		muNeighborConn.Lock()
+		fmt.Printf("connecting to right neighbor at %s\n", neighborAddress)
+		conn, err := net.Dial("tcp", neighborAddress)
+		if err != nil {
+			fmt.Printf("error connecting to right neighbor: %v. Retrying...\n", err)
+			muNeighborConn.Unlock()
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		neighborConn = conn
+		fmt.Printf("connected to right neighbor (%s)\n", neighborAddress)
+		loginMsg := shared.Message{
+			ID:         uuid.New().String(),
+			SenderID:   -1,
+			SenderName: "server",
+			Type:       shared.LoginMsg,
+		}
+
+		loginMsg.Send(neighborConn)
+		msg := shared.GetAkeAMsg(&mainSession, &config)
+		msg.Send(neighborConn)
+		fmt.Println("CRYPTO: sending Leader AKE A message")
+
+		muNeighborConn.Unlock()
+		break
+	}
+
+	msgReader := shared.NewMessageReader(neighborConn)
+
+	if !msgReader.HasMessage() {
+		fmt.Println("right neighbor did not send login message")
+		neighborConn.Close()
+		muNeighborConn.Lock()
+		neighborConn = nil
+		muNeighborConn.Unlock()
+		return
+	}
+
+	msg := msgReader.GetMessage()
+	handler := GetHandler(msg)
+	handler.HandleMessage(nil, msg)
 }
 
 func clientLogin(conn net.Conn) {
@@ -115,68 +160,10 @@ func clientLogin(conn net.Conn) {
 		sendMsgToClient(msg)
 	}
 
-	go handleConnection(client)
+	handleClient(client)
 }
 
-func connectNeighbor(neighborAddress string) {
-	for {
-		muNeighborConn.Lock()
-		if neighborConn == nil {
-			fmt.Printf("connecting to right neighbor at %s\n", neighborAddress)
-			conn, err := net.Dial("tcp", neighborAddress)
-			if err != nil {
-				fmt.Printf("error connecting to right neighbor: %v. Retrying...\n", err)
-				muNeighborConn.Unlock()
-				time.Sleep(2 * time.Second)
-				continue
-			}
-			neighborConn = conn
-			fmt.Printf("connected to right neighbor (%s)\n", neighborAddress)
-			loginMsg := shared.Message{
-				ID:         uuid.New().String(),
-				SenderID:   -1,
-				SenderName: "server",
-				Type:       shared.LoginMsg,
-			}
-
-			err = loginMsg.Send(neighborConn)
-			if err != nil {
-				fmt.Printf("error sending login message to right neighbor: %v\n", err)
-				neighborConn.Close()
-				neighborConn = nil
-			}
-
-			msg := shared.GetAkeAMsg(&mainSession, &config)
-			err = msg.Send(neighborConn)
-			fmt.Println("CRYPTO: sending Leader AKE A message")
-
-			if err != nil {
-				fmt.Printf("error sending AkeInitA message to right neighbor: %v\n", err)
-			}
-			muNeighborConn.Unlock()
-			break
-		}
-		muNeighborConn.Unlock()
-		time.Sleep(5 * time.Second)
-	}
-
-	msgReader := shared.NewMessageReader(neighborConn)
-
-	if !msgReader.HasMessage() {
-		fmt.Println("right neighbor did not send login message")
-		neighborConn.Close()
-		muNeighborConn.Lock()
-		neighborConn = nil
-		muNeighborConn.Unlock()
-		return
-	}
-
-	msg := msgReader.GetMessage()
-	handler := GetHandler(msg)
-	handler.HandleMessage(nil, msg)
-}
-
-func handleConnection(client Client) {
+func handleClient(client Client) {
 	defer func() {
 		muClients.Lock()
 		delete(clients, client)
