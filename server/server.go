@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -85,20 +83,18 @@ func main() {
 func clientLogin(conn net.Conn) {
 	fmt.Println("new client connected:", conn.RemoteAddr())
 
-	scanner := bufio.NewScanner(conn)
-	scanner.Scan()
-	msgData := scanner.Bytes()
-
-	var msg shared.Message
-	err := json.Unmarshal(msgData, &msg)
-	if err != nil {
-		fmt.Println("error unmarshaling message:", err)
+	msgReader := shared.NewMessageReader(conn)
+	if !msgReader.HasMessage() {
+		fmt.Println("client did not send login message")
 		conn.Close()
+		return
 	}
 
+	msg := msgReader.GetMessage()
 	if msg.Type != shared.LoginMsg {
 		fmt.Println("client did not send login message")
 		conn.Close()
+		return
 	}
 
 	client := Client{name: msg.SenderName, conn: conn, index: msg.SenderID}
@@ -143,15 +139,15 @@ func connectNeighbor(neighborAddress string) {
 				Type:       shared.LoginMsg,
 			}
 
-			err = shared.SendMsg(neighborConn, loginMsg)
+			err = loginMsg.Send(neighborConn)
 			if err != nil {
 				fmt.Printf("error sending login message to right neighbor: %v\n", err)
 				neighborConn.Close()
 				neighborConn = nil
 			}
 
-			aMsg := shared.GetAkeAMsg(&mainSession, &config)
-			err = shared.SendMsg(neighborConn, aMsg)
+			msg := shared.GetAkeAMsg(&mainSession, &config)
+			err = msg.Send(neighborConn)
 			fmt.Println("CRYPTO: sending Leader AKE A message")
 
 			if err != nil {
@@ -164,17 +160,18 @@ func connectNeighbor(neighborAddress string) {
 		time.Sleep(5 * time.Second)
 	}
 
-	scanner := bufio.NewScanner(neighborConn)
-	scanner.Scan()
-	msgData := scanner.Bytes()
+	msgReader := shared.NewMessageReader(neighborConn)
 
-	var msg shared.Message
-	err := json.Unmarshal(msgData, &msg)
-	if err != nil {
-		fmt.Println("error unmarshaling message:", err)
+	if !msgReader.HasMessage() {
+		fmt.Println("right neighbor did not send login message")
+		neighborConn.Close()
+		muNeighborConn.Lock()
+		neighborConn = nil
+		muNeighborConn.Unlock()
 		return
 	}
 
+	msg := msgReader.GetMessage()
 	handler := GetHandler(msg)
 	handler.HandleMessage(nil, msg)
 }
@@ -188,16 +185,10 @@ func handleConnection(client Client) {
 		fmt.Println("client disconnected:", client.conn.RemoteAddr())
 	}()
 
-	scanner := bufio.NewScanner(client.conn)
-	for scanner.Scan() {
-		msgData := scanner.Bytes()
+	msgReader := shared.NewMessageReader(client.conn)
 
-		var msg shared.Message
-		err := json.Unmarshal(msgData, &msg)
-		if err != nil {
-			fmt.Println("error unmarshaling message:", err)
-			continue
-		}
+	for msgReader.HasMessage() {
+		msg := msgReader.GetMessage()
 
 		muReceivedMessages.Lock()
 		if receivedMessages[msg.ID] {
@@ -214,8 +205,5 @@ func handleConnection(client Client) {
 		fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
 		handler := GetHandler(msg)
 		handler.HandleMessage(client.conn, msg)
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Println("error reading from client:", err)
 	}
 }

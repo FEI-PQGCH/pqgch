@@ -13,7 +13,7 @@ func sendMsgToClient(msg shared.Message) {
 
 	for client := range clients {
 		if client.index == msg.ReceiverID && client.index != msg.SenderID {
-			err := shared.SendMsg(client.conn, msg)
+			err := msg.Send(client.conn)
 			if err != nil {
 				fmt.Println("error sending message to client:", err)
 				client.conn.Close()
@@ -38,7 +38,7 @@ func broadcastMessage(msg shared.Message) {
 			continue
 		}
 
-		err := shared.SendMsg(client.conn, msg)
+		err := msg.Send(client.conn)
 		if err != nil {
 			fmt.Println("error sending message to client:", err)
 			client.conn.Close()
@@ -64,7 +64,7 @@ func forwardMessage(msg shared.Message) {
 			continue
 		}
 
-		err := shared.SendMsg(neighborConn, msg)
+		err := msg.Send(neighborConn)
 		if err != nil {
 			fmt.Println("error forwarding message to left neighbor:", err)
 			neighborConn.Close()

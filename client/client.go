@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -55,7 +54,7 @@ func main() {
 		Type:       shared.LoginMsg,
 		ClusterID:  -1,
 	}
-	shared.SendMsg(conn, loginMsg)
+	loginMsg.Send(conn)
 
 	go receiveMsgs(conn)
 
@@ -80,7 +79,7 @@ func initProtocol(conn net.Conn) {
 	fmt.Println("CRYPTO: initiating the protocol")
 	msg := shared.GetAkeAMsg(&session, &config.ClusterConfig)
 	fmt.Println("CRYPTO: sending AKE A message")
-	shared.SendMsg(conn, msg)
+	msg.Send(conn)
 }
 
 func broadcastMsg(conn net.Conn, text string) {
@@ -102,26 +101,17 @@ func broadcastMsg(conn net.Conn, text string) {
 		Content:    cipherText,
 		Type:       shared.BroadcastMsg,
 	}
-	shared.SendMsg(conn, msg)
+	msg.Send(conn)
 }
 
 func receiveMsgs(conn net.Conn) {
-	scanner := bufio.NewScanner(conn)
-	for scanner.Scan() {
-		var msg shared.Message
-		err := json.Unmarshal(scanner.Bytes(), &msg)
-		if err != nil {
-			fmt.Println("error unmarshaling received message:", err)
-			continue
-		}
+	msgReader := shared.NewMessageReader(conn)
 
+	for msgReader.HasMessage() {
+		msg := msgReader.GetMessage()
 		fmt.Printf("RECEIVED: %s from %s\n", msg.MsgTypeName(), msg.SenderName)
 		handler := GetHandler(msg.Type)
 		handler.HandleMessage(conn, msg)
-	}
-
-	if err := scanner.Err(); err != nil {
-		fmt.Println("error reading from server:", err)
 	}
 
 	fmt.Println("disconnected from server")

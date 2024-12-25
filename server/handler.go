@@ -35,7 +35,7 @@ func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 
 func (h *LeaderAkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 	sendFunc := func(message shared.Message) {
-		shared.SendMsg(conn, message)
+		message.Send(conn)
 	}
 	shared.HandleAkeA(msg, &config, &mainSession, sendFunc, forwardMessage)
 }

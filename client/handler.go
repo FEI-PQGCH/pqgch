@@ -17,14 +17,14 @@ type DefaultHandler struct{}
 
 func (h *AkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 	sendFunc := func(message shared.Message) {
-		shared.SendMsg(conn, message)
+		message.Send(conn)
 	}
 	shared.HandleAkeA(msg, &config, &session, sendFunc, sendFunc)
 }
 
 func (h *AkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 	sendFunc := func(message shared.Message) {
-		shared.SendMsg(conn, message)
+		message.Send(conn)
 	}
 	shared.HandleAkeB(msg, &config, &session, sendFunc)
 }

@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -44,8 +45,8 @@ const (
 	LeaderXiMsg
 )
 
-func SendMsg(conn net.Conn, msg Message) error {
-	msgData, err := json.Marshal(msg)
+func (m Message) Send(conn net.Conn) error {
+	msgData, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("error marshaling message: %w", err)
 	}
@@ -58,4 +59,51 @@ func SendMsg(conn net.Conn, msg Message) error {
 	}
 
 	return nil
+}
+
+type MessageReader struct {
+	scanner *bufio.Scanner
+	nextMsg *Message
+	hasNext bool
+}
+
+func NewMessageReader(conn net.Conn) *MessageReader {
+	reader := &MessageReader{
+		scanner: bufio.NewScanner(conn),
+	}
+	return reader
+}
+
+func (mr *MessageReader) advance() {
+	mr.nextMsg = nil
+	mr.hasNext = false
+	if mr.scanner.Scan() {
+		var msg Message
+		err := json.Unmarshal(mr.scanner.Bytes(), &msg)
+		if err != nil {
+			fmt.Println("error unmarshaling message:", err)
+		} else {
+			mr.nextMsg = &msg
+			mr.hasNext = true
+		}
+	} else {
+		if err := mr.scanner.Err(); err != nil {
+			fmt.Println("error reading from connection:", err)
+		} else {
+			fmt.Println("connection closed")
+		}
+	}
+}
+
+func (mr *MessageReader) HasMessage() bool {
+	mr.advance()
+	return mr.hasNext
+}
+
+func (mr *MessageReader) GetMessage() Message {
+	if mr.nextMsg == nil {
+		panic("getMsg called when no valid message is available")
+	}
+	msg := *mr.nextMsg
+	return msg
 }
