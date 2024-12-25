@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net"
-	"pqgch-client/gake"
 	"pqgch-client/shared"
 )
 
@@ -18,41 +16,21 @@ type XiHandler struct{}
 type DefaultHandler struct{}
 
 func (h *AkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	fmt.Println("CRYPTO: received AKE A message")
-	responseMsg := shared.GetAkeBMsg(&session, msg, &config.ClusterConfig)
-	fmt.Println("CRYPTO: sending AKE B message")
-	shared.SendMsg(conn, responseMsg)
-	ok, msg := shared.CheckLeftRightKeys(&session, &config.ClusterConfig)
-
-	if ok {
-		fmt.Println("CRYPTO: sending Xi")
-		shared.SendMsg(conn, msg)
+	sendFunc := func(message shared.Message) {
+		shared.SendMsg(conn, message)
 	}
+	shared.HandleAkeA(msg, &config, &session, sendFunc, sendFunc)
 }
 
 func (h *AkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	fmt.Println("CRYPTO: received AKE B message")
-	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
-	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
-	fmt.Println("CRYPTO: established shared key with right neighbor")
-	ok, msg := shared.CheckLeftRightKeys(&session, &config.ClusterConfig)
-
-	if ok {
-		fmt.Println("CRYPTO: sending Xi")
-		shared.SendMsg(conn, msg)
+	sendFunc := func(message shared.Message) {
+		shared.SendMsg(conn, message)
 	}
+	shared.HandleAkeB(msg, &config, &session, sendFunc)
 }
 
 func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	if msg.SenderID == config.Index {
-		return
-	}
-	fmt.Println("CRYPTO: received Xi")
-	xi, _ := base64.StdEncoding.DecodeString(msg.Content)
-	var xiArr [32]byte
-	copy(xiArr[:], xi)
-	session.Xs[msg.SenderID] = xiArr
-	shared.CheckXs(&session, &config.ClusterConfig)
+	shared.HandleXi(msg, &config, &session)
 }
 
 func printMessage(msg shared.Message) {

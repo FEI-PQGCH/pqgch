@@ -22,17 +22,23 @@ type Session struct {
 	SharedSecret [32]byte
 }
 
-func CheckLeftRightKeys(session *Session, config ConfigAccessor) (bool, Message) {
+func MakeSession(config ConfigAccessor) Session {
+	return Session{
+		Xs: make([][32]byte, len(config.GetNamesOrAddrs())),
+	}
+}
+
+func checkLeftRightKeys(session *Session, config ConfigAccessor) (bool, Message) {
 	if session.KeyRight != [32]byte{} && session.KeyLeft != [32]byte{} {
 		fmt.Println("CRYPTO: established shared keys with both neighbors")
-		msg := GetXiMsg(session, config)
-		CheckXs(session, config)
-		return true, msg
+		xi := getXiMsg(session, config)
+		checkXs(session, config)
+		return true, xi
 	}
 	return false, Message{}
 }
 
-func GetXiMsg(session *Session, config ConfigAccessor) Message {
+func getXiMsg(session *Session, config ConfigAccessor) Message {
 	xi, _, _ /* TODO: mi1, mi2 */ := gake.ComputeXsCommitment(
 		config.GetIndex(),
 		session.KeyRight,
@@ -54,7 +60,7 @@ func GetXiMsg(session *Session, config ConfigAccessor) Message {
 	return msg
 }
 
-func CheckXs(session *Session, config ConfigAccessor) {
+func checkXs(session *Session, config ConfigAccessor) {
 	for i := 0; i < len(session.Xs); i++ {
 		if (session.Xs)[i] == [32]byte{} {
 			return
@@ -92,7 +98,7 @@ func GetAkeAMsg(session *Session, config ConfigAccessor) Message {
 	return msg
 }
 
-func GetAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
+func getAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
 	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
 
 	var akeSendB []byte
@@ -164,4 +170,59 @@ func DecryptAesGcm(encryptedText string, session *Session) (string, error) {
 	}
 
 	return string(plainText), nil
+}
+
+// TODO: return new session instead of modifying the existing one
+
+func HandleAkeA(
+	msg Message,
+	config ConfigAccessor,
+	session *Session,
+	send func(Message),
+	broadcast func(Message),
+) {
+	fmt.Println("CRYPTO: received AKE A message")
+	responseMsg := getAkeBMsg(session, msg, config)
+	fmt.Println("CRYPTO: sending AKE B message")
+	send(responseMsg)
+	ok, xi := checkLeftRightKeys(session, config)
+
+	if ok {
+		fmt.Println("CRYPTO: sending Xi")
+		broadcast(xi)
+	}
+}
+
+func HandleAkeB(
+	msg Message,
+	config ConfigAccessor,
+	session *Session,
+	broadcast func(Message),
+) {
+	fmt.Println("CRYPTO: received AKE B message")
+	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
+	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
+	fmt.Println("CRYPTO: established shared key with right neighbor")
+	ok, xi := checkLeftRightKeys(session, config)
+
+	if ok {
+		fmt.Println("CRYPTO: sending Xi")
+		broadcast(xi)
+	}
+}
+
+func HandleXi(
+	msg Message,
+	config ConfigAccessor,
+	session *Session,
+) {
+	if msg.SenderID == config.GetIndex() {
+		return
+	}
+	fmt.Println("CRYPTO: received Xi")
+	xi, _ := base64.StdEncoding.DecodeString(msg.Content)
+	var xiArr [32]byte
+	copy(xiArr[:], xi)
+	session.Xs[msg.SenderID] = xiArr
+	checkXs(session, config)
 }

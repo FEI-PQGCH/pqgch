@@ -2,12 +2,10 @@ package main
 
 import (
 	"bufio"
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
-	"pqgch-client/gake"
 	"pqgch-client/shared"
 	"sync"
 	"time"
@@ -33,7 +31,7 @@ var (
 	mainSession        shared.Session
 )
 
-func main() {
+func initialize() net.Listener {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
@@ -41,13 +39,13 @@ func main() {
 		config = shared.GetServConfig(*configFlag)
 	} else {
 		fmt.Println("please provide a configuration file using the -config flag.")
-		return
+		panic("no configuration file provided")
 	}
 
 	_, selfPort, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
 		fmt.Println("error parsing self address from config:", err)
-		return
+		panic("error parsing self address from config")
 	}
 	port := selfPort
 
@@ -56,12 +54,20 @@ func main() {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		fmt.Println("error starting TCP server:", err)
-		return
+		panic("error starting TCP server")
 	}
-	defer listener.Close()
+
 	fmt.Println("server listening on", address)
-	clusterSession.Xs = make([][32]byte, len(config.Names))
-	mainSession.Xs = make([][32]byte, len(config.ServAddrs))
+
+	clusterSession = shared.MakeSession(&config.ClusterConfig)
+	mainSession = shared.MakeSession(&config)
+
+	return listener
+}
+
+func main() {
+	listener := initialize()
+	defer listener.Close()
 
 	go connectNeighbor(config.GetRightNeighbor())
 
@@ -169,23 +175,8 @@ func connectNeighbor(neighborAddress string) {
 		return
 	}
 
-	if msg.Type == shared.LeaderAkeBMsg {
-		fmt.Println("CRYPTO: received Leader AKE B message")
-		akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
-		mainSession.KeyRight = gake.KexAkeSharedA(akeSendB, mainSession.TkRight, mainSession.EskaRight, config.GetDecodedSecretKey())
-
-		fmt.Println("CRYPTO: established shared key with right neighbor")
-		fmt.Printf("CRYPTO: KeyRight%d: %02x\n", config.Index, mainSession.KeyRight)
-
-		ok, msg := shared.CheckLeftRightKeys(&mainSession, &config)
-
-		if ok {
-			fmt.Printf("CRYPTO: sending Xi\n")
-			forwardMessage(msg)
-		}
-	} else {
-		fmt.Println("error: expected Leader AKE B message")
-	}
+	handler := GetHandler(msg)
+	handler.HandleMessage(nil, msg)
 }
 
 func handleConnection(client Client) {
@@ -221,37 +212,8 @@ func handleConnection(client Client) {
 		}
 
 		fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
-
-		if msg.Type == shared.LeaderAkeAMsg {
-			fmt.Println("CRYPTO: received Leader AKE A message")
-			responseMsg := shared.GetAkeBMsg(&mainSession, msg, &config)
-			shared.SendMsg(client.conn, responseMsg)
-			fmt.Println("CRYPTO: sending Leader AKE B message")
-			ok, msg := shared.CheckLeftRightKeys(&mainSession, &config)
-
-			if ok {
-				fmt.Printf("CRYPTO: sending Xi\n")
-				forwardMessage(msg)
-			}
-			continue
-		}
-
-		if msg.Type == shared.LeaderXiMsg {
-			fmt.Printf("CRYPTO: received Leader Xi (%d) message", msg.SenderID)
-
-			if msg.SenderID != config.Index {
-				xi, _ := base64.StdEncoding.DecodeString(msg.Content)
-				var xiArr [32]byte
-				copy(xiArr[:], xi)
-				mainSession.Xs[msg.SenderID] = xiArr
-				shared.CheckXs(&mainSession, &config)
-				forwardMessage(msg)
-			}
-			continue
-		}
-
 		handler := GetHandler(msg)
-		handler.HandleMessage(msg)
+		handler.HandleMessage(client.conn, msg)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Println("error reading from client:", err)

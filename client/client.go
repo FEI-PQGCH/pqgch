@@ -20,7 +20,7 @@ var (
 	session shared.Session
 )
 
-func main() {
+func initialize() net.Conn {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
@@ -28,19 +28,26 @@ func main() {
 		config = shared.GetUserConfig(*configFlag)
 	} else {
 		fmt.Println("please provide a configuration file using the -config flag")
-		return
+		panic("no configuration file provided")
 	}
 
 	servAddr := config.LeadAddr
 	conn, err := net.Dial("tcp", servAddr)
 	if err != nil {
 		fmt.Printf("error connecting to server %s: %v\n", servAddr, err)
-		return
+		panic("error connecting to server")
 	}
-	defer conn.Close()
+
 	fmt.Printf("connected to server %s\n", servAddr)
 
-	session.Xs = make([][32]byte, len(config.Names))
+	session = shared.MakeSession(&config.ClusterConfig)
+	return conn
+}
+
+func main() {
+	conn := initialize()
+	defer conn.Close()
+
 	loginMsg := shared.Message{
 		ID:         uuid.New().String(),
 		SenderID:   config.Index,
