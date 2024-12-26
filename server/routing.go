@@ -50,14 +50,14 @@ func broadcastMessage(msg shared.Message) {
 	fmt.Printf("ROUTE: broadcasted message %s from %s\n", msg.MsgTypeName(), msg.SenderName)
 }
 
-// forward a message to the left neighbor.
+// forward a message to the right neighbor.
 func forwardMessage(msg shared.Message) {
 	muNeighborConn.Lock()
 	defer muNeighborConn.Unlock()
 
 	for {
 		if neighborConn == nil {
-			fmt.Println("no connection to left neighbor; waiting.")
+			fmt.Println("no connection to right neighbor; waiting.")
 			muNeighborConn.Unlock()
 			time.Sleep(1 * time.Second)
 			muNeighborConn.Lock()
@@ -66,7 +66,7 @@ func forwardMessage(msg shared.Message) {
 
 		err := msg.Send(neighborConn)
 		if err != nil {
-			fmt.Println("error forwarding message to left neighbor:", err)
+			fmt.Println("error forwarding message to right neighbor:", err)
 			neighborConn.Close()
 			neighborConn = nil
 			return

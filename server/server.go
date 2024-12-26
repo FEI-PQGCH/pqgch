@@ -121,6 +121,7 @@ func connectNeighbor(neighborAddress string) {
 	}
 
 	msg := msgReader.GetMessage()
+	fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
 	handler := GetHandler(msg)
 	handler.HandleMessage(nil, msg)
 }
@@ -160,10 +161,10 @@ func clientLogin(conn net.Conn) {
 		sendMsgToClient(msg)
 	}
 
-	handleClient(client)
+	handleClient(client, *msgReader)
 }
 
-func handleClient(client Client) {
+func handleClient(client Client, reader shared.MessageReader) {
 	defer func() {
 		muClients.Lock()
 		delete(clients, client)
@@ -172,10 +173,9 @@ func handleClient(client Client) {
 		fmt.Println("client disconnected:", client.conn.RemoteAddr())
 	}()
 
-	msgReader := shared.NewMessageReader(client.conn)
-
-	for msgReader.HasMessage() {
-		msg := msgReader.GetMessage()
+	for reader.HasMessage() {
+		msg := reader.GetMessage()
+		fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
 
 		muReceivedMessages.Lock()
 		if receivedMessages[msg.ID] {
@@ -189,7 +189,6 @@ func handleClient(client Client) {
 			msg.ClusterID = config.Index
 		}
 
-		fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
 		handler := GetHandler(msg)
 		handler.HandleMessage(client.conn, msg)
 	}
