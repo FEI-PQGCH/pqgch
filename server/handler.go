@@ -21,11 +21,18 @@ type SpecificClientHandler struct{}
 type DefaultHandler struct{}
 
 func (h *AkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	shared.HandleAkeA(msg, &config.ClusterConfig, &clusterSession, sendMsgToClient, broadcastMessage)
+	akeB, xi := shared.HandleAkeA(msg, &config.ClusterConfig, &clusterSession)
+	sendMsgToClient(akeB)
+	if xi != (shared.Message{}) {
+		broadcastMessage(xi)
+	}
 }
 
 func (h *AkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	shared.HandleAkeB(msg, &config.ClusterConfig, &clusterSession, broadcastMessage)
+	xi := shared.HandleAkeB(msg, &config.ClusterConfig, &clusterSession)
+	if xi != (shared.Message{}) {
+		broadcastMessage(xi)
+	}
 }
 
 func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
@@ -34,14 +41,18 @@ func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 }
 
 func (h *LeaderAkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	sendFunc := func(message shared.Message) {
-		message.Send(conn)
+	akeB, xi := shared.HandleAkeA(msg, &config, &mainSession)
+	akeB.Send(conn)
+	if xi != (shared.Message{}) {
+		forwardMessage(xi)
 	}
-	shared.HandleAkeA(msg, &config, &mainSession, sendFunc, forwardMessage)
 }
 
 func (h *LeaderAkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	shared.HandleAkeB(msg, &config, &mainSession, forwardMessage)
+	xi := shared.HandleAkeB(msg, &config, &mainSession)
+	if xi != (shared.Message{}) {
+		forwardMessage(xi)
+	}
 }
 
 func (h *LeaderXiHandler) HandleMessage(conn net.Conn, msg shared.Message) {

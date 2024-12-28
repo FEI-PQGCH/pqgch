@@ -16,17 +16,18 @@ type XiHandler struct{}
 type DefaultHandler struct{}
 
 func (h *AkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	sendFunc := func(message shared.Message) {
-		message.Send(conn)
+	akeB, xi := shared.HandleAkeA(msg, &config, &session)
+	akeB.Send(conn)
+	if xi != (shared.Message{}) {
+		xi.Send(conn)
 	}
-	shared.HandleAkeA(msg, &config, &session, sendFunc, sendFunc)
 }
 
 func (h *AkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	sendFunc := func(message shared.Message) {
-		message.Send(conn)
+	xi := shared.HandleAkeB(msg, &config, &session)
+	if xi != (shared.Message{}) {
+		xi.Send(conn)
 	}
-	shared.HandleAkeB(msg, &config, &session, sendFunc)
 }
 
 func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {

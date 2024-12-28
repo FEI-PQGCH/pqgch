@@ -28,14 +28,15 @@ func MakeSession(config ConfigAccessor) Session {
 	}
 }
 
-func checkLeftRightKeys(session *Session, config ConfigAccessor) (bool, Message) {
+func checkLeftRightKeys(session *Session, config ConfigAccessor) Message {
 	if session.KeyRight != [32]byte{} && session.KeyLeft != [32]byte{} {
 		fmt.Println("CRYPTO: established shared keys with both neighbors")
 		xi := getXiMsg(session, config)
 		checkXs(session, config)
-		return true, xi
+		return xi
 	}
-	return false, Message{}
+
+	return Message{}
 }
 
 func getXiMsg(session *Session, config ConfigAccessor) Message {
@@ -171,43 +172,25 @@ func DecryptAesGcm(encryptedText string, session *Session) (string, error) {
 	return string(plainText), nil
 }
 
-// TODO: return new session instead of modifying the existing one
-
 func HandleAkeA(
 	msg Message,
 	config ConfigAccessor,
 	session *Session,
-	send func(Message),
-	broadcast func(Message),
-) {
-	fmt.Println("CRYPTO: received AKE A message")
-	responseMsg := getAkeBMsg(session, msg, config)
-	fmt.Println("CRYPTO: sending AKE B message")
-	send(responseMsg)
-	ok, xi := checkLeftRightKeys(session, config)
-
-	if ok {
-		fmt.Println("CRYPTO: sending Xi")
-		broadcast(xi)
-	}
+) (Message, Message) {
+	akeB := getAkeBMsg(session, msg, config)
+	xi := checkLeftRightKeys(session, config)
+	return akeB, xi
 }
 
 func HandleAkeB(
 	msg Message,
 	config ConfigAccessor,
 	session *Session,
-	broadcast func(Message),
-) {
-	fmt.Println("CRYPTO: received AKE B message")
+) Message {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
-	fmt.Println("CRYPTO: established shared key with right neighbor")
-	ok, xi := checkLeftRightKeys(session, config)
-
-	if ok {
-		fmt.Println("CRYPTO: sending Xi")
-		broadcast(xi)
-	}
+	xi := checkLeftRightKeys(session, config)
+	return xi
 }
 
 func HandleXi(
@@ -218,7 +201,6 @@ func HandleXi(
 	if msg.SenderID == config.GetIndex() {
 		return
 	}
-	fmt.Println("CRYPTO: received Xi")
 	xi, _ := base64.StdEncoding.DecodeString(msg.Content)
 	var xiArr [32]byte
 	copy(xiArr[:], xi)
