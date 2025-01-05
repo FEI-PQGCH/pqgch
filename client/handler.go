@@ -6,31 +6,22 @@ import (
 	"pqgch-client/shared"
 )
 
-type MessageHandler interface {
-	HandleMessage(conn net.Conn, msg shared.Message)
-}
-
-type AkeAHandler struct{}
-type AkeBHandler struct{}
-type XiHandler struct{}
-type DefaultHandler struct{}
-
-func (h *AkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func akeAHandler(conn net.Conn, msg shared.Message) {
 	akeB, xi := shared.HandleAkeA(msg, &config, &session)
 	akeB.Send(conn)
-	if xi != (shared.Message{}) {
+	if !xi.IsEmpty() {
 		xi.Send(conn)
 	}
 }
 
-func (h *AkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func akeBHandler(conn net.Conn, msg shared.Message) {
 	xi := shared.HandleAkeB(msg, &config, &session)
-	if xi != (shared.Message{}) {
+	if !xi.IsEmpty() {
 		xi.Send(conn)
 	}
 }
 
-func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func xiHandler(msg shared.Message) {
 	shared.HandleXi(msg, &config, &session)
 }
 
@@ -41,7 +32,7 @@ func printMessage(msg shared.Message) {
 	fmt.Print("You: ")
 }
 
-func (h *DefaultHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func defaultHandler(msg shared.Message) {
 	var plainText, err = shared.DecryptAesGcm(msg.Content, &session)
 	if err != nil {
 		fmt.Println("error decrypting message")
@@ -52,15 +43,15 @@ func (h *DefaultHandler) HandleMessage(conn net.Conn, msg shared.Message) {
 	printMessage(msg)
 }
 
-func GetHandler(msgType int) MessageHandler {
-	switch msgType {
+func handleMessage(conn net.Conn, msg shared.Message) {
+	switch msg.Type {
 	case shared.AkeAMsg:
-		return &AkeAHandler{}
+		akeAHandler(conn, msg)
 	case shared.AkeBMsg:
-		return &AkeBHandler{}
+		akeBHandler(conn, msg)
 	case shared.XiMsg:
-		return &XiHandler{}
+		xiHandler(msg)
 	default:
-		return &DefaultHandler{}
+		defaultHandler(msg)
 	}
 }

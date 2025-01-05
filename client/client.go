@@ -19,7 +19,7 @@ var (
 	session shared.Session
 )
 
-func initialize() net.Conn {
+func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
@@ -36,16 +36,10 @@ func initialize() net.Conn {
 		fmt.Printf("error connecting to server %s: %v\n", servAddr, err)
 		panic("error connecting to server")
 	}
-
+	defer conn.Close()
 	fmt.Printf("connected to server %s\n", servAddr)
 
 	session = shared.MakeSession(&config.ClusterConfig)
-	return conn
-}
-
-func main() {
-	conn := initialize()
-	defer conn.Close()
 
 	loginMsg := shared.Message{
 		ID:         uuid.New().String(),
@@ -56,7 +50,7 @@ func main() {
 	}
 	loginMsg.Send(conn)
 
-	go receiveMsgs(conn)
+	go receiver(conn)
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -70,7 +64,7 @@ func main() {
 		case "init":
 			initProtocol(conn)
 		default:
-			broadcastMsg(conn, text)
+			send(conn, text)
 		}
 	}
 }
@@ -82,7 +76,7 @@ func initProtocol(conn net.Conn) {
 	msg.Send(conn)
 }
 
-func broadcastMsg(conn net.Conn, text string) {
+func send(conn net.Conn, text string) {
 	if session.SharedSecret == [32]byte{} {
 		fmt.Println("no shared secret, skipping")
 		return
@@ -104,14 +98,13 @@ func broadcastMsg(conn net.Conn, text string) {
 	msg.Send(conn)
 }
 
-func receiveMsgs(conn net.Conn) {
+func receiver(conn net.Conn) {
 	msgReader := shared.NewMessageReader(conn)
 
 	for msgReader.HasMessage() {
 		msg := msgReader.GetMessage()
-		fmt.Printf("RECEIVED: %s from %s\n", msg.MsgTypeName(), msg.SenderName)
-		handler := GetHandler(msg.Type)
-		handler.HandleMessage(conn, msg)
+		fmt.Printf("RECEIVED: %s from %s\n", msg.TypeName(), msg.SenderName)
+		handleMessage(conn, msg)
 	}
 
 	fmt.Println("disconnected from server")

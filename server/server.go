@@ -18,18 +18,16 @@ type Client struct {
 }
 
 var (
-	receivedMessages   = make(map[string]bool)
-	muReceivedMessages sync.Mutex
-	clients            = make(map[Client]bool)
-	muClients          sync.Mutex
-	neighborConn       net.Conn
-	muNeighborConn     sync.Mutex
-	config             shared.ServConfig
-	clusterSession     shared.Session
-	mainSession        shared.Session
+	clients        = make(map[Client]bool)
+	muClients      sync.Mutex
+	neighborConn   net.Conn
+	muNeighborConn sync.Mutex
+	config         shared.ServConfig
+	clusterSession shared.Session
+	mainSession    shared.Session
 )
 
-func initialize() net.Listener {
+func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
@@ -54,18 +52,12 @@ func initialize() net.Listener {
 		fmt.Println("error starting TCP server:", err)
 		panic("error starting TCP server")
 	}
-
+	defer listener.Close()
 	fmt.Println("server listening on", address)
 
 	clusterSession = shared.MakeSession(&config.ClusterConfig)
 	mainSession = shared.MakeSession(&config)
-
-	return listener
-}
-
-func main() {
-	listener := initialize()
-	defer listener.Close()
+	tracker := shared.NewMessageTracker()
 
 	go connectNeighbor(config.GetRightNeighbor())
 
@@ -76,7 +68,7 @@ func main() {
 			continue
 		}
 
-		go clientLogin(conn)
+		go handleClient(conn, tracker)
 	}
 }
 
@@ -121,24 +113,23 @@ func connectNeighbor(neighborAddress string) {
 	}
 
 	msg := msgReader.GetMessage()
-	fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
-	handler := GetHandler(msg)
-	handler.HandleMessage(nil, msg)
+	fmt.Printf("RECEIVED: %s from %s \n", msg.TypeName(), msg.SenderName)
+	handleMessage(nil, msg)
 }
 
-func clientLogin(conn net.Conn) {
+func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 	fmt.Println("new client connected:", conn.RemoteAddr())
 
-	msgReader := shared.NewMessageReader(conn)
-	if !msgReader.HasMessage() {
-		fmt.Println("client did not send login message")
+	reader := shared.NewMessageReader(conn)
+	if !reader.HasMessage() {
+		fmt.Println("error: client did not send message")
 		conn.Close()
 		return
 	}
 
-	msg := msgReader.GetMessage()
+	msg := reader.GetMessage()
 	if msg.Type != shared.LoginMsg {
-		fmt.Println("client did not send login message")
+		fmt.Println("error: client did not send login message")
 		conn.Close()
 		return
 	}
@@ -148,6 +139,13 @@ func clientLogin(conn net.Conn) {
 	muClients.Lock()
 	clients[client] = true
 	muClients.Unlock()
+	defer func() {
+		muClients.Lock()
+		delete(clients, client)
+		muClients.Unlock()
+		client.conn.Close()
+		fmt.Println("client disconnected:", client.conn.RemoteAddr())
+	}()
 
 	clusterClientCount := 0
 	for c := range clients {
@@ -158,38 +156,21 @@ func clientLogin(conn net.Conn) {
 
 	if clusterClientCount == len(config.Names)-1 {
 		msg := shared.GetAkeAMsg(&clusterSession, &config.ClusterConfig)
-		sendMsgToClient(msg)
+		sendToClient(msg)
 	}
-
-	handleClient(client, *msgReader)
-}
-
-func handleClient(client Client, reader shared.MessageReader) {
-	defer func() {
-		muClients.Lock()
-		delete(clients, client)
-		muClients.Unlock()
-		client.conn.Close()
-		fmt.Println("client disconnected:", client.conn.RemoteAddr())
-	}()
 
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		fmt.Printf("RECEIVED: %s from %s \n", msg.MsgTypeName(), msg.SenderName)
+		fmt.Printf("RECEIVED: %s from %s \n", msg.TypeName(), msg.SenderName)
 
-		muReceivedMessages.Lock()
-		if receivedMessages[msg.ID] {
-			muReceivedMessages.Unlock()
+		if !tracker.AddMessage(msg.ID) {
 			continue
 		}
-		receivedMessages[msg.ID] = true
-		muReceivedMessages.Unlock()
 
 		if client.index != -1 {
 			msg.ClusterID = config.Index
 		}
 
-		handler := GetHandler(msg)
-		handler.HandleMessage(client.conn, msg)
+		handleMessage(client.conn, msg)
 	}
 }

@@ -6,97 +6,75 @@ import (
 	"pqgch-client/shared"
 )
 
-type MessageHandler interface {
-	HandleMessage(conn net.Conn, msg shared.Message)
-}
-
-type AkeAHandler struct{}
-type AkeBHandler struct{}
-type XiHandler struct{}
-type LeaderAkeAHandler struct{}
-type LeaderAkeBHandler struct{}
-type LeaderXiHandler struct{}
-type BroadcastHandler struct{}
-type SpecificClientHandler struct{}
-type DefaultHandler struct{}
-
-func (h *AkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func akeA(msg shared.Message) {
 	akeB, xi := shared.HandleAkeA(msg, &config.ClusterConfig, &clusterSession)
-	sendMsgToClient(akeB)
-	if xi != (shared.Message{}) {
-		broadcastMessage(xi)
+	sendToClient(akeB)
+	if !xi.IsEmpty() {
+		broadcastToCluster(xi)
 	}
 }
 
-func (h *AkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func akeB(msg shared.Message) {
 	xi := shared.HandleAkeB(msg, &config.ClusterConfig, &clusterSession)
-	if xi != (shared.Message{}) {
-		broadcastMessage(xi)
+	if !xi.IsEmpty() {
+		broadcastToCluster(xi)
 	}
 }
 
-func (h *XiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func xi(msg shared.Message) {
 	shared.HandleXi(msg, &config.ClusterConfig, &clusterSession)
-	broadcastMessage(msg)
+	broadcastToCluster(msg)
 }
 
-func (h *LeaderAkeAHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func akeALeader(conn net.Conn, msg shared.Message) {
 	akeB, xi := shared.HandleAkeA(msg, &config, &mainSession)
 	akeB.Send(conn)
-	if xi != (shared.Message{}) {
-		forwardMessage(xi)
+	if !xi.IsEmpty() {
+		forwardToNeighbor(xi)
 	}
 }
 
-func (h *LeaderAkeBHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func akeBLeader(msg shared.Message) {
 	xi := shared.HandleAkeB(msg, &config, &mainSession)
-	if xi != (shared.Message{}) {
-		forwardMessage(xi)
+	if !xi.IsEmpty() {
+		forwardToNeighbor(xi)
 	}
 }
 
-func (h *LeaderXiHandler) HandleMessage(conn net.Conn, msg shared.Message) {
+func xiLeader(msg shared.Message) {
 	shared.HandleXi(msg, &config, &mainSession)
-	forwardMessage(msg)
+	forwardToNeighbor(msg)
 }
 
-func (h *BroadcastHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	broadcastMessage(msg)
-	forwardMessage(msg)
+func broadcast(msg shared.Message) {
+	broadcastToCluster(msg)
+	forwardToNeighbor(msg)
 }
 
-func (h *DefaultHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	fmt.Println("error: unknown message type")
-}
-
-func (h *SpecificClientHandler) HandleMessage(conn net.Conn, msg shared.Message) {
-	sendMsgToClient(msg)
-}
-
-func GetHandler(msg shared.Message) MessageHandler {
+func handleMessage(conn net.Conn, msg shared.Message) {
 	if msg.ReceiverID == config.ClusterConfig.Index {
-		if msg.Type == shared.AkeAMsg {
-			return &AkeAHandler{}
-		}
-		if msg.Type == shared.AkeBMsg {
-			return &AkeBHandler{}
+		switch msg.Type {
+		case shared.AkeAMsg:
+			akeA(msg)
+		case shared.AkeBMsg:
+			akeB(msg)
 		}
 	}
 
 	switch msg.Type {
 	case shared.XiMsg:
-		return &XiHandler{}
+		xi(msg)
 	case shared.BroadcastMsg:
-		return &BroadcastHandler{}
+		broadcast(msg)
 	case shared.AkeAMsg, shared.AkeBMsg:
-		return &SpecificClientHandler{}
+		sendToClient(msg)
 	case shared.LeaderAkeAMsg:
-		return &LeaderAkeAHandler{}
+		akeALeader(conn, msg)
 	case shared.LeaderAkeBMsg:
-		return &LeaderAkeBHandler{}
+		akeBLeader(msg)
 	case shared.LeaderXiMsg:
-		return &LeaderXiHandler{}
+		xiLeader(msg)
+	default:
+		fmt.Println("error: unknown message type")
 	}
-
-	return &DefaultHandler{}
 }

@@ -7,7 +7,7 @@ import (
 )
 
 // send a message to a client in this cluster
-func sendMsgToClient(msg shared.Message) {
+func sendToClient(msg shared.Message) {
 	muClients.Lock()
 	defer muClients.Unlock()
 
@@ -20,7 +20,7 @@ func sendMsgToClient(msg shared.Message) {
 				delete(clients, client)
 			}
 
-			fmt.Printf("ROUTE: sent message %s to %s\n", msg.MsgTypeName(), client.name)
+			fmt.Printf("ROUTE: sent message %s to %s\n", msg.TypeName(), client.name)
 			return
 		}
 
@@ -29,7 +29,7 @@ func sendMsgToClient(msg shared.Message) {
 }
 
 // broadcast a message to all clients in this cluster except the sender
-func broadcastMessage(msg shared.Message) {
+func broadcastToCluster(msg shared.Message) {
 	muClients.Lock()
 	defer muClients.Unlock()
 
@@ -47,11 +47,11 @@ func broadcastMessage(msg shared.Message) {
 		}
 	}
 
-	fmt.Printf("ROUTE: broadcasted message %s from %s\n", msg.MsgTypeName(), msg.SenderName)
+	fmt.Printf("ROUTE: broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName)
 }
 
 // forward a message to the right neighbor.
-func forwardMessage(msg shared.Message) {
+func forwardToNeighbor(msg shared.Message) {
 	muNeighborConn.Lock()
 	defer muNeighborConn.Unlock()
 
@@ -72,7 +72,7 @@ func forwardMessage(msg shared.Message) {
 			return
 		}
 
-		fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.MsgTypeName(), msg.SenderName)
+		fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.TypeName(), msg.SenderName)
 		break
 	}
 

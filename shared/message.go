@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"sync"
 )
 
 type Message struct {
@@ -30,7 +31,7 @@ var MessageTypeNames = map[int]string{
 	LeaderXiMsg:   "LeaderXiMsg",
 }
 
-func (m Message) MsgTypeName() string {
+func (m Message) TypeName() string {
 	return MessageTypeNames[m.Type]
 }
 
@@ -106,4 +107,30 @@ func (mr *MessageReader) GetMessage() Message {
 	}
 	msg := *mr.nextMsg
 	return msg
+}
+
+func (m Message) IsEmpty() bool {
+	return m == Message{}
+}
+
+type MessageTracker struct {
+	mu       sync.Mutex
+	messages map[string]bool
+}
+
+func NewMessageTracker() *MessageTracker {
+	return &MessageTracker{
+		messages: make(map[string]bool),
+	}
+}
+
+// AddMessage adds a message ID to the tracker and returns true if it was not already present.
+func (mt *MessageTracker) AddMessage(msgID string) bool {
+	mt.mu.Lock()
+	defer mt.mu.Unlock()
+	if mt.messages[msgID] {
+		return false
+	}
+	mt.messages[msgID] = true
+	return true
 }
