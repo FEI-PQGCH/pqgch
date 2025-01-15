@@ -6,6 +6,12 @@ import (
 	"pqgch-client/shared"
 )
 
+func onClusterSession() {
+	fmt.Println("CRYPTO: broadcasting key to cluster")
+	keyMsg := shared.EncryptAndHMAC(&clusterSession, &mainSession, &config)
+	broadcastToCluster(keyMsg)
+}
+
 func akeA(msg shared.Message) {
 	akeB, xi := shared.HandleAkeA(msg, &config.ClusterConfig, &clusterSession)
 	sendToClient(akeB)

@@ -26,6 +26,7 @@ var MessageTypeNames = map[int]string{
 	AkeAMsg:       "AkeAMsg",
 	AkeBMsg:       "AkeBMsg",
 	XiMsg:         "XiMsg",
+	KeyMsg:        "KeyMsg",
 	LeaderAkeAMsg: "LeaderAkeAMsg",
 	LeaderAkeBMsg: "LeaderAkeBMsg",
 	LeaderXiMsg:   "LeaderXiMsg",
@@ -41,6 +42,7 @@ const (
 	AkeAMsg
 	AkeBMsg
 	XiMsg
+	KeyMsg
 	LeaderAkeAMsg
 	LeaderAkeBMsg
 	LeaderXiMsg

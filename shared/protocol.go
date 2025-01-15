@@ -3,7 +3,9 @@ package shared
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -19,12 +21,14 @@ type Session struct {
 	KeyLeft      [32]byte
 	KeyRight     [32]byte
 	Xs           [][32]byte
-	SharedSecret [32]byte
+	SharedSecret [64]byte
+	OnSharedKey  func()
 }
 
 func MakeSession(config ConfigAccessor) Session {
 	return Session{
-		Xs: make([][32]byte, len(config.GetNamesOrAddrs())),
+		Xs:          make([][32]byte, len(config.GetNamesOrAddrs())),
+		OnSharedKey: func() {},
 	}
 }
 
@@ -78,7 +82,8 @@ func checkXs(session *Session, config ConfigAccessor) {
 	skSid := gake.ComputeSkSid(len(config.GetNamesOrAddrs()), masterKey, dummyPids)
 	fmt.Printf("CRYPTO: SkSid%d: %02x...\n", config.GetIndex(), skSid[:4])
 
-	copy(session.SharedSecret[:], skSid[:32])
+	copy(session.SharedSecret[:], skSid[:64])
+	session.OnSharedKey()
 }
 
 func GetAkeAMsg(session *Session, config ConfigAccessor) Message {
@@ -121,8 +126,8 @@ func getAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
 	return msg
 }
 
-func EncryptAesGcm(plaintext string, session *Session) (string, error) {
-	block, err := aes.NewCipher(session.SharedSecret[:])
+func EncryptAesGcm(plaintext string, key []byte) (string, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
@@ -142,13 +147,13 @@ func EncryptAesGcm(plaintext string, session *Session) (string, error) {
 	return base64.StdEncoding.EncodeToString(cipherText), nil
 }
 
-func DecryptAesGcm(encryptedText string, session *Session) (string, error) {
+func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 	cipherText, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(session.SharedSecret[:])
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
@@ -170,6 +175,50 @@ func DecryptAesGcm(encryptedText string, session *Session) (string, error) {
 	}
 
 	return string(plainText), nil
+}
+
+func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config ConfigAccessor) Message {
+	ciphertext := make([]byte, 32)
+
+	for i := 0; i < 32; i++ {
+		ciphertext[i] = mainSession.SharedSecret[i] ^ clusterSession.SharedSecret[i]
+	}
+	mac := hmac.New(sha256.New, clusterSession.SharedSecret[32:])
+	mac.Write(ciphertext)
+	tag := mac.Sum(nil)
+	ciphertext = append(ciphertext, tag...)
+
+	msg := Message{
+		ID:         uuid.New().String(),
+		SenderID:   -1,
+		SenderName: config.GetName(),
+		Type:       KeyMsg,
+		Content:    base64.StdEncoding.EncodeToString(ciphertext),
+	}
+
+	return msg
+}
+
+func DecryptAndCheckHMAC(encryptedText []byte, session *Session) ([]byte, error) {
+	ciphertext := encryptedText[:32]
+	tag := encryptedText[32:]
+
+	mac := hmac.New(sha256.New, session.SharedSecret[32:])
+	mac.Write(ciphertext)
+	expectedTag := mac.Sum(nil)
+
+	if !hmac.Equal(tag, expectedTag) {
+		fmt.Println("error: key message tag mismatch")
+		return nil, errors.New("tag mismatch")
+	}
+
+	key := make([]byte, 32)
+
+	for i := 0; i < 32; i++ {
+		key[i] = session.SharedSecret[i] ^ ciphertext[i]
+	}
+
+	return key, nil
 }
 
 func HandleAkeA(

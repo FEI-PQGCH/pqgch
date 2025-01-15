@@ -56,6 +56,8 @@ func main() {
 	fmt.Println("server listening on", address)
 
 	clusterSession = shared.MakeSession(&config.ClusterConfig)
+	clusterSession.OnSharedKey = onClusterSession
+
 	mainSession = shared.MakeSession(&config)
 	tracker := shared.NewMessageTracker()
 

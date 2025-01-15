@@ -14,9 +14,11 @@ import (
 )
 
 var (
-	mu      sync.Mutex
-	config  shared.UserConfig
-	session shared.Session
+	mu            sync.Mutex
+	config        shared.UserConfig
+	session       shared.Session
+	key           [32]byte
+	keyCiphertext []byte
 )
 
 func main() {
@@ -40,6 +42,13 @@ func main() {
 	fmt.Printf("connected to server %s\n", servAddr)
 
 	session = shared.MakeSession(&config.ClusterConfig)
+	session.OnSharedKey = func() {
+		if keyCiphertext == nil {
+			fmt.Println("CRYPTO: no key ciphertext, skipping")
+			return
+		}
+		getMainKey(keyCiphertext)
+	}
 
 	loginMsg := shared.Message{
 		ID:         uuid.New().String(),
@@ -77,12 +86,12 @@ func initProtocol(conn net.Conn) {
 }
 
 func send(conn net.Conn, text string) {
-	if session.SharedSecret == [32]byte{} {
+	if session.SharedSecret == [64]byte{} {
 		fmt.Println("no shared secret, skipping")
 		return
 	}
 
-	var cipherText, err = shared.EncryptAesGcm(text, &session)
+	var cipherText, err = shared.EncryptAesGcm(text, key[:])
 	if err != nil {
 		fmt.Println("error encrypting message")
 		return
