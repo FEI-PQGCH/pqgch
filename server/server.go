@@ -18,7 +18,8 @@ type Client struct {
 }
 
 var (
-	clients        = make(map[Client]bool)
+	queues         []MessageQueue
+	clients        []Client
 	muClients      sync.Mutex
 	neighborConn   net.Conn
 	muNeighborConn sync.Mutex
@@ -26,6 +27,22 @@ var (
 	clusterSession shared.Session
 	mainSession    shared.Session
 )
+
+type MessageQueue []shared.Message
+
+func (mq *MessageQueue) add(msg shared.Message) {
+	*mq = append(*mq, msg)
+}
+
+func (mq *MessageQueue) remove(msg shared.Message) {
+	tmp := MessageQueue{}
+	for _, x := range *mq {
+		if x.ID != msg.ID {
+			tmp.add(x)
+		}
+	}
+	*mq = tmp
+}
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
@@ -60,6 +77,17 @@ func main() {
 
 	mainSession = shared.MakeSession(&config)
 	tracker := shared.NewMessageTracker()
+
+	queues = make([]MessageQueue, len(config.ClusterConfig.GetNamesOrAddrs()))
+
+	for i := range len(config.ClusterConfig.GetNamesOrAddrs()) {
+		if i == config.ClusterConfig.GetIndex() {
+			continue
+		}
+
+		client := Client{name: config.ClusterConfig.GetNamesOrAddrs()[i], conn: nil, index: i}
+		clients = append(clients, client)
+	}
 
 	go connectNeighbor(config.GetRightNeighbor())
 
@@ -138,20 +166,25 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 
 	client := Client{name: msg.SenderName, conn: conn, index: msg.SenderID}
 
-	muClients.Lock()
-	clients[client] = true
-	muClients.Unlock()
-	defer func() {
+	if msg.SenderID != -1 {
 		muClients.Lock()
-		delete(clients, client)
+		clients[msg.SenderID].conn = conn
 		muClients.Unlock()
-		client.conn.Close()
-		fmt.Println("client disconnected:", client.conn.RemoteAddr())
-	}()
+		defer func() {
+			/* TODO: handle disconnect */
+			client.conn.Close()
+			fmt.Println("client disconnected:", client.conn.RemoteAddr())
+		}()
+
+		for _, msg := range queues[client.index] {
+			msg.Send(client.conn)
+			queues[client.index].remove(msg)
+		}
+	}
 
 	clusterClientCount := 0
-	for c := range clients {
-		if c.index != -1 {
+	for i := range clients {
+		if clients[i].conn != nil {
 			clusterClientCount++
 		}
 	}

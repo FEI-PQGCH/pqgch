@@ -62,8 +62,10 @@ func handleMessage(conn net.Conn, msg shared.Message) {
 		switch msg.Type {
 		case shared.AkeAMsg:
 			akeA(msg)
+			return
 		case shared.AkeBMsg:
 			akeB(msg)
+			return
 		}
 	}
 

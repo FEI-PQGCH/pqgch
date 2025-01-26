@@ -61,20 +61,14 @@ func main() {
 
 	go receiver(conn)
 
+	initProtocol(conn)
+
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("You: ")
 		text, _ := reader.ReadString('\n')
 		text = strings.TrimSpace(text)
-
-		switch text {
-		case "":
-			continue
-		case "init":
-			initProtocol(conn)
-		default:
-			send(conn, text)
-		}
+		send(conn, text)
 	}
 }
 
