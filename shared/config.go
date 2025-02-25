@@ -14,6 +14,7 @@ type ConfigAccessor interface {
 	GetNamesOrAddrs() []string
 	GetDecodedSecretKey() []byte
 	GetDecodedPublicKey(int) [1184]byte
+	GetDecodedPublicKeys() [][1184]byte
 	GetName() string
 	GetMessageType(int) int
 }
@@ -36,6 +37,15 @@ func (c *ClusterConfig) GetNamesOrAddrs() []string {
 
 func (c *ClusterConfig) GetDecodedPublicKey(index int) [1184]byte {
 	return getDecodedPublicKey(c.PublicKeys, index)
+}
+
+func (c *ClusterConfig) GetDecodedPublicKeys() [][1184]byte {
+	keys := make([][1184]byte, len(c.GetNamesOrAddrs()))
+	for i := 0; i < len(c.GetNamesOrAddrs()); i++ {
+		keys[i] = c.GetDecodedPublicKey(i)
+	}
+
+	return keys
 }
 
 func (c *ClusterConfig) GetDecodedSecretKey() []byte {
@@ -68,6 +78,15 @@ func (c *ServConfig) GetNamesOrAddrs() []string {
 
 func (c *ServConfig) GetDecodedPublicKey(index int) [1184]byte {
 	return getDecodedPublicKey(c.PublicKeys, index)
+}
+
+func (c *ServConfig) GetDecodedPublicKeys() [][1184]byte {
+	keys := make([][1184]byte, len(c.GetNamesOrAddrs()))
+	for i := 0; i < len(c.GetNamesOrAddrs()); i++ {
+		keys[i] = c.GetDecodedPublicKey(i)
+	}
+
+	return keys
 }
 
 func (c *ServConfig) GetDecodedSecretKey() []byte {

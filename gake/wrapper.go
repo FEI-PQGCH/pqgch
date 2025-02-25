@@ -110,9 +110,9 @@ func ComputeXsCommitment(
 	i int,
 	key_right [32]byte,
 	key_left [32]byte,
-	public_key [1184]byte) ([]byte, []byte, Commitment) {
+	public_key [1184]byte) ([32]byte, [44]byte, Commitment) {
 	var xi [32]byte
-	var ri [44]byte
+	var coin [44]byte
 	var commitment Commitment
 
 	var msg [36]byte
@@ -129,7 +129,7 @@ func ComputeXsCommitment(
 		(*C.uchar)(unsafe.Pointer(&xi[0])))
 
 	C.randombytes(
-		(*C.uchar)(unsafe.Pointer(&ri[0])),
+		(*C.uchar)(unsafe.Pointer(&coin[0])),
 		44)
 
 	copy(msg[:], xi[:])
@@ -139,10 +139,10 @@ func ComputeXsCommitment(
 		(*C.uchar)(unsafe.Pointer(&public_key[0])),
 		(*C.uchar)(unsafe.Pointer(&msg[0])),
 		36,
-		(*C.uchar)(unsafe.Pointer(&ri[0])),
+		(*C.uchar)(unsafe.Pointer(&coin[0])),
 		(*C.Commitment)(unsafe.Pointer(&commitment)))
 
-	return xi[:], ri[:], commitment
+	return xi, coin, commitment
 }
 
 func CheckXs(xs [][32]byte, numParties int) bool {
@@ -167,9 +167,53 @@ func CheckXs(xs [][32]byte, numParties int) bool {
 	return true
 }
 
-// TODO
-func CheckCommitments() {
+func CheckCommitments(
+	numParties int,
+	xs [][32]byte,
+	public_keys [][1184]byte,
+	coins [][44]byte,
+	commitments []Commitment) bool {
+	for i := 0; i < numParties; i++ {
+		msg := make([]byte, 32+4)
 
+		var buf_int [4]byte
+		buf_int[0] = byte(i >> 24)
+		buf_int[1] = byte(i >> 16)
+		buf_int[2] = byte(i >> 8)
+		buf_int[3] = byte(i)
+
+		copy(msg[:32], xs[i][:])
+		copy(msg[32:], buf_int[:])
+
+		var commitment Commitment
+
+		C.commit(
+			(*C.uchar)(unsafe.Pointer(&public_keys[i][0])),
+			(*C.uchar)(unsafe.Pointer(&msg[0])),
+			36,
+			(*C.uchar)(unsafe.Pointer(&coins[i][0])),
+			(*C.Commitment)(unsafe.Pointer(&commitment)))
+
+		for j := 0; j < 1088; j++ {
+			if commitment.CipherTextKem[j] != commitments[i].CipherTextKem[j] {
+				return false
+			}
+		}
+
+		for j := 0; j < 36; j++ {
+			if commitment.CipherTextDem[j] != commitments[i].CipherTextDem[j] {
+				return false
+			}
+		}
+
+		for j := 0; j < 16; j++ {
+			if commitment.Tag[j] != commitments[i].Tag[j] {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func ComputeMasterKey(numParties int, partyIndex int, key_left [32]byte, xs [][32]byte) [][32]byte {
