@@ -59,7 +59,6 @@ func Example() [64]byte {
 		copy(parties[i].MasterKey, masterkey)
 	}
 	for i := 0; i < numParties; i++ {
-		//PrintParty(parties[i])
 	}
 	sksid := make([][64]byte, numParties)
 	// Compute sk_sid

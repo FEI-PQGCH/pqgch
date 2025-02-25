@@ -29,7 +29,6 @@ void hash_g_fn(unsigned char *out, const unsigned char *in, unsigned long long i
 */
 import "C"
 import (
-	"fmt"
 	"unsafe"
 )
 
@@ -53,32 +52,6 @@ type Commitment struct {
 	CipherTextKem [1088]byte
 	CipherTextDem [36]byte
 	Tag           [16]byte
-}
-
-func PrintParty(p Party, numParties int) {
-	fmt.Println("pk: ", p.Pk)
-	fmt.Println("sk: ", p.Sk)
-	fmt.Println("key_left: ", p.KeyLeft)
-	fmt.Println("key_right: ", p.KeyRight)
-	fmt.Printf("xs: ")
-	for i := 0; i < numParties; i++ {
-		fmt.Printf("%x", p.Xs[i])
-	}
-
-	fmt.Printf("\ncoins:\n")
-	for i := 0; i < numParties; i++ {
-		fmt.Printf("%x\n", p.Coins[i])
-	}
-
-	fmt.Printf("\ncommitments:\n")
-	for i := 0; i < numParties; i++ {
-		fmt.Printf("%x\n", p.Commitments[i])
-	}
-
-	fmt.Printf("\nmasterkey:\n")
-	for i := 0; i < numParties; i++ {
-		fmt.Printf("%x\n", p.MasterKey[i])
-	}
 }
 
 func GetKemKeyPair() KemKeyPair {
