@@ -145,9 +145,26 @@ func ComputeXsCommitment(
 	return xi[:], ri[:], commitment
 }
 
-// TODO
-func CheckXs() {
+func CheckXs(xs [][32]byte, numParties int) bool {
+	zero := make([]byte, 32)
+	check := make([]byte, 32)
 
+	copy(check[:], xs[0][:])
+	for i := 0; i < numParties-1; i++ {
+		C.xor_keys(
+			(*C.uchar)(unsafe.Pointer(&xs[i+1][0])),
+			(*C.uchar)(unsafe.Pointer(&check[0])),
+			(*C.uchar)(unsafe.Pointer(&check[0])),
+		)
+	}
+
+	for i := 0; i < 32; i++ {
+		if check[i] != zero[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // TODO

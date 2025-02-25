@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"pqgch-client/gake"
 
 	"github.com/google/uuid"
@@ -73,6 +74,16 @@ func checkXs(session *Session, config ConfigAccessor) {
 	}
 
 	fmt.Println("CRYPTO: received all Xs")
+
+	ok := gake.CheckXs(session.Xs, len(config.GetNamesOrAddrs()))
+
+	if ok {
+		fmt.Println("CRYPTO: Xs check: success")
+	} else {
+		fmt.Println("CRYPTO: Xs check: fail")
+		os.Exit(1)
+	}
+
 	for i := 0; i < len(session.Xs); i++ {
 		fmt.Printf("CRYPTO: X%d: %02x\n", i, (session.Xs)[i][:4])
 	}
