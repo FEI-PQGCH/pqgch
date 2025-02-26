@@ -243,21 +243,28 @@ func ComputeMasterKey(numParties int, partyIndex int, key_left [32]byte, xs [][3
 }
 
 func ComputeSkSid(numParties int, masterKeys [][32]byte, pids [][20]byte) [64]byte {
-	mki := make([]byte, 52*numParties)
-
-	C.concat_masterkey(
-		(*C.MasterKey)(unsafe.Pointer(&masterKeys[0][0])),
-		(*C.Pid)(unsafe.Pointer(&pids[0][0])),
-		C.int(numParties),
-		(*C.uchar)(unsafe.Pointer(&mki[0])),
-	)
+	mki := concatMasterKey(masterKeys, pids, numParties)
 
 	var sksid [64]byte
 
 	C.hash_g_fn(
 		(*C.uchar)(unsafe.Pointer(&sksid[0])),
 		(*C.uchar)(unsafe.Pointer(&mki[0])),
-		64)
+		(C.ulonglong)(52*numParties))
 
 	return sksid
+}
+
+func concatMasterKey(masterKeys [][32]byte, pids [][20]byte, numParties int) []byte {
+	mki := make([]byte, 52*numParties)
+
+	for i := 0; i < len(masterKeys); i++ {
+		copy(mki[i*32:(i+1)*32], masterKeys[i][:])
+	}
+
+	for i := 0; i < len(pids); i++ {
+		copy(mki[len(masterKeys)*32+i*20:len(masterKeys)*32+(i+1)*20], pids[i][:])
+	}
+
+	return mki
 }

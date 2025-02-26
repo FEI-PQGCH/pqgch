@@ -107,10 +107,17 @@ func checkXs(session *Session, config ConfigAccessor) {
 	for i := 0; i < len(session.Xs); i++ {
 		fmt.Printf("CRYPTO: X%d: %02x\n", i, (session.Xs)[i][:4])
 	}
-	dummyPids := make([][20]byte, len(config.GetNamesOrAddrs())) // TODO: replace with actual pids
+
+	pids := make([][20]byte, len(config.GetNamesOrAddrs()))
+	stringPids := config.GetNamesOrAddrs()
+	for i := 0; i < len(config.GetNamesOrAddrs()); i++ {
+		var byteArr [20]byte
+		copy(byteArr[:], []byte(stringPids[i]))
+		pids[i] = byteArr
+	}
 
 	masterKey := gake.ComputeMasterKey(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs)
-	skSid := gake.ComputeSkSid(len(config.GetNamesOrAddrs()), masterKey, dummyPids)
+	skSid := gake.ComputeSkSid(len(config.GetNamesOrAddrs()), masterKey, pids)
 	fmt.Printf("CRYPTO: SkSid%d: %02x...\n", config.GetIndex(), skSid[:4])
 
 	copy(session.SharedSecret[:], skSid[:64])
