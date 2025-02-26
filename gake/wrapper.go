@@ -32,31 +32,31 @@ import (
 	"unsafe"
 )
 
-type KemKeyPair struct {
-	Pk [1184]byte
-	Sk [2400]byte
-}
+const (
+	PkLen    = 1184
+	SkLen    = 2400
+	CtKemLen = 1088
+	CtDemLen = 36
+	TagLen   = 16
+	SsLen    = 32
+	CoinLen  = 44
+	PidLen   = 20
+)
 
-type Party struct {
-	Pk          [1184]byte
-	Sk          [2400]byte
-	KeyLeft     [32]byte
-	KeyRight    [32]byte
-	Xs          [][32]byte
-	Coins       [][44]byte
-	Commitments []Commitment
-	MasterKey   [][32]byte
+type KemKeyPair struct {
+	Pk [PkLen]byte
+	Sk [SkLen]byte
 }
 
 type Commitment struct {
-	CipherTextKem [1088]byte
-	CipherTextDem [36]byte
-	Tag           [16]byte
+	CipherTextKem [CtKemLen]byte
+	CipherTextDem [CtDemLen]byte
+	Tag           [TagLen]byte
 }
 
 func GetKemKeyPair() KemKeyPair {
-	var pk [1184]byte
-	var sk [2400]byte
+	var pk [PkLen]byte
+	var sk [SkLen]byte
 
 	C.crypto_kem_keypair(
 		(*C.uchar)(unsafe.Pointer(&pk[0])),
@@ -65,9 +65,9 @@ func GetKemKeyPair() KemKeyPair {
 	return KemKeyPair{pk, sk}
 }
 
-func KexAkeInitA(pkb [1184]byte) ([]byte, []byte, []byte) {
+func KexAkeInitA(pkb [PkLen]byte) ([]byte, []byte, []byte) {
 	var ake_senda [2272]byte
-	var tk [32]byte
+	var tk [SsLen]byte
 	var eska [2400]byte
 
 	C.kex_ake_initA(
@@ -81,7 +81,7 @@ func KexAkeInitA(pkb [1184]byte) ([]byte, []byte, []byte) {
 
 func KexAkeSharedB(ake_senda []byte, skb []byte, pka [1184]byte) ([]byte, [32]byte) {
 	var ake_sendb [2176]byte
-	var kb [32]byte
+	var kb [SsLen]byte
 
 	C.kex_ake_sharedB(
 		(*C.uchar)(unsafe.Pointer(&ake_sendb[0])),

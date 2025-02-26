@@ -20,26 +20,26 @@ import (
 type Session struct {
 	TkRight      []byte
 	EskaRight    []byte
-	KeyLeft      [32]byte
-	KeyRight     [32]byte
-	Xs           [][32]byte
+	KeyLeft      [gake.SsLen]byte
+	KeyRight     [gake.SsLen]byte
+	Xs           [][gake.SsLen]byte
 	Commitments  []gake.Commitment
-	Coins        [][44]byte
+	Coins        [][gake.CoinLen]byte
 	SharedSecret [64]byte
 	OnSharedKey  func()
 }
 
 func MakeSession(config ConfigAccessor) Session {
 	return Session{
-		Xs:          make([][32]byte, len(config.GetNamesOrAddrs())),
+		Xs:          make([][gake.SsLen]byte, len(config.GetNamesOrAddrs())),
 		OnSharedKey: func() {},
 		Commitments: make([]gake.Commitment, len(config.GetNamesOrAddrs())),
-		Coins:       make([][44]byte, len(config.GetNamesOrAddrs())),
+		Coins:       make([][gake.CoinLen]byte, len(config.GetNamesOrAddrs())),
 	}
 }
 
 func checkLeftRightKeys(session *Session, config ConfigAccessor) Message {
-	if session.KeyRight != [32]byte{} && session.KeyLeft != [32]byte{} {
+	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
 		fmt.Println("CRYPTO: established shared keys with both neighbors")
 		xi := getXiMsg(session, config)
 		checkXs(session, config)
@@ -61,7 +61,7 @@ func getXiMsg(session *Session, config ConfigAccessor) Message {
 	session.Coins[config.GetIndex()] = coin
 
 	var buffer bytes.Buffer
-	buffer.Grow(32 + 1088 + 36 + 16 + 44)
+	buffer.Grow(gake.SsLen + gake.CtKemLen + gake.CtDemLen + gake.TagLen + gake.CoinLen)
 	buffer.Write(xi[:])
 	buffer.Write(commitment.CipherTextKem[:])
 	buffer.Write(commitment.CipherTextDem[:])
@@ -81,7 +81,7 @@ func getXiMsg(session *Session, config ConfigAccessor) Message {
 
 func checkXs(session *Session, config ConfigAccessor) {
 	for i := 0; i < len(session.Xs); i++ {
-		if (session.Xs)[i] == [32]byte{} {
+		if (session.Xs)[i] == [gake.SsLen]byte{} {
 			return
 		}
 	}
@@ -108,10 +108,10 @@ func checkXs(session *Session, config ConfigAccessor) {
 		fmt.Printf("CRYPTO: X%d: %02x\n", i, (session.Xs)[i][:4])
 	}
 
-	pids := make([][20]byte, len(config.GetNamesOrAddrs()))
+	pids := make([][gake.PidLen]byte, len(config.GetNamesOrAddrs()))
 	stringPids := config.GetNamesOrAddrs()
 	for i := 0; i < len(config.GetNamesOrAddrs()); i++ {
-		var byteArr [20]byte
+		var byteArr [gake.PidLen]byte
 		copy(byteArr[:], []byte(stringPids[i]))
 		pids[i] = byteArr
 	}
@@ -216,12 +216,12 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 }
 
 func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config ConfigAccessor) Message {
-	ciphertext := make([]byte, 32)
+	ciphertext := make([]byte, gake.SsLen)
 
-	for i := 0; i < 32; i++ {
+	for i := 0; i < gake.SsLen; i++ {
 		ciphertext[i] = mainSession.SharedSecret[i] ^ clusterSession.SharedSecret[i]
 	}
-	mac := hmac.New(sha256.New, clusterSession.SharedSecret[32:])
+	mac := hmac.New(sha256.New, clusterSession.SharedSecret[gake.SsLen:])
 	mac.Write(ciphertext)
 	tag := mac.Sum(nil)
 	ciphertext = append(ciphertext, tag...)
@@ -238,10 +238,10 @@ func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config Config
 }
 
 func DecryptAndCheckHMAC(encryptedText []byte, session *Session) ([]byte, error) {
-	ciphertext := encryptedText[:32]
-	tag := encryptedText[32:]
+	ciphertext := encryptedText[:gake.SsLen]
+	tag := encryptedText[gake.SsLen:]
 
-	mac := hmac.New(sha256.New, session.SharedSecret[32:])
+	mac := hmac.New(sha256.New, session.SharedSecret[gake.SsLen:])
 	mac.Write(ciphertext)
 	expectedTag := mac.Sum(nil)
 
@@ -250,9 +250,9 @@ func DecryptAndCheckHMAC(encryptedText []byte, session *Session) ([]byte, error)
 		return nil, errors.New("tag mismatch")
 	}
 
-	key := make([]byte, 32)
+	key := make([]byte, gake.SsLen)
 
-	for i := 0; i < 32; i++ {
+	for i := 0; i < gake.SsLen; i++ {
 		key[i] = session.SharedSecret[i] ^ ciphertext[i]
 	}
 
@@ -291,21 +291,21 @@ func HandleXi(
 
 	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
 
-	xi := decoded[:32]
-	kem := decoded[32 : 32+1088]
-	dem := decoded[32+1088 : 32+1088+36]
-	tag := decoded[32+1088+36 : 32+1088+36+16]
-	coin := decoded[32+1088+36+16 : 32+1088+36+16+44]
+	xi := decoded[:gake.SsLen]
+	kem := decoded[gake.SsLen : gake.SsLen+gake.CtKemLen]
+	dem := decoded[gake.SsLen+gake.CtKemLen : gake.SsLen+gake.CtKemLen+gake.CtDemLen]
+	tag := decoded[gake.SsLen+gake.CtKemLen+gake.CtDemLen : gake.SsLen+gake.CtKemLen+gake.CtDemLen+gake.TagLen]
+	coin := decoded[gake.SsLen+gake.CtKemLen+gake.CtDemLen+gake.TagLen:]
 
-	var xiArr [32]byte
+	var xiArr [gake.SsLen]byte
 	copy(xiArr[:], xi)
-	var kemArr [1088]byte
+	var kemArr [gake.CtKemLen]byte
 	copy(kemArr[:], kem)
-	var demArr [36]byte
+	var demArr [gake.CtDemLen]byte
 	copy(demArr[:], dem)
-	var tagArr [16]byte
+	var tagArr [gake.TagLen]byte
 	copy(tagArr[:], tag)
-	var coinArr [44]byte
+	var coinArr [gake.CoinLen]byte
 	copy(coinArr[:], coin)
 
 	var commitment gake.Commitment

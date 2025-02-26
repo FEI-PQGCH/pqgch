@@ -4,6 +4,17 @@ import (
 	"fmt"
 )
 
+type Party struct {
+	Pk          [1184]byte
+	Sk          [2400]byte
+	KeyLeft     [32]byte
+	KeyRight    [32]byte
+	Xs          [][32]byte
+	Coins       [][44]byte
+	Commitments []Commitment
+	MasterKey   [][32]byte
+}
+
 func Example() [64]byte {
 	numParties := 3
 	kem_a := GetKemKeyPair()

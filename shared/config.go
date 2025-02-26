@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"pqgch-client/gake"
 )
 
 type ConfigAccessor interface {
@@ -13,8 +14,8 @@ type ConfigAccessor interface {
 	GetSecretKey() string
 	GetNamesOrAddrs() []string
 	GetDecodedSecretKey() []byte
-	GetDecodedPublicKey(int) [1184]byte
-	GetDecodedPublicKeys() [][1184]byte
+	GetDecodedPublicKey(int) [gake.PkLen]byte
+	GetDecodedPublicKeys() [][gake.PkLen]byte
 	GetName() string
 	GetMessageType(int) int
 }
@@ -35,12 +36,12 @@ func (c *ClusterConfig) GetNamesOrAddrs() []string {
 	return c.Names
 }
 
-func (c *ClusterConfig) GetDecodedPublicKey(index int) [1184]byte {
+func (c *ClusterConfig) GetDecodedPublicKey(index int) [gake.PkLen]byte {
 	return getDecodedPublicKey(c.PublicKeys, index)
 }
 
-func (c *ClusterConfig) GetDecodedPublicKeys() [][1184]byte {
-	keys := make([][1184]byte, len(c.GetNamesOrAddrs()))
+func (c *ClusterConfig) GetDecodedPublicKeys() [][gake.PkLen]byte {
+	keys := make([][gake.PkLen]byte, len(c.GetNamesOrAddrs()))
 	for i := 0; i < len(c.GetNamesOrAddrs()); i++ {
 		keys[i] = c.GetDecodedPublicKey(i)
 	}
@@ -76,12 +77,12 @@ func (c *ServConfig) GetNamesOrAddrs() []string {
 	return c.ServAddrs
 }
 
-func (c *ServConfig) GetDecodedPublicKey(index int) [1184]byte {
+func (c *ServConfig) GetDecodedPublicKey(index int) [gake.PkLen]byte {
 	return getDecodedPublicKey(c.PublicKeys, index)
 }
 
-func (c *ServConfig) GetDecodedPublicKeys() [][1184]byte {
-	keys := make([][1184]byte, len(c.GetNamesOrAddrs()))
+func (c *ServConfig) GetDecodedPublicKeys() [][gake.PkLen]byte {
+	keys := make([][gake.PkLen]byte, len(c.GetNamesOrAddrs()))
 	for i := 0; i < len(c.GetNamesOrAddrs()); i++ {
 		keys[i] = c.GetDecodedPublicKey(i)
 	}
@@ -153,8 +154,8 @@ func getDecodedSecretKey(secretKey string) []byte {
 	return decodedSecretKey
 }
 
-func getDecodedPublicKey(publicKeys []string, index int) [1184]byte {
-	decodedPublicKey := [1184]byte{}
+func getDecodedPublicKey(publicKeys []string, index int) [gake.PkLen]byte {
+	decodedPublicKey := [gake.PkLen]byte{}
 	decodedPubKey, _ := base64.StdEncoding.DecodeString(publicKeys[index])
 	copy(decodedPublicKey[:], decodedPubKey)
 	return decodedPublicKey

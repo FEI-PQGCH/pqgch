@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"pqgch-client/gake"
 	"pqgch-client/shared"
 	"strings"
 	"sync"
@@ -17,7 +18,7 @@ var (
 	mu            sync.Mutex
 	config        shared.UserConfig
 	session       shared.Session
-	key           [32]byte
+	key           [gake.SsLen]byte
 	keyCiphertext []byte
 )
 
