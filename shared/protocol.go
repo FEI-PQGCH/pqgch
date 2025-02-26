@@ -41,15 +41,15 @@ func MakeSession(config ConfigAccessor) Session {
 func checkLeftRightKeys(session *Session, config ConfigAccessor) Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
 		fmt.Println("CRYPTO: established shared keys with both neighbors")
-		xi := getXiMsg(session, config)
-		checkXs(session, config)
+		xi := getXiCommitmentCoinMsg(session, config)
+		tryFinalizeProtocol(session, config)
 		return xi
 	}
 
 	return Message{}
 }
 
-func getXiMsg(session *Session, config ConfigAccessor) Message {
+func getXiCommitmentCoinMsg(session *Session, config ConfigAccessor) Message {
 	xi, coin, commitment := gake.ComputeXsCommitment(
 		config.GetIndex(),
 		session.KeyRight,
@@ -79,7 +79,7 @@ func getXiMsg(session *Session, config ConfigAccessor) Message {
 	return msg
 }
 
-func checkXs(session *Session, config ConfigAccessor) {
+func tryFinalizeProtocol(session *Session, config ConfigAccessor) {
 	for i := 0; i < len(session.Xs); i++ {
 		if (session.Xs)[i] == [gake.SsLen]byte{} {
 			return
@@ -316,5 +316,5 @@ func HandleXi(
 	session.Commitments[msg.SenderID] = commitment
 	session.Coins[msg.SenderID] = coinArr
 	session.Xs[msg.SenderID] = xiArr
-	checkXs(session, config)
+	tryFinalizeProtocol(session, config)
 }
