@@ -4,10 +4,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"pqgch-client/gake"
 	"pqgch-client/shared"
 )
 
-func akeAHandler(conn net.Conn, msg shared.Message) {
+func akeA(conn net.Conn, msg shared.Message) {
 	akeB, xi := shared.HandleAkeA(msg, &config, &session)
 	akeB.Send(conn)
 	if !xi.IsEmpty() {
@@ -15,21 +16,21 @@ func akeAHandler(conn net.Conn, msg shared.Message) {
 	}
 }
 
-func akeBHandler(conn net.Conn, msg shared.Message) {
+func akeB(conn net.Conn, msg shared.Message) {
 	xi := shared.HandleAkeB(msg, &config, &session)
 	if !xi.IsEmpty() {
 		xi.Send(conn)
 	}
 }
 
-func xiHandler(msg shared.Message) {
+func xi(msg shared.Message) {
 	shared.HandleXi(msg, &config, &session)
 }
 
-func keyHandler(msg shared.Message) {
+func sharedKey(msg shared.Message) {
 	decodedContent, _ := base64.StdEncoding.DecodeString(msg.Content)
 
-	if session.SharedSecret == [64]byte{} {
+	if session.SharedSecret == [gake.SsLen]byte{} {
 		keyCiphertext = decodedContent
 		return
 	}
@@ -47,14 +48,14 @@ func getMainKey(decodedContent []byte) {
 	fmt.Printf("CRYPTO: main shared key established: %02x\n", key[:4])
 }
 
-func printMessage(msg shared.Message) {
+func print(msg shared.Message) {
 	mu.Lock()
 	defer mu.Unlock()
 	fmt.Printf("\r\033[K%s: %s\n", msg.SenderName, msg.Content)
 	fmt.Print("You: ")
 }
 
-func defaultHandler(msg shared.Message) {
+func text(msg shared.Message) {
 	var plainText, err = shared.DecryptAesGcm(msg.Content, key[:])
 	if err != nil {
 		fmt.Println("error decrypting message")
@@ -62,20 +63,20 @@ func defaultHandler(msg shared.Message) {
 	}
 
 	msg.Content = plainText
-	printMessage(msg)
+	print(msg)
 }
 
 func handleMessage(conn net.Conn, msg shared.Message) {
 	switch msg.Type {
 	case shared.AkeAMsg:
-		akeAHandler(conn, msg)
+		akeA(conn, msg)
 	case shared.AkeBMsg:
-		akeBHandler(conn, msg)
+		akeB(conn, msg)
 	case shared.XiMsg:
-		xiHandler(msg)
+		xi(msg)
 	case shared.KeyMsg:
-		keyHandler(msg)
+		sharedKey(msg)
 	default:
-		defaultHandler(msg)
+		text(msg)
 	}
 }

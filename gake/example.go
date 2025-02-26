@@ -15,7 +15,7 @@ type Party struct {
 	MasterKey   [][32]byte
 }
 
-func Example() [64]byte {
+func Example() {
 	numParties := 3
 	kem_a := GetKemKeyPair()
 	kem_b := GetKemKeyPair()
@@ -64,20 +64,12 @@ func Example() [64]byte {
 			copy(parties[j].Commitments[i].Tag[:], commitment.Tag[:])
 		}
 	}
-	// Computer Master keys
+
+	sksid := make([][32]byte, numParties)
 	for i := 0; i < numParties; i++ {
-		masterkey := ComputeMasterKey(numParties, i, parties[i].KeyLeft, parties[i].Xs)
-		copy(parties[i].MasterKey, masterkey)
-	}
-	for i := 0; i < numParties; i++ {
-	}
-	sksid := make([][64]byte, numParties)
-	// Compute sk_sid
-	for i := 0; i < numParties; i++ {
-		sksid[i] = ComputeSkSid(numParties, parties[i].MasterKey, pids)
+		sksid[i], _ = ComputeSharedKey(numParties, i, parties[i].KeyLeft, parties[i].Xs, pids)
 	}
 	for i := 0; i < len(sksid); i++ {
 		fmt.Printf("sksid%d: %02x\n\n", i, sksid[i])
 	}
-	return sksid[0]
 }

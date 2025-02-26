@@ -216,7 +216,7 @@ func CheckCommitments(
 	return true
 }
 
-func ComputeMasterKey(numParties int, partyIndex int, key_left [32]byte, xs [][32]byte) [][32]byte {
+func ComputeSharedKey(numParties int, partyIndex int, key_left [32]byte, xs [][32]byte, pids [][20]byte) ([32]byte, [32]byte) {
 	masterKey := make([][32]byte, numParties)
 
 	copy(masterKey[partyIndex][:], key_left[:])
@@ -239,11 +239,7 @@ func ComputeMasterKey(numParties int, partyIndex int, key_left [32]byte, xs [][3
 		copy(masterKey[index][:], mk[:])
 	}
 
-	return masterKey
-}
-
-func ComputeSkSid(numParties int, masterKeys [][32]byte, pids [][20]byte) [64]byte {
-	mki := concatMasterKey(masterKeys, pids, numParties)
+	mki := concatMasterKey(masterKey, pids, numParties)
 
 	var sksid [64]byte
 
@@ -252,7 +248,13 @@ func ComputeSkSid(numParties int, masterKeys [][32]byte, pids [][20]byte) [64]by
 		(*C.uchar)(unsafe.Pointer(&mki[0])),
 		(C.ulonglong)(52*numParties))
 
-	return sksid
+	var sharedSecret [32]byte
+	var sessionId [32]byte
+
+	copy(sharedSecret[:], sksid[:32])
+	copy(sessionId[:], sksid[32:])
+
+	return sharedSecret, sessionId
 }
 
 func concatMasterKey(masterKeys [][32]byte, pids [][20]byte, numParties int) []byte {

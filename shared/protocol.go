@@ -25,7 +25,7 @@ type Session struct {
 	Xs           [][gake.SsLen]byte
 	Commitments  []gake.Commitment
 	Coins        [][gake.CoinLen]byte
-	SharedSecret [64]byte
+	SharedSecret [gake.SsLen]byte
 	OnSharedKey  func()
 }
 
@@ -116,11 +116,11 @@ func checkXs(session *Session, config ConfigAccessor) {
 		pids[i] = byteArr
 	}
 
-	masterKey := gake.ComputeMasterKey(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs)
-	skSid := gake.ComputeSkSid(len(config.GetNamesOrAddrs()), masterKey, pids)
-	fmt.Printf("CRYPTO: SkSid%d: %02x...\n", config.GetIndex(), skSid[:4])
+	sharedSecret, sessioId := gake.ComputeSharedKey(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, pids)
+	fmt.Printf("CRYPTO: SharedSecret%d: %02x...\n", config.GetIndex(), sharedSecret[:4])
+	fmt.Printf("CRYPTO: SessionId%d: %02x...\n", config.GetIndex(), sessioId[:4])
 
-	copy(session.SharedSecret[:], skSid[:64])
+	session.SharedSecret = sharedSecret
 	session.OnSharedKey()
 }
 

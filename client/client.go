@@ -81,7 +81,7 @@ func initProtocol(conn net.Conn) {
 }
 
 func send(conn net.Conn, text string) {
-	if session.SharedSecret == [64]byte{} {
+	if key == [gake.SsLen]byte{} {
 		fmt.Println("no shared secret, skipping")
 		return
 	}
