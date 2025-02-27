@@ -7,6 +7,8 @@ import (
 	"os"
 )
 
+var DebugMode bool
+
 type ConfigAccessor interface {
 	GetIndex() int
 	GetKeys() []string

@@ -44,7 +44,8 @@ func getMainKey(decodedContent []byte) {
 	}
 	copy(key[:], decryptedKey)
 
-	fmt.Printf("CRYPTO: main shared key established: %02x\n", key[:4])
+	fmt.Printf("[CRYPTO] Main shared key established: %02x\n", key[:4])
+
 }
 
 func printMessage(msg shared.Message) {
@@ -57,7 +58,7 @@ func printMessage(msg shared.Message) {
 func defaultHandler(msg shared.Message) {
 	var plainText, err = shared.DecryptAesGcm(msg.Content, key[:])
 	if err != nil {
-		fmt.Println("error decrypting message")
+		fmt.Printf("[ERROR] Failed to decrypt message\n")
 		return
 	}
 

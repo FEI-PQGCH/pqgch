@@ -12,24 +12,24 @@ clean:
 	rm -f ${BINARY_NAME}
 
 run: build
-	@echo "make: Running the application..."
-	@echo "make: Executing: $(BINARY_NAME)"
+	@echo "[Make]: Running the application..."
+	@echo "[Make]: Executing: $(BINARY_NAME)"
 	@./$(BINARY_NAME)
-	@echo "make: Removing the binary after execution..."
+	@echo "[Make]: Removing the binary after execution..."
 	@rm -f $(BINARY_NAME)
 
 c%:
-	@echo "make: Running client$*..."
+	@echo "[Make]: Running client$*..."
 	@cd client && CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go -config="../.config/c$*conf.json"
 
 s%:
-	@echo "make: Running server$*..."
+	@echo "[Make]: Running server$*..."
 	@cd server && CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go -config="../.config/s$*conf.json"
 
 gen:
-	@echo "make: Generating the KEM keypairs..."
+	@echo "[Make]: Generating the KEM keypairs..."
 	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run gakeutil/gake.go -p gen -c $(or $(n),1)
 
 test: build
-	@echo "make: Running GAKE test..."
+	@echo "[Make]: Running GAKE test..."
 	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run gakeutil/gake.go -p test

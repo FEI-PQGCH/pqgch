@@ -19,16 +19,20 @@ var (
 	session       shared.Session
 	key           [32]byte
 	keyCiphertext []byte
+	debugMode     bool
 )
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
+	debugFlag := flag.Bool("debug", true, "enable debug messages")
 	flag.Parse()
+
+	shared.DebugMode = *debugFlag
 
 	if *configFlag != "" {
 		config = shared.GetUserConfig(*configFlag)
 	} else {
-		fmt.Println("please provide a configuration file using the -config flag")
+		fmt.Printf("[ERROR] Configuration file missing. Please provide it using the -config flag\n")
 		panic("no configuration file provided")
 	}
 
@@ -39,12 +43,12 @@ func main() {
 		panic("error connecting to server")
 	}
 	defer conn.Close()
-	fmt.Printf("connected to server %s\n", servAddr)
+	fmt.Printf("[INFO] Connected to server %s\n", servAddr)
 
 	session = shared.MakeSession(&config.ClusterConfig)
 	session.OnSharedKey = func() {
 		if keyCiphertext == nil {
-			fmt.Println("CRYPTO: no key ciphertext, skipping")
+			fmt.Println("[CRYPTO] No key ciphertext, skipping")
 			return
 		}
 		getMainKey(keyCiphertext)
@@ -73,21 +77,21 @@ func main() {
 }
 
 func initProtocol(conn net.Conn) {
-	fmt.Println("CRYPTO: initiating the protocol")
+	fmt.Printf("[CRYPTO] Initiating protocol (AKE A)\n")
 	msg := shared.GetAkeAMsg(&session, &config.ClusterConfig)
-	fmt.Println("CRYPTO: sending AKE A message")
+	fmt.Printf("[CRYPTO] Sending AKE A message\n")
 	msg.Send(conn)
 }
 
 func send(conn net.Conn, text string) {
 	if session.SharedSecret == [64]byte{} {
-		fmt.Println("no shared secret, skipping")
+		fmt.Printf("[ERROR] Shared secret not established – message skipped\n")
 		return
 	}
 
 	var cipherText, err = shared.EncryptAesGcm(text, key[:])
 	if err != nil {
-		fmt.Println("error encrypting message")
+		fmt.Printf("[ERROR] Encryption failed: %v\n", err)
 		return
 	}
 
@@ -106,9 +110,11 @@ func receiver(conn net.Conn) {
 
 	for msgReader.HasMessage() {
 		msg := msgReader.GetMessage()
-		fmt.Printf("RECEIVED: %s from %s\n", msg.TypeName(), msg.SenderName)
+		if debugMode {
+			fmt.Printf("[DEBUG] Received %s from %s\n", msg.TypeName(), msg.SenderName)
+		}
 		handleMessage(conn, msg)
 	}
 
-	fmt.Println("disconnected from server")
+	fmt.Println("[INFO] Disconnected from server")
 }

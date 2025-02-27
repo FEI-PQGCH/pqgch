@@ -34,7 +34,7 @@ func MakeSession(config ConfigAccessor) Session {
 
 func checkLeftRightKeys(session *Session, config ConfigAccessor) Message {
 	if session.KeyRight != [32]byte{} && session.KeyLeft != [32]byte{} {
-		fmt.Println("CRYPTO: established shared keys with both neighbors")
+		fmt.Printf("[CRYPTO] Established shared keys with both neighbors\n")
 		xi := getXiMsg(session, config)
 		checkXs(session, config)
 		return xi
@@ -72,15 +72,19 @@ func checkXs(session *Session, config ConfigAccessor) {
 		}
 	}
 
-	fmt.Println("CRYPTO: received all Xs")
-	for i := 0; i < len(session.Xs); i++ {
-		fmt.Printf("CRYPTO: X%d: %02x\n", i, (session.Xs)[i][:4])
+	fmt.Println("[CRYPTO] Received all Xs")
+	if DebugMode {
+		for i := 0; i < len(session.Xs); i++ {
+			fmt.Printf("[DEBUG] Crypto: X%d: %02x\n", i, (session.Xs)[i][:4])
+		}
 	}
 	dummyPids := make([][20]byte, len(config.GetNamesOrAddrs())) // TODO: replace with actual pids
 
 	masterKey := gake.ComputeMasterKey(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs)
 	skSid := gake.ComputeSkSid(len(config.GetNamesOrAddrs()), masterKey, dummyPids)
-	fmt.Printf("CRYPTO: SkSid%d: %02x...\n", config.GetIndex(), skSid[:4])
+	if DebugMode {
+		fmt.Printf("[DEBUG] Crypto: SkSid%d: %02x...\n", config.GetIndex(), skSid[:4])
+	}
 
 	copy(session.SharedSecret[:], skSid[:64])
 	session.OnSharedKey()
@@ -112,7 +116,7 @@ func getAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
 		config.GetDecodedSecretKey(),
 		config.GetDecodedPublicKey(msg.SenderID))
 
-	fmt.Println("CRYPTO: established shared key with left neighbor")
+	fmt.Println("Established shared key with left neighbor")
 
 	msg = Message{
 		ID:         uuid.New().String(),

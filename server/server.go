@@ -51,7 +51,7 @@ func main() {
 	if *configFlag != "" {
 		config = shared.GetServConfig(*configFlag)
 	} else {
-		fmt.Println("please provide a configuration file using the -config flag.")
+		fmt.Printf("[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
 		panic("no configuration file provided")
 	}
 
@@ -105,16 +105,16 @@ func main() {
 func connectNeighbor(neighborAddress string) {
 	for {
 		muNeighborConn.Lock()
-		fmt.Printf("connecting to right neighbor at %s\n", neighborAddress)
+		fmt.Printf("[INFO] Attempting connection to right neighbor at %s\n", neighborAddress)
 		conn, err := net.Dial("tcp", neighborAddress)
 		if err != nil {
-			fmt.Printf("error connecting to right neighbor: %v. Retrying...\n", err)
+			fmt.Printf("[ERROR] Right neighbor connection error: %v. Retrying...\n", err)
 			muNeighborConn.Unlock()
 			time.Sleep(2 * time.Second)
 			continue
 		}
 		neighborConn = conn
-		fmt.Printf("connected to right neighbor (%s)\n", neighborAddress)
+		fmt.Printf("[INFO] Connected to right neighbor (%s)\n", neighborAddress)
 		loginMsg := shared.Message{
 			ID:         uuid.New().String(),
 			SenderID:   -1,
@@ -125,7 +125,7 @@ func connectNeighbor(neighborAddress string) {
 		loginMsg.Send(neighborConn)
 		msg := shared.GetAkeAMsg(&mainSession, &config)
 		msg.Send(neighborConn)
-		fmt.Println("CRYPTO: sending Leader AKE A message")
+		fmt.Printf("[CRYPTO] Sending Leader AKE A message\n")
 
 		muNeighborConn.Unlock()
 		break
@@ -143,12 +143,12 @@ func connectNeighbor(neighborAddress string) {
 	}
 
 	msg := msgReader.GetMessage()
-	fmt.Printf("RECEIVED: %s from %s \n", msg.TypeName(), msg.SenderName)
+	fmt.Printf("[INFO] Received %s from %s \n", msg.TypeName(), msg.SenderName)
 	handleMessage(nil, msg)
 }
 
 func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
-	fmt.Println("new client connected:", conn.RemoteAddr())
+	fmt.Println("[INFO] New client connected:", conn.RemoteAddr())
 
 	reader := shared.NewMessageReader(conn)
 	if !reader.HasMessage() {
@@ -196,7 +196,7 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		fmt.Printf("RECEIVED: %s from %s \n", msg.TypeName(), msg.SenderName)
+		fmt.Printf("[INFO] Received %s from %s \n", msg.TypeName(), msg.SenderName)
 
 		if !tracker.AddMessage(msg.ID) {
 			continue
