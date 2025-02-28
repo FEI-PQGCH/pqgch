@@ -15,19 +15,26 @@ import (
 )
 
 var (
-	mu sync.Mutex
-	config shared.UserConfig
-	session shared.Session
-	masterKey [gake.SsLen]byte
+	mu              sync.Mutex
+	config          shared.UserConfig
+	session         shared.Session
+	masterKey       [gake.SsLen]byte
 	intraClusterKey [gake.SsLen]byte
-	keyCiphertext []byte
+	keyCiphertext   []byte
+	debugMode       bool
 )
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
+	debugFlag := flag.Bool("debug", true, "enable debug messages")
 	flag.Parse()
-	if *configFlag == "" {
-		fmt.Println("please provide a configuration file using the -config flag")
+
+	shared.DebugMode = *debugFlag
+
+	if *configFlag != "" {
+		config = shared.GetUserConfig(*configFlag)
+	} else {
+		fmt.Printf("[ERROR] Configuration file missing. Please provide it using the -config flag\n")
 		panic("no configuration file provided")
 	}
 	config = shared.GetUserConfig(*configFlag)
@@ -39,19 +46,19 @@ func main() {
 		panic("error connecting to server")
 	}
 	defer conn.Close()
-	fmt.Printf("connected to server %s\n", servAddr)
+	fmt.Printf("[INFO] Connected to server %s\n", servAddr)
 
 	session = shared.MakeSession(&config.ClusterConfig)
 	session.OnSharedKey = func() {
 		if keyCiphertext == nil {
-			fmt.Println("CRYPTO: no key ciphertext, skipping")
+			fmt.Println("[CRYPTO] No key ciphertext, skipping")
 			return
 		}
 		getMasterkey(keyCiphertext)
 	}
 
 	keyFilePath := config.ClusterConfig.ClusterKeyFile
-	loadedKey, err := shared.LoadClusterKey(keyFilePath) 
+	loadedKey, err := shared.LoadClusterKey(keyFilePath)
 	if err != nil {
 		fmt.Printf("error loading cluster key from file %s: %v\n", keyFilePath, err)
 		panic(err)
@@ -92,34 +99,34 @@ func main() {
 
 func send(conn net.Conn, text string) {
 	if masterKey == [gake.SsLen]byte{} {
-			fmt.Println("no master key available, skipping")
-			return
+		fmt.Println("no master key available, skipping")
+		return
 	}
 	cipherText, err := shared.EncryptAesGcm(text, masterKey[:])
 	if err != nil {
-			fmt.Println("error encrypting message:", err)
-			return
+		fmt.Printf("[ERROR] Encryption failed: %v\n", err)
+		return
 	}
 	msg := shared.Message{
-			ID:         uuid.New().String(),
-			SenderID:   config.Index,
-			SenderName: config.GetName(),
-			Content:    cipherText,
-			Type:       shared.BroadcastMsg,
-			ClusterID:  config.ClusterConfig.Index,
+		ID:         uuid.New().String(),
+		SenderID:   config.Index,
+		SenderName: config.GetName(),
+		Content:    cipherText,
+		Type:       shared.BroadcastMsg,
+		ClusterID:  config.ClusterConfig.Index,
 	}
 	msg.Send(conn)
 }
-
-
 
 func receiver(conn net.Conn) {
 	msgReader := shared.NewMessageReader(conn)
 	for msgReader.HasMessage() {
 		msg := msgReader.GetMessage()
-		fmt.Printf("RECEIVED: %s from %s\n", msg.TypeName(), msg.SenderName)
+		if debugMode {
+			fmt.Printf("[DEBUG] Received %s from %s\n", msg.TypeName(), msg.SenderName)
+		}
 		handleMessage(conn, msg)
 	}
-	fmt.Println("disconnected from server")
-}
 
+	fmt.Println("[INFO] Disconnected from server")
+}

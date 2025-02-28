@@ -7,7 +7,7 @@ import (
 )
 
 func onClusterSession() {
-	fmt.Println("CRYPTO: broadcasting key to cluster")
+	fmt.Println("[CRYPTO] Broadcasting key to cluster")
 	keyMsg := shared.EncryptAndHMAC(&clusterSession, &mainSession, &config, intraClusterKey[:])
 	broadcastToCluster(keyMsg)
 }
@@ -83,6 +83,6 @@ func handleMessage(conn net.Conn, msg shared.Message) {
 	case shared.LeaderXiMsg:
 		xiLeader(msg)
 	default:
-		fmt.Println("error: unknown message type")
+		fmt.Printf("[ERROR] Unknown message type encountered\n")
 	}
 }

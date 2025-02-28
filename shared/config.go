@@ -8,6 +8,8 @@ import (
 	"pqgch-client/gake"
 )
 
+var DebugMode bool
+
 type ConfigAccessor interface {
 	GetIndex() int
 	GetKeys() []string

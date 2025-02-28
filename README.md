@@ -132,7 +132,7 @@ When everything is ready to go, the protocol initializes automatically at each o
 
 - **Client Initialization**:
 
-  - After clients are created and execute the `init` command, the protocol begins:
+  - After clients are created, `init` will automatically run and the protocol begins:
     - Clients send **AKE A messages** to the each other and receive **AKE B messages** in response, establishing a secure connection.
   - When all clients are exchange the initial messages, the process completes:
     - Clients broadcast their **Xs** and receive them from their peers.

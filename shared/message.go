@@ -93,7 +93,7 @@ func (mr *MessageReader) advance() {
 		if err := mr.scanner.Err(); err != nil {
 			fmt.Println("error reading from connection:", err)
 		} else {
-			fmt.Println("connection closed")
+			fmt.Printf("[INFO] Connection closed\n")
 		}
 	}
 }

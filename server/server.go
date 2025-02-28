@@ -59,7 +59,7 @@ func main() {
 	}
 
 	keyFilePath := config.ClusterConfig.ClusterKeyFile
-	loadedKey, err := shared.LoadClusterKey(keyFilePath) 
+	loadedKey, err := shared.LoadClusterKey(keyFilePath)
 	if err != nil {
 		fmt.Printf("error loading cluster key from file %s: %v\n", keyFilePath, err)
 		panic(err)
@@ -84,7 +84,7 @@ func main() {
 	fmt.Println("server listening on", address)
 
 	clusterSession = shared.MakeSession(&config.ClusterConfig)
-	clusterSession.OnSharedKey = onClusterSession 
+	clusterSession.OnSharedKey = onClusterSession
 	mainSession = shared.MakeSession(&config)
 	tracker := shared.NewMessageTracker()
 
@@ -126,7 +126,6 @@ func connectNeighbor(neighborAddress string) {
 		}
 		neighborConn = conn
 		fmt.Printf("[INFO] Connected to right neighbor (%s)\n", neighborAddress)
-
 		loginMsg := shared.Message{
 			ID:         uuid.New().String(),
 			SenderID:   -1,
@@ -222,5 +221,3 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 		handleMessage(client.conn, msg)
 	}
 }
-
-

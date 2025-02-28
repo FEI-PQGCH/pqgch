@@ -27,7 +27,6 @@ func xi(msg shared.Message) {
 	shared.HandleXi(msg, &config, &session)
 }
 
-
 func getMasterkey(decodedContent []byte) {
 	recoveredKey, err := shared.DecryptAndCheckHMAC(decodedContent, intraClusterKey[:])
 	if err != nil {
@@ -35,7 +34,7 @@ func getMasterkey(decodedContent []byte) {
 		return
 	}
 	copy(masterKey[:], recoveredKey)
-	fmt.Printf("CRYPTO: master key established: %02x\n", masterKey[:4])
+	fmt.Printf("[CRYPTO] Master key established: %02x\n", masterKey[:4])
 }
 
 func print(msg shared.Message) {
@@ -48,7 +47,7 @@ func print(msg shared.Message) {
 func keyHandler(msg shared.Message) {
 	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
-		fmt.Println("error decoding key message:", err)
+		fmt.Printf("[ERROR] Failed to decrypt message\n")
 		return
 	}
 
@@ -63,13 +62,12 @@ func keyHandler(msg shared.Message) {
 func text(msg shared.Message) {
 	plainText, err := shared.DecryptAesGcm(msg.Content, masterKey[:])
 	if err != nil {
-			fmt.Println("error decrypting message:", err)
-			return
+		fmt.Println("error decrypting message:", err)
+		return
 	}
 	msg.Content = plainText
 	print(msg)
 }
-
 
 func handleMessage(conn net.Conn, msg shared.Message) {
 	switch msg.Type {

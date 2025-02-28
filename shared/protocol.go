@@ -42,7 +42,7 @@ func MakeSession(config ConfigAccessor) Session {
 
 func checkLeftRightKeys(session *Session, config ConfigAccessor) Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
-		fmt.Println("CRYPTO: established shared keys with both neighbors")
+		fmt.Println("[CRYPTO] Established shared keys with both neighbors")
 		xi := getXiCommitmentCoinMsg(session, config)
 		tryFinalizeProtocol(session, config)
 		return xi
@@ -88,26 +88,26 @@ func tryFinalizeProtocol(session *Session, config ConfigAccessor) {
 		}
 	}
 
-	fmt.Println("CRYPTO: received all Xs")
+	fmt.Println("[CRYPTO] Received all Xs")
 
 	ok := gake.CheckXs(session.Xs, len(config.GetNamesOrAddrs()))
 	if ok {
-		fmt.Println("CRYPTO: Xs check: success")
+		fmt.Println("[CRYPTO] Xs check: success")
 	} else {
-		fmt.Println("CRYPTO: Xs check: fail")
+		fmt.Println("[CRYPTO] Xs check: fail")
 		os.Exit(1)
 	}
 
 	ok = gake.CheckCommitments(len(config.GetNamesOrAddrs()), session.Xs, config.GetDecodedPublicKeys(), session.Coins, session.Commitments)
 	if ok {
-		fmt.Println("CRYPTO: Commitments check: success")
+		fmt.Println("[CRYPTO] Commitments check: success")
 	} else {
-		fmt.Println("CRYPTO: Commitments check: fail")
+		fmt.Println("[CRYPTO] Commitments check: fail")
 		os.Exit(1)
 	}
 
 	for i := 0; i < len(session.Xs); i++ {
-		fmt.Printf("CRYPTO: X%d: %02x\n", i, (session.Xs)[i][:4])
+		fmt.Printf("[CRYPTO] X%d: %02x\n", i, (session.Xs)[i][:4])
 	}
 
 	pids := make([][gake.PidLen]byte, len(config.GetNamesOrAddrs()))
@@ -119,8 +119,8 @@ func tryFinalizeProtocol(session *Session, config ConfigAccessor) {
 	}
 
 	sharedSecret, sessioId := gake.ComputeSharedKey(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, pids)
-	fmt.Printf("CRYPTO: SharedSecret%d: %02x...\n", config.GetIndex(), sharedSecret[:4])
-	fmt.Printf("CRYPTO: SessionId%d: %02x...\n", config.GetIndex(), sessioId[:4])
+	fmt.Printf("[CRYPTO] SharedSecret%d: %02x...\n", config.GetIndex(), sharedSecret[:4])
+	fmt.Printf("[CRYPTO] SessionId%d: %02x...\n", config.GetIndex(), sessioId[:4])
 
 	session.SharedSecret = sharedSecret
 	session.OnSharedKey()
@@ -152,7 +152,7 @@ func getAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
 		config.GetDecodedSecretKey(),
 		config.GetDecodedPublicKey(msg.SenderID))
 
-	fmt.Println("CRYPTO: established shared key with left neighbor")
+	fmt.Println("Established shared key with left neighbor")
 
 	msg = Message{
 		ID:         uuid.New().String(),
@@ -190,38 +190,37 @@ func EncryptAesGcm(plaintext string, key []byte) (string, error) {
 func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 	cipherText, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
-			return "", err
+		return "", err
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-			return "", err
+		return "", err
 	}
-	
+
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-			return "", err
+		return "", err
 	}
-	
+
 	nonceSize := aesGCM.NonceSize()
 	if len(cipherText) < nonceSize {
-			return "", errors.New("ciphertext too short")
+		return "", errors.New("ciphertext too short")
 	}
 	nonce, cipherText := cipherText[:nonceSize], cipherText[nonceSize:]
-	
+
 	plainText, err := aesGCM.Open(nil, nonce, cipherText, nil)
 	if err != nil {
-			return "", err
+		return "", err
 	}
-	
+
 	return string(plainText), nil
 }
-
 
 func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config ConfigAccessor, externalKey []byte) Message {
 	ciphertext := make([]byte, gake.SsLen)
 	for i := 0; i < gake.SsLen; i++ {
-			ciphertext[i] = mainSession.SharedSecret[i] ^ externalKey[i]
+		ciphertext[i] = mainSession.SharedSecret[i] ^ externalKey[i]
 	}
 	hmacKey := externalKey[gake.SsLen:]
 	mac := hmac.New(sha256.New, hmacKey)
@@ -229,17 +228,14 @@ func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config Config
 	tag := mac.Sum(nil)
 	ciphertext = append(ciphertext, tag...)
 	msg := Message{
-			ID:         uuid.New().String(),
-			SenderID:   -1,
-			SenderName: config.GetName(),
-			Type:       KeyMsg,
-			Content:    base64.StdEncoding.EncodeToString(ciphertext),
+		ID:         uuid.New().String(),
+		SenderID:   -1,
+		SenderName: config.GetName(),
+		Type:       KeyMsg,
+		Content:    base64.StdEncoding.EncodeToString(ciphertext),
 	}
 	return msg
 }
-
-
-
 
 func DecryptAndCheckHMAC(encryptedText []byte, intraClusterKey []byte) ([]byte, error) {
 	ciphertext := encryptedText[:gake.SsLen]
@@ -249,11 +245,11 @@ func DecryptAndCheckHMAC(encryptedText []byte, intraClusterKey []byte) ([]byte, 
 	mac.Write(ciphertext)
 	expectedTag := mac.Sum(nil)
 	if !hmac.Equal(tag, expectedTag) {
-			return nil, errors.New("tag mismatch")
+		return nil, errors.New("tag mismatch")
 	}
 	recoveredKey := make([]byte, gake.SsLen)
 	for i := 0; i < gake.SsLen; i++ {
-			recoveredKey[i] = intraClusterKey[i] ^ ciphertext[i]
+		recoveredKey[i] = intraClusterKey[i] ^ ciphertext[i]
 	}
 	return recoveredKey, nil
 }
@@ -323,15 +319,15 @@ func LoadClusterKey(filePath string) ([gake.SsLen]byte, error) {
 
 	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
-			return key, err
+		return key, err
 	}
 
 	decoded, err := hex.DecodeString(string(data))
 	if err != nil {
-			return key, err
+		return key, err
 	}
 	if len(decoded) < gake.SsLen {
-			return key, errors.New("cluster key file is too short")
+		return key, errors.New("cluster key file is too short")
 	}
 	copy(key[:], decoded)
 	return key, nil
