@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"pqgch-client/gake"
 	"pqgch-client/shared"
 	"sync"
 	"time"
@@ -26,6 +27,8 @@ var (
 	config         shared.ServConfig
 	clusterSession shared.Session
 	mainSession    shared.Session
+
+	intraClusterKey [gake.SsLen]byte
 )
 
 type MessageQueue []shared.Message
@@ -51,9 +54,18 @@ func main() {
 	if *configFlag != "" {
 		config = shared.GetServConfig(*configFlag)
 	} else {
-		fmt.Println("please provide a configuration file using the -config flag.")
+		fmt.Printf("[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
 		panic("no configuration file provided")
 	}
+
+	keyFilePath := config.ClusterConfig.ClusterKeyFile
+	loadedKey, err := shared.LoadClusterKey(keyFilePath) 
+	if err != nil {
+		fmt.Printf("error loading cluster key from file %s: %v\n", keyFilePath, err)
+		panic(err)
+	}
+	intraClusterKey = loadedKey
+	fmt.Printf("[CRYPTO] external cluster key loaded from file %s\n", keyFilePath)
 
 	_, selfPort, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
@@ -61,7 +73,6 @@ func main() {
 		panic("error parsing self address from config")
 	}
 	port := selfPort
-
 	address := fmt.Sprintf(":%s", port)
 
 	listener, err := net.Listen("tcp", address)
@@ -73,19 +84,20 @@ func main() {
 	fmt.Println("server listening on", address)
 
 	clusterSession = shared.MakeSession(&config.ClusterConfig)
-	clusterSession.OnSharedKey = onClusterSession
-
+	clusterSession.OnSharedKey = onClusterSession 
 	mainSession = shared.MakeSession(&config)
 	tracker := shared.NewMessageTracker()
 
 	queues = make([]MessageQueue, len(config.ClusterConfig.GetNamesOrAddrs()))
-
-	for i := range len(config.ClusterConfig.GetNamesOrAddrs()) {
+	for i := range config.ClusterConfig.GetNamesOrAddrs() {
 		if i == config.ClusterConfig.GetIndex() {
 			continue
 		}
-
-		client := Client{name: config.ClusterConfig.GetNamesOrAddrs()[i], conn: nil, index: i}
+		client := Client{
+			name:  config.ClusterConfig.GetNamesOrAddrs()[i],
+			conn:  nil,
+			index: i,
+		}
 		clients = append(clients, client)
 	}
 
@@ -97,7 +109,6 @@ func main() {
 			fmt.Println("error accepting connection:", err)
 			continue
 		}
-
 		go handleClient(conn, tracker)
 	}
 }
@@ -105,34 +116,34 @@ func main() {
 func connectNeighbor(neighborAddress string) {
 	for {
 		muNeighborConn.Lock()
-		fmt.Printf("connecting to right neighbor at %s\n", neighborAddress)
+		fmt.Printf("[INFO] Attempting connection to right neighbor at %s\n", neighborAddress)
 		conn, err := net.Dial("tcp", neighborAddress)
 		if err != nil {
-			fmt.Printf("error connecting to right neighbor: %v. Retrying...\n", err)
+			fmt.Printf("[ERROR] Right neighbor connection error: %v. Retrying...\n", err)
 			muNeighborConn.Unlock()
 			time.Sleep(2 * time.Second)
 			continue
 		}
 		neighborConn = conn
-		fmt.Printf("connected to right neighbor (%s)\n", neighborAddress)
+		fmt.Printf("[INFO] Connected to right neighbor (%s)\n", neighborAddress)
+
 		loginMsg := shared.Message{
 			ID:         uuid.New().String(),
 			SenderID:   -1,
 			SenderName: "server",
 			Type:       shared.LoginMsg,
 		}
-
 		loginMsg.Send(neighborConn)
+
 		msg := shared.GetAkeAMsg(&mainSession, &config)
 		msg.Send(neighborConn)
-		fmt.Println("CRYPTO: sending Leader AKE A message")
+		fmt.Printf("[CRYPTO] Sending Leader AKE A message for inter-cluster handshake\n")
 
 		muNeighborConn.Unlock()
 		break
 	}
 
 	msgReader := shared.NewMessageReader(neighborConn)
-
 	if !msgReader.HasMessage() {
 		fmt.Println("right neighbor did not send login message")
 		neighborConn.Close()
@@ -143,12 +154,12 @@ func connectNeighbor(neighborAddress string) {
 	}
 
 	msg := msgReader.GetMessage()
-	fmt.Printf("RECEIVED: %s from %s \n", msg.TypeName(), msg.SenderName)
+	fmt.Printf("[INFO] Received %s from %s \n", msg.TypeName(), msg.SenderName)
 	handleMessage(nil, msg)
 }
 
 func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
-	fmt.Println("new client connected:", conn.RemoteAddr())
+	fmt.Println("[INFO] New client connected:", conn.RemoteAddr())
 
 	reader := shared.NewMessageReader(conn)
 	if !reader.HasMessage() {
@@ -164,7 +175,11 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 		return
 	}
 
-	client := Client{name: msg.SenderName, conn: conn, index: msg.SenderID}
+	client := Client{
+		name:  msg.SenderName,
+		conn:  conn,
+		index: msg.SenderID,
+	}
 
 	if msg.SenderID != -1 {
 		muClients.Lock()
@@ -188,15 +203,13 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 			clusterClientCount++
 		}
 	}
-
 	if clusterClientCount == len(config.Names)-1 {
-		msg := shared.GetAkeAMsg(&clusterSession, &config.ClusterConfig)
-		sendToClient(msg)
+		clusterSession.OnSharedKey()
 	}
 
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		fmt.Printf("RECEIVED: %s from %s \n", msg.TypeName(), msg.SenderName)
+		fmt.Printf("[INFO] Received %s from %s \n", msg.TypeName(), msg.SenderName)
 
 		if !tracker.AddMessage(msg.ID) {
 			continue
@@ -209,3 +222,5 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 		handleMessage(client.conn, msg)
 	}
 }
+
+

@@ -15,23 +15,22 @@ import (
 )
 
 var (
-	mu            sync.Mutex
-	config        shared.UserConfig
-	session       shared.Session
-	key           [gake.SsLen]byte
+	mu sync.Mutex
+	config shared.UserConfig
+	session shared.Session
+	masterKey [gake.SsLen]byte
+	intraClusterKey [gake.SsLen]byte
 	keyCiphertext []byte
 )
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
-
-	if *configFlag != "" {
-		config = shared.GetUserConfig(*configFlag)
-	} else {
+	if *configFlag == "" {
 		fmt.Println("please provide a configuration file using the -config flag")
 		panic("no configuration file provided")
 	}
+	config = shared.GetUserConfig(*configFlag)
 
 	servAddr := config.LeadAddr
 	conn, err := net.Dial("tcp", servAddr)
@@ -48,21 +47,32 @@ func main() {
 			fmt.Println("CRYPTO: no key ciphertext, skipping")
 			return
 		}
-		getMainKey(keyCiphertext)
+		getMasterkey(keyCiphertext)
 	}
+
+	keyFilePath := config.ClusterConfig.ClusterKeyFile
+	loadedKey, err := shared.LoadClusterKey(keyFilePath) 
+	if err != nil {
+		fmt.Printf("error loading cluster key from file %s: %v\n", keyFilePath, err)
+		panic(err)
+	}
+	intraClusterKey = loadedKey
+	fmt.Printf("CRYPTO: external cluster key loaded from file %s\n", keyFilePath)
+	fmt.Printf("CRYPTO: intra-cluster key initialized: %02x\n", intraClusterKey[:4])
+	fmt.Printf("CRYPTO: inter-cluster (master) key not yet established\n")
 
 	loginMsg := shared.Message{
 		ID:         uuid.New().String(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		Type:       shared.LoginMsg,
-		ClusterID:  -1,
+		ClusterID:  config.ClusterConfig.Index,
 	}
 	loginMsg.Send(conn)
 
 	go receiver(conn)
 
-	initProtocol(conn)
+	// initProtocol(conn)
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -73,43 +83,43 @@ func main() {
 	}
 }
 
-func initProtocol(conn net.Conn) {
-	fmt.Println("CRYPTO: initiating the protocol")
-	msg := shared.GetAkeAMsg(&session, &config.ClusterConfig)
-	fmt.Println("CRYPTO: sending AKE A message")
-	msg.Send(conn)
-}
+// func initProtocol(conn net.Conn) {
+// 	fmt.Println("CRYPTO: initiating the protocol")
+// 	msg := shared.GetAkeAMsg(&session, &config.ClusterConfig)
+// 	fmt.Println("CRYPTO: sending AKE A message")
+// 	msg.Send(conn)
+// }
 
 func send(conn net.Conn, text string) {
-	if key == [gake.SsLen]byte{} {
-		fmt.Println("no shared secret, skipping")
-		return
+	if masterKey == [gake.SsLen]byte{} {
+			fmt.Println("no master key available, skipping")
+			return
 	}
-
-	var cipherText, err = shared.EncryptAesGcm(text, key[:])
+	cipherText, err := shared.EncryptAesGcm(text, masterKey[:])
 	if err != nil {
-		fmt.Println("error encrypting message")
-		return
+			fmt.Println("error encrypting message:", err)
+			return
 	}
-
 	msg := shared.Message{
-		ID:         uuid.New().String(),
-		SenderID:   config.Index,
-		SenderName: config.GetName(),
-		Content:    cipherText,
-		Type:       shared.BroadcastMsg,
+			ID:         uuid.New().String(),
+			SenderID:   config.Index,
+			SenderName: config.GetName(),
+			Content:    cipherText,
+			Type:       shared.BroadcastMsg,
+			ClusterID:  config.ClusterConfig.Index,
 	}
 	msg.Send(conn)
 }
+
+
 
 func receiver(conn net.Conn) {
 	msgReader := shared.NewMessageReader(conn)
-
 	for msgReader.HasMessage() {
 		msg := msgReader.GetMessage()
 		fmt.Printf("RECEIVED: %s from %s\n", msg.TypeName(), msg.SenderName)
 		handleMessage(conn, msg)
 	}
-
 	fmt.Println("disconnected from server")
 }
+

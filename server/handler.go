@@ -8,7 +8,7 @@ import (
 
 func onClusterSession() {
 	fmt.Println("CRYPTO: broadcasting key to cluster")
-	keyMsg := shared.EncryptAndHMAC(&clusterSession, &mainSession, &config)
+	keyMsg := shared.EncryptAndHMAC(&clusterSession, &mainSession, &config, intraClusterKey[:])
 	broadcastToCluster(keyMsg)
 }
 

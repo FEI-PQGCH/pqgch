@@ -116,6 +116,7 @@ type ClusterConfig struct {
 	Index      int      `json:"index"`
 	PublicKeys []string `json:"publicKeys"`
 	SecretKey  string   `json:"secretKey"`
+	ClusterKeyFile string   `json:"clusterKeyFile"`
 }
 
 type UserConfig struct {

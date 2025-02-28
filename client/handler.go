@@ -27,25 +27,15 @@ func xi(msg shared.Message) {
 	shared.HandleXi(msg, &config, &session)
 }
 
-func sharedKey(msg shared.Message) {
-	decodedContent, _ := base64.StdEncoding.DecodeString(msg.Content)
 
-	if session.SharedSecret == [gake.SsLen]byte{} {
-		keyCiphertext = decodedContent
-		return
-	}
-	getMainKey(decodedContent)
-}
-
-func getMainKey(decodedContent []byte) {
-	decryptedKey, err := shared.DecryptAndCheckHMAC(decodedContent, &session)
+func getMasterkey(decodedContent []byte) {
+	recoveredKey, err := shared.DecryptAndCheckHMAC(decodedContent, intraClusterKey[:])
 	if err != nil {
-		fmt.Println("error: decrypting key")
+		fmt.Println("error decrypting key message:", err)
 		return
 	}
-	copy(key[:], decryptedKey)
-
-	fmt.Printf("CRYPTO: main shared key established: %02x\n", key[:4])
+	copy(masterKey[:], recoveredKey)
+	fmt.Printf("CRYPTO: master key established: %02x\n", masterKey[:4])
 }
 
 func print(msg shared.Message) {
@@ -55,16 +45,31 @@ func print(msg shared.Message) {
 	fmt.Print("You: ")
 }
 
-func text(msg shared.Message) {
-	var plainText, err = shared.DecryptAesGcm(msg.Content, key[:])
+func keyHandler(msg shared.Message) {
+	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
-		fmt.Println("error decrypting message")
+		fmt.Println("error decoding key message:", err)
 		return
 	}
 
+	if intraClusterKey == [gake.SsLen]byte{} {
+		fmt.Println("intraClusterKey not loaded yet")
+		keyCiphertext = decodedContent
+		return
+	}
+	getMasterkey(decodedContent)
+}
+
+func text(msg shared.Message) {
+	plainText, err := shared.DecryptAesGcm(msg.Content, masterKey[:])
+	if err != nil {
+			fmt.Println("error decrypting message:", err)
+			return
+	}
 	msg.Content = plainText
 	print(msg)
 }
+
 
 func handleMessage(conn net.Conn, msg shared.Message) {
 	switch msg.Type {
@@ -75,7 +80,7 @@ func handleMessage(conn net.Conn, msg shared.Message) {
 	case shared.XiMsg:
 		xi(msg)
 	case shared.KeyMsg:
-		sharedKey(msg)
+		keyHandler(msg)
 	default:
 		text(msg)
 	}

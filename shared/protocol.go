@@ -8,9 +8,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"pqgch-client/gake"
 
@@ -188,75 +190,72 @@ func EncryptAesGcm(plaintext string, key []byte) (string, error) {
 func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 	cipherText, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
-		return "", err
+			return "", err
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+			return "", err
 	}
-
+	
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+			return "", err
 	}
-
+	
 	nonceSize := aesGCM.NonceSize()
 	if len(cipherText) < nonceSize {
-		return "", errors.New("ciphertext too short")
+			return "", errors.New("ciphertext too short")
 	}
 	nonce, cipherText := cipherText[:nonceSize], cipherText[nonceSize:]
-
+	
 	plainText, err := aesGCM.Open(nil, nonce, cipherText, nil)
 	if err != nil {
-		return "", err
+			return "", err
 	}
-
+	
 	return string(plainText), nil
 }
 
-func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config ConfigAccessor) Message {
-	ciphertext := make([]byte, gake.SsLen)
 
+func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config ConfigAccessor, externalKey []byte) Message {
+	ciphertext := make([]byte, gake.SsLen)
 	for i := 0; i < gake.SsLen; i++ {
-		ciphertext[i] = mainSession.SharedSecret[i] ^ clusterSession.SharedSecret[i]
+			ciphertext[i] = mainSession.SharedSecret[i] ^ externalKey[i]
 	}
-	mac := hmac.New(sha256.New, clusterSession.SharedSecret[gake.SsLen:])
+	hmacKey := externalKey[gake.SsLen:]
+	mac := hmac.New(sha256.New, hmacKey)
 	mac.Write(ciphertext)
 	tag := mac.Sum(nil)
 	ciphertext = append(ciphertext, tag...)
-
 	msg := Message{
-		ID:         uuid.New().String(),
-		SenderID:   -1,
-		SenderName: config.GetName(),
-		Type:       KeyMsg,
-		Content:    base64.StdEncoding.EncodeToString(ciphertext),
+			ID:         uuid.New().String(),
+			SenderID:   -1,
+			SenderName: config.GetName(),
+			Type:       KeyMsg,
+			Content:    base64.StdEncoding.EncodeToString(ciphertext),
 	}
-
 	return msg
 }
 
-func DecryptAndCheckHMAC(encryptedText []byte, session *Session) ([]byte, error) {
+
+
+
+func DecryptAndCheckHMAC(encryptedText []byte, intraClusterKey []byte) ([]byte, error) {
 	ciphertext := encryptedText[:gake.SsLen]
 	tag := encryptedText[gake.SsLen:]
-
-	mac := hmac.New(sha256.New, session.SharedSecret[gake.SsLen:])
+	hmacKey := intraClusterKey[gake.SsLen:]
+	mac := hmac.New(sha256.New, hmacKey)
 	mac.Write(ciphertext)
 	expectedTag := mac.Sum(nil)
-
 	if !hmac.Equal(tag, expectedTag) {
-		fmt.Println("error: key message tag mismatch")
-		return nil, errors.New("tag mismatch")
+			return nil, errors.New("tag mismatch")
 	}
-
-	key := make([]byte, gake.SsLen)
-
+	recoveredKey := make([]byte, gake.SsLen)
 	for i := 0; i < gake.SsLen; i++ {
-		key[i] = session.SharedSecret[i] ^ ciphertext[i]
+			recoveredKey[i] = intraClusterKey[i] ^ ciphertext[i]
 	}
-
-	return key, nil
+	return recoveredKey, nil
 }
 
 func HandleAkeA(
@@ -317,4 +316,23 @@ func HandleXi(
 	session.Coins[msg.SenderID] = coinArr
 	session.Xs[msg.SenderID] = xiArr
 	tryFinalizeProtocol(session, config)
+}
+
+func LoadClusterKey(filePath string) ([gake.SsLen]byte, error) {
+	var key [gake.SsLen]byte
+
+	data, err := ioutil.ReadFile(filePath)
+	if err != nil {
+			return key, err
+	}
+
+	decoded, err := hex.DecodeString(string(data))
+	if err != nil {
+			return key, err
+	}
+	if len(decoded) < gake.SsLen {
+			return key, errors.New("cluster key file is too short")
+	}
+	copy(key[:], decoded)
+	return key, nil
 }
