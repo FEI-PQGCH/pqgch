@@ -27,16 +27,6 @@ func xi(msg shared.Message) {
 	shared.HandleXi(msg, &config, &session)
 }
 
-func getMasterkey(decodedContent []byte) {
-	recoveredKey, err := shared.DecryptAndCheckHMAC(decodedContent, intraClusterKey[:])
-	if err != nil {
-		fmt.Println("error decrypting key message:", err)
-		return
-	}
-	copy(masterKey[:], recoveredKey)
-	fmt.Printf("[CRYPTO] Master key established: %02x\n", masterKey[:4])
-}
-
 func print(msg shared.Message) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -47,22 +37,58 @@ func print(msg shared.Message) {
 func keyHandler(msg shared.Message) {
 	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
-		fmt.Printf("[ERROR] Failed to decrypt message\n")
+		fmt.Printf("[ERROR] Failed to decode key message: %v\n", err)
 		return
 	}
+	var wrappingKey [64]byte
+	var zero [gake.SsLen]byte
+	if useExternal {
+		if intraClusterKey == zero {
+			fmt.Println("[CRYPTO] External key not loaded yet; storing key message")
+			keyCiphertext = decodedContent
+			return
+		}
+		copy(wrappingKey[:], intraClusterKey[:])
+		fmt.Printf("[DEBUG] Using external key (intraClusterKey): %x\n", intraClusterKey[:])
+	} else {
+		if session.SharedSecret == zero {
+			fmt.Println("[CRYPTO] GAKE handshake not complete; storing key message")
+			keyCiphertext = decodedContent
+			return
+		}
+		copy(wrappingKey[:], session.SharedSecret[:])
+	}
+	recoveredKey, err := shared.DecryptAndCheckHMAC(decodedContent, wrappingKey[:])
+	if err != nil {
+		fmt.Println("[ERROR] Failed decrypting key message:", err)
+		return
+	}
+	copy(masterKey[:], recoveredKey)
+}
 
-	if intraClusterKey == [gake.SsLen]byte{} {
-		fmt.Println("intraClusterKey not loaded yet")
-		keyCiphertext = decodedContent
+func getMasterKey(decodedContent []byte) {
+	fmt.Println("[CRYPTO] inside getMasterkey")
+
+	var keyForDecryption [64]byte
+	if useExternal {
+		copy(keyForDecryption[:], intraClusterKey[:])
+	} else {
+		copy(keyForDecryption[:], session.SharedSecret[:])
+	}
+	recoveredKey, err := shared.DecryptAndCheckHMAC(decodedContent, keyForDecryption[:])
+
+	if err != nil {
+		fmt.Println("[ERROR] Failed decrypting key message:", err)
 		return
 	}
-	getMasterkey(decodedContent)
+	copy(masterKey[:], recoveredKey)
+	fmt.Printf("[CRYPTO] Master key established: %02x\n", masterKey[:4])
 }
 
 func text(msg shared.Message) {
 	plainText, err := shared.DecryptAesGcm(msg.Content, masterKey[:])
 	if err != nil {
-		fmt.Println("error decrypting message:", err)
+		fmt.Println("[ERROR] Failed decrypting message:", err)
 		return
 	}
 	msg.Content = plainText

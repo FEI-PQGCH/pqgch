@@ -29,6 +29,7 @@ var (
 	mainSession    shared.Session
 
 	intraClusterKey [gake.SsLen]byte
+	useExternal     bool
 )
 
 type MessageQueue []shared.Message
@@ -49,7 +50,9 @@ func (mq *MessageQueue) remove(msg shared.Message) {
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
+	useExternalFlag := flag.Bool("useExternal", false, "use external key from file for key distribution")
 	flag.Parse()
+	useExternal = *useExternalFlag
 
 	if *configFlag != "" {
 		config = shared.GetServConfig(*configFlag)
@@ -58,18 +61,22 @@ func main() {
 		panic("no configuration file provided")
 	}
 
-	keyFilePath := config.ClusterConfig.ClusterKeyFile
-	loadedKey, err := shared.LoadClusterKey(keyFilePath)
-	if err != nil {
-		fmt.Printf("error loading cluster key from file %s: %v\n", keyFilePath, err)
-		panic(err)
+	if useExternal {
+		keyFilePath := config.ClusterConfig.ClusterKeyFile
+		loadedKey, err := shared.LoadClusterKey(keyFilePath)
+		if err != nil {
+			fmt.Printf("[ERROR] Error loading cluster key from file %s: %v\n", keyFilePath, err)
+			panic(err)
+		}
+		intraClusterKey = loadedKey
+		fmt.Printf("[CRYPTO] External cluster key loaded from file %s\n", keyFilePath)
+	} else {
+		fmt.Println("[CRYPTO] Using GAKE handshake to derive master key")
 	}
-	intraClusterKey = loadedKey
-	fmt.Printf("[CRYPTO] external cluster key loaded from file %s\n", keyFilePath)
 
 	_, selfPort, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
-		fmt.Println("error parsing self address from config:", err)
+		fmt.Println("[ERROR] Error parsing self address from config:", err)
 		panic("error parsing self address from config")
 	}
 	port := selfPort
@@ -77,7 +84,7 @@ func main() {
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		fmt.Println("error starting TCP server:", err)
+		fmt.Println("[ERROR] Error starting TCP server:", err)
 		panic("error starting TCP server")
 	}
 	defer listener.Close()
@@ -106,7 +113,7 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("error accepting connection:", err)
+			fmt.Println("[ERROR] Error accepting connection:", err)
 			continue
 		}
 		go handleClient(conn, tracker)
@@ -162,14 +169,14 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 
 	reader := shared.NewMessageReader(conn)
 	if !reader.HasMessage() {
-		fmt.Println("error: client did not send message")
+		fmt.Println("[ERROR] Client did not send message")
 		conn.Close()
 		return
 	}
 
 	msg := reader.GetMessage()
 	if msg.Type != shared.LoginMsg {
-		fmt.Println("error: client did not send login message")
+		fmt.Println("[ERROR] Client did not send login message")
 		conn.Close()
 		return
 	}
@@ -187,7 +194,7 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 		defer func() {
 			/* TODO: handle disconnect */
 			client.conn.Close()
-			fmt.Println("client disconnected:", client.conn.RemoteAddr())
+			fmt.Println("[INFO] Client disconnected:", client.conn.RemoteAddr())
 		}()
 
 		for _, msg := range queues[client.index] {
@@ -203,7 +210,13 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 		}
 	}
 	if clusterClientCount == len(config.Names)-1 {
-		clusterSession.OnSharedKey()
+		if useExternal {
+			clusterSession.OnSharedKey()
+		} else {
+			msg := shared.GetAkeAMsg(&clusterSession, &config.ClusterConfig)
+			sendToClient(msg)
+		}
+
 	}
 
 	for reader.HasMessage() {

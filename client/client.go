@@ -22,12 +22,15 @@ var (
 	intraClusterKey [gake.SsLen]byte
 	keyCiphertext   []byte
 	debugMode       bool
+	useExternal     bool
 )
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	debugFlag := flag.Bool("debug", true, "enable debug messages")
+	useExternalFlag := flag.Bool("useExternal", false, "use external key from file for key derivation")
 	flag.Parse()
+	useExternal = *useExternalFlag
 
 	shared.DebugMode = *debugFlag
 
@@ -42,8 +45,8 @@ func main() {
 	servAddr := config.LeadAddr
 	conn, err := net.Dial("tcp", servAddr)
 	if err != nil {
-		fmt.Printf("error connecting to server %s: %v\n", servAddr, err)
-		panic("error connecting to server")
+		fmt.Printf("[ERROR] Error connecting to server %s: %v\n", servAddr, err)
+		panic("[ERROR] Error connecting to server")
 	}
 	defer conn.Close()
 	fmt.Printf("[INFO] Connected to server %s\n", servAddr)
@@ -54,19 +57,8 @@ func main() {
 			fmt.Println("[CRYPTO] No key ciphertext, skipping")
 			return
 		}
-		getMasterkey(keyCiphertext)
+		getMasterKey(keyCiphertext)
 	}
-
-	keyFilePath := config.ClusterConfig.ClusterKeyFile
-	loadedKey, err := shared.LoadClusterKey(keyFilePath)
-	if err != nil {
-		fmt.Printf("error loading cluster key from file %s: %v\n", keyFilePath, err)
-		panic(err)
-	}
-	intraClusterKey = loadedKey
-	fmt.Printf("CRYPTO: external cluster key loaded from file %s\n", keyFilePath)
-	fmt.Printf("CRYPTO: intra-cluster key initialized: %02x\n", intraClusterKey[:4])
-	fmt.Printf("CRYPTO: inter-cluster (master) key not yet established\n")
 
 	loginMsg := shared.Message{
 		ID:         uuid.New().String(),
@@ -78,8 +70,22 @@ func main() {
 	loginMsg.Send(conn)
 
 	go receiver(conn)
-
-	// initProtocol(conn)
+	if useExternal {
+		keyFilePath := config.ClusterConfig.ClusterKeyFile
+		loadedKey, err := shared.LoadClusterKey(keyFilePath)
+		if err != nil {
+			fmt.Printf("[ERROR] Error loading cluster key from file %s: %v\n", keyFilePath, err)
+			panic(err)
+		}
+		intraClusterKey = loadedKey
+		fmt.Printf("[CRYPTO] external cluster key loaded from file %s\n", keyFilePath)
+		fmt.Printf("[CRYPTO] intra-cluster key initialized: %02x\n", intraClusterKey[:4])
+		if keyCiphertext != nil {
+			session.OnSharedKey()
+		}
+	} else {
+		initProtocol(conn)
+	}
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -90,16 +96,16 @@ func main() {
 	}
 }
 
-// func initProtocol(conn net.Conn) {
-// 	fmt.Println("CRYPTO: initiating the protocol")
-// 	msg := shared.GetAkeAMsg(&session, &config.ClusterConfig)
-// 	fmt.Println("CRYPTO: sending AKE A message")
-// 	msg.Send(conn)
-// }
+func initProtocol(conn net.Conn) {
+	fmt.Println("[CRYPTO] Initiating the protocol")
+	msg := shared.GetAkeAMsg(&session, &config.ClusterConfig)
+	fmt.Println("[CRYPTO] Sending AKE A message")
+	msg.Send(conn)
+}
 
 func send(conn net.Conn, text string) {
 	if masterKey == [gake.SsLen]byte{} {
-		fmt.Println("no master key available, skipping")
+		fmt.Println("[CRYPTO] No master key available, skipping")
 		return
 	}
 	cipherText, err := shared.EncryptAesGcm(text, masterKey[:])

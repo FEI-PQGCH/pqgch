@@ -217,12 +217,12 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 	return string(plainText), nil
 }
 
-func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config ConfigAccessor, externalKey []byte) Message {
+func EncryptAndHMAC(masterKey []byte, config ConfigAccessor, key []byte) Message {
 	ciphertext := make([]byte, gake.SsLen)
 	for i := 0; i < gake.SsLen; i++ {
-		ciphertext[i] = mainSession.SharedSecret[i] ^ externalKey[i]
+		ciphertext[i] = masterKey[i] ^ key[i]
 	}
-	hmacKey := externalKey[gake.SsLen:]
+	hmacKey := key[gake.SsLen:]
 	mac := hmac.New(sha256.New, hmacKey)
 	mac.Write(ciphertext)
 	tag := mac.Sum(nil)
@@ -237,10 +237,10 @@ func EncryptAndHMAC(clusterSession *Session, mainSession *Session, config Config
 	return msg
 }
 
-func DecryptAndCheckHMAC(encryptedText []byte, intraClusterKey []byte) ([]byte, error) {
+func DecryptAndCheckHMAC(encryptedText []byte, key []byte) ([]byte, error) {
 	ciphertext := encryptedText[:gake.SsLen]
 	tag := encryptedText[gake.SsLen:]
-	hmacKey := intraClusterKey[gake.SsLen:]
+	hmacKey := key[gake.SsLen:]
 	mac := hmac.New(sha256.New, hmacKey)
 	mac.Write(ciphertext)
 	expectedTag := mac.Sum(nil)
@@ -249,7 +249,7 @@ func DecryptAndCheckHMAC(encryptedText []byte, intraClusterKey []byte) ([]byte, 
 	}
 	recoveredKey := make([]byte, gake.SsLen)
 	for i := 0; i < gake.SsLen; i++ {
-		recoveredKey[i] = intraClusterKey[i] ^ ciphertext[i]
+		recoveredKey[i] = key[i] ^ ciphertext[i]
 	}
 	return recoveredKey, nil
 }

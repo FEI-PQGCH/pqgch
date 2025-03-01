@@ -7,8 +7,14 @@ import (
 )
 
 func onClusterSession() {
-	fmt.Println("[CRYPTO] Broadcasting key to cluster")
-	keyMsg := shared.EncryptAndHMAC(&clusterSession, &mainSession, &config, intraClusterKey[:])
+	fmt.Println("[CRYPTO] Broadcasting master key to cluster")
+	var wrappingKey [64]byte
+	if useExternal {
+		copy(wrappingKey[:], intraClusterKey[:])
+	} else {
+		copy(wrappingKey[:], clusterSession.SharedSecret[:])
+	}
+	keyMsg := shared.EncryptAndHMAC(mainSession.SharedSecret[:], &config, wrappingKey[:])
 	broadcastToCluster(keyMsg)
 }
 
