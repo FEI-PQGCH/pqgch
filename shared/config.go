@@ -8,8 +8,6 @@ import (
 	"pqgch-client/gake"
 )
 
-var DebugMode bool
-
 type ConfigAccessor interface {
 	GetIndex() int
 	GetKeys() []string
@@ -114,10 +112,10 @@ func (c *ServConfig) GetMessageType(msgType int) int {
 }
 
 type ClusterConfig struct {
-	Names      []string `json:"names"`
-	Index      int      `json:"index"`
-	PublicKeys []string `json:"publicKeys"`
-	SecretKey  string   `json:"secretKey"`
+	Names          []string `json:"names"`
+	Index          int      `json:"index"`
+	PublicKeys     []string `json:"publicKeys"`
+	SecretKey      string   `json:"secretKey"`
 	ClusterKeyFile string   `json:"clusterKeyFile"`
 }
 

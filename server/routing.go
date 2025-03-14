@@ -12,9 +12,7 @@ func sendToClient(msg shared.Message) {
 
 	if client.conn == nil {
 		queues[msg.ReceiverID].add(msg)
-		if shared.DebugMode {
-			fmt.Printf("[DEBUG] Route: stored message\n")
-		}
+		fmt.Printf("[DEBUG] Route: stored message\n")
 		return
 	}
 
@@ -46,9 +44,7 @@ func broadcastToCluster(msg shared.Message) {
 			return
 		}
 	}
-	if shared.DebugMode {
-		fmt.Printf("ROUTE: broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName)
-	}
+	fmt.Printf("ROUTE: broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName)
 }
 
 // forward a message to the right neighbor.
@@ -72,9 +68,7 @@ func forwardToNeighbor(msg shared.Message) {
 			neighborConn = nil
 			return
 		}
-		if shared.DebugMode {
-			fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.TypeName(), msg.SenderName)
-		}
+		fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.TypeName(), msg.SenderName)
 		break
 	}
 
