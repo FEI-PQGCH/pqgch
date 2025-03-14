@@ -3,8 +3,43 @@ package main
 import (
 	"fmt"
 	"pqgch-client/shared"
+	"sync"
 	"time"
 )
+
+type ServerTransport struct {
+	messageHandler func(shared.Message)
+	mu             sync.Mutex
+}
+
+func NewServerTransport() *ServerTransport {
+	t := &ServerTransport{}
+	return t
+}
+
+func (t *ServerTransport) SetMessageHandler(handler func(shared.Message)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.messageHandler = handler
+}
+
+func (t *ServerTransport) Send(msg shared.Message) {
+	switch msg.Type {
+	case shared.XiMsg:
+		broadcastToCluster(msg)
+	case shared.AkeAMsg:
+		sendToClient(msg)
+	case shared.AkeBMsg:
+		sendToClient(msg)
+	case shared.KeyMsg:
+		broadcastToCluster(msg)
+	}
+}
+
+func (t *ServerTransport) Receive(msg shared.Message) {
+	t.messageHandler(msg)
+}
 
 // send a message to a client in this cluster
 func sendToClient(msg shared.Message) {
@@ -71,5 +106,9 @@ func forwardToNeighbor(msg shared.Message) {
 		fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.TypeName(), msg.SenderName)
 		break
 	}
+}
 
+func broadcast(msg shared.Message) {
+	broadcastToCluster(msg)
+	forwardToNeighbor(msg)
 }

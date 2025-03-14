@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"pqgch-client/gake"
 	"pqgch-client/shared"
 	"sync"
 	"time"
@@ -19,17 +18,15 @@ type Client struct {
 }
 
 var (
-	queues         []MessageQueue
-	clients        []Client
-	muClients      sync.Mutex
-	neighborConn   net.Conn
-	muNeighborConn sync.Mutex
-	config         shared.ServConfig
-	clusterSession shared.Session
-	mainSession    shared.Session
-
-	intraClusterKey [gake.SsLen]byte
-	useExternal     bool
+	queues          []MessageQueue
+	clients         []Client
+	muClients       sync.Mutex
+	neighborConn    net.Conn
+	muNeighborConn  sync.Mutex
+	config          shared.ServConfig
+	mainSession     shared.Session
+	devSession      *shared.DevSession
+	serverTransport *ServerTransport
 )
 
 type MessageQueue []shared.Message
@@ -50,9 +47,7 @@ func (mq *MessageQueue) remove(msg shared.Message) {
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
-	useExternalFlag := flag.Bool("useExternal", false, "use external key from file for key distribution")
 	flag.Parse()
-	useExternal = *useExternalFlag
 
 	if *configFlag != "" {
 		config = shared.GetServConfig(*configFlag)
@@ -61,18 +56,7 @@ func main() {
 		panic("no configuration file provided")
 	}
 
-	if useExternal {
-		keyFilePath := config.ClusterConfig.ClusterKeyFile
-		loadedKey, err := shared.LoadClusterKey(keyFilePath)
-		if err != nil {
-			fmt.Printf("[ERROR] Error loading cluster key from file %s: %v\n", keyFilePath, err)
-			panic(err)
-		}
-		intraClusterKey = loadedKey
-		fmt.Printf("[CRYPTO] External cluster key loaded from file %s\n", keyFilePath)
-	} else {
-		fmt.Println("[CRYPTO] Using GAKE handshake to derive master key")
-	}
+	fmt.Println("[CRYPTO] Using GAKE handshake to derive master key")
 
 	_, selfPort, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
@@ -90,10 +74,11 @@ func main() {
 	defer listener.Close()
 	fmt.Println("server listening on", address)
 
-	clusterSession = shared.MakeSession(&config.ClusterConfig)
-	clusterSession.OnSharedKey = onClusterSession
 	mainSession = shared.MakeSession(&config)
 	tracker := shared.NewMessageTracker()
+
+	serverTransport = NewServerTransport()
+	devSession = shared.NewLeaderDevSession(serverTransport, &config.ClusterConfig, &mainSession)
 
 	queues = make([]MessageQueue, len(config.ClusterConfig.GetNamesOrAddrs()))
 	for i := range config.ClusterConfig.GetNamesOrAddrs() {
@@ -210,13 +195,7 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 		}
 	}
 	if clusterClientCount == len(config.Names)-1 {
-		if useExternal {
-			clusterSession.OnSharedKey()
-		} else {
-			msg := shared.GetAkeAMsg(&clusterSession, &config.ClusterConfig)
-			sendToClient(msg)
-		}
-
+		devSession.Init()
 	}
 
 	for reader.HasMessage() {
@@ -231,6 +210,25 @@ func handleClient(conn net.Conn, tracker *shared.MessageTracker) {
 			msg.ClusterID = config.Index
 		}
 
+		if msg.ReceiverID == config.ClusterConfig.Index && msg.Type == shared.AkeAMsg {
+			serverTransport.Receive(msg)
+		}
+		if msg.ReceiverID == config.ClusterConfig.Index && msg.Type == shared.AkeBMsg {
+			serverTransport.Receive(msg)
+		}
+		if msg.ReceiverID != config.ClusterConfig.Index && msg.Type == shared.AkeAMsg {
+			sendToClient(msg)
+		}
+		if msg.ReceiverID != config.ClusterConfig.Index && msg.Type == shared.AkeBMsg {
+			sendToClient(msg)
+		}
+		if msg.Type == shared.XiMsg {
+			serverTransport.Receive(msg)
+			broadcastToCluster(msg)
+		}
+		if msg.Type == shared.BroadcastMsg {
+			broadcast(msg)
+		}
 		handleMessage(client.conn, msg)
 	}
 }

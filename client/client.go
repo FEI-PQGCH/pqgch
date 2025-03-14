@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"pqgch-client/shared"
 	"strings"
@@ -28,15 +27,6 @@ func main() {
 	}
 	config = shared.GetUserConfig(*configFlag)
 
-	servAddr := config.LeadAddr
-	conn, err := net.Dial("tcp", servAddr)
-	if err != nil {
-		fmt.Printf("[ERROR] Error connecting to server %s: %v\n", servAddr, err)
-		panic("[ERROR] Error connecting to server")
-	}
-	defer conn.Close()
-	fmt.Printf("[INFO] Connected to server %s\n", servAddr)
-
 	transport, _ := shared.NewTCPTransport(config.LeadAddr)
 	loginMsg := shared.Message{
 		ID:         uuid.New().String(),
@@ -47,6 +37,7 @@ func main() {
 	}
 	transport.Send(loginMsg)
 	devSession := shared.NewDevSession(transport, &config.ClusterConfig)
+	devSession.Init()
 
 	reader := bufio.NewReader(os.Stdin)
 	for {

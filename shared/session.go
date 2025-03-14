@@ -33,10 +33,30 @@ func NewDevSession(transport Transport, config ConfigAccessor) *DevSession {
 
 	transport.SetMessageHandler(s.handleMessage)
 
-	msg := GetAkeAMsg(&s.session, s.config)
-	s.transport.Send(msg)
+	return s
+}
+
+func NewLeaderDevSession(transport Transport, config ConfigAccessor, mainSession *Session) *DevSession {
+	s := &DevSession{
+		transport: transport,
+		session:   MakeSession(config),
+		config:    config,
+	}
+
+	s.session.OnSharedKey = func() {
+		fmt.Println("[CRYPTO] Broadcasting master key to cluster")
+		keyMsg := EncryptAndHMAC(mainSession.SharedSecret[:], config, s.session.SharedSecret[:])
+		s.transport.Send(keyMsg)
+	}
+
+	transport.SetMessageHandler(s.handleMessage)
 
 	return s
+}
+
+func (s *DevSession) Init() {
+	msg := GetAkeAMsg(&s.session, s.config)
+	s.transport.Send(msg)
 }
 
 func (s *DevSession) akeA(msg Message) {
@@ -81,8 +101,8 @@ func (s *DevSession) keyHandler(msg Message) {
 		fmt.Println("[ERROR] Failed decrypting key message:", err)
 		return
 	}
-	fmt.Println("[CRYPTO] Established main session key")
 	copy(s.mainSessionKey[:], recoveredKey)
+	fmt.Printf("[CRYPTO] Main session established: %02x\n", s.mainSessionKey[:4])
 }
 
 func (s *DevSession) getMasterKey(decodedContent []byte) {
@@ -94,7 +114,7 @@ func (s *DevSession) getMasterKey(decodedContent []byte) {
 	}
 
 	copy(s.mainSessionKey[:], recoveredKey)
-	fmt.Printf("[CRYPTO] Master key established: %02x\n", s.mainSessionKey[:4])
+	fmt.Printf("[CRYPTO] Main session established: %02x\n", s.mainSessionKey[:4])
 }
 
 func (s *DevSession) text(msg Message) {
