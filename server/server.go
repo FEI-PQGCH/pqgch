@@ -8,38 +8,11 @@ import (
 	"sync"
 )
 
-type Client struct {
-	name  string
-	conn  net.Conn
-	index int
-}
-
 var (
-	queues           []MessageQueue
-	clients          []Client
-	muClients        sync.Mutex
-	config           shared.ServConfig
-	devSession       *shared.DevSession
-	mainDevSession   *shared.LeaderDevSession
-	clusterTransport *ClusterTransport
-	leaderTransport  *LeaderTransport
+	clients   []Client
+	muClients sync.Mutex
+	config    shared.ServConfig
 )
-
-type MessageQueue []shared.Message
-
-func (mq *MessageQueue) add(msg shared.Message) {
-	*mq = append(*mq, msg)
-}
-
-func (mq *MessageQueue) remove(msg shared.Message) {
-	tmp := MessageQueue{}
-	for _, x := range *mq {
-		if x.ID != msg.ID {
-			tmp.add(x)
-		}
-	}
-	*mq = tmp
-}
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
@@ -72,13 +45,12 @@ func main() {
 
 	tracker := shared.NewMessageTracker()
 
-	leaderTransport = NewLeaderTransport()
-	mainDevSession = shared.NewLeaderDevSession(leaderTransport, &config)
+	leaderTransport := NewLeaderTransport()
+	mainDevSession := shared.NewLeaderDevSession(leaderTransport, &config)
 
-	clusterTransport = NewClusterTransport()
-	devSession = shared.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, mainDevSession.GetKeyRef())
+	clusterTransport := NewClusterTransport()
+	devSession := shared.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, mainDevSession.GetKeyRef())
 
-	queues = make([]MessageQueue, len(config.ClusterConfig.GetNamesOrAddrs()))
 	for i := range config.ClusterConfig.GetNamesOrAddrs() {
 		if i == config.ClusterConfig.GetIndex() {
 			continue
@@ -99,11 +71,16 @@ func main() {
 			fmt.Println("[ERROR] Error accepting connection:", err)
 			continue
 		}
-		go handleConnection(conn, tracker)
+		go handleConnection(conn, tracker, devSession, clusterTransport, leaderTransport)
 	}
 }
 
-func handleConnection(conn net.Conn, tracker *shared.MessageTracker) {
+func handleConnection(
+	conn net.Conn,
+	tracker *shared.MessageTracker,
+	devSession *shared.DevSession,
+	clusterTransport *ClusterTransport,
+	leaderTransport *LeaderTransport) {
 	reader := shared.NewMessageReader(conn)
 	if !reader.HasMessage() {
 		fmt.Println("[ERROR] Client did not send any message")
@@ -125,12 +102,13 @@ func handleConnection(conn net.Conn, tracker *shared.MessageTracker) {
 		conn.Close()
 		return
 	}
-	fmt.Printf("[INFO] New client (%s, %s) joined", msg.SenderName, conn.RemoteAddr())
+	fmt.Printf("[INFO] New client (%s, %s) joined\n", msg.SenderName, conn.RemoteAddr())
 
 	client := Client{
 		name:  msg.SenderName,
 		conn:  conn,
 		index: msg.SenderID,
+		queue: MessageQueue{},
 	}
 
 	if msg.SenderID != -1 {
@@ -142,9 +120,9 @@ func handleConnection(conn net.Conn, tracker *shared.MessageTracker) {
 			fmt.Println("[INFO] Client disconnected:", client.conn.RemoteAddr())
 		}()
 
-		for _, msg := range queues[client.index] {
+		for _, msg := range clients[client.index].queue {
 			msg.Send(client.conn)
-			queues[client.index].remove(msg)
+			clients[client.index].queue.remove(msg)
 		}
 	}
 

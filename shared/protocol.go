@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"pqgch-client/gake"
 
@@ -43,9 +42,9 @@ func MakeSession(config ConfigAccessor) Session {
 func checkLeftRightKeys(session *Session, config ConfigAccessor) Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
 		fmt.Println("[CRYPTO] Established shared keys with both neighbors")
-		xi := getXiCommitmentCoinMsg(session, config)
+		xcmMsg := getXiCommitmentCoinMsg(session, config)
 		tryFinalizeProtocol(session, config)
-		return xi
+		return xcmMsg
 	}
 
 	return Message{}
@@ -82,7 +81,7 @@ func getXiCommitmentCoinMsg(session *Session, config ConfigAccessor) Message {
 }
 
 func tryFinalizeProtocol(session *Session, config ConfigAccessor) {
-	for i := 0; i < len(session.Xs); i++ {
+	for i := range session.Xs {
 		if (session.Xs)[i] == [gake.SsLen]byte{} {
 			return
 		}
@@ -106,13 +105,13 @@ func tryFinalizeProtocol(session *Session, config ConfigAccessor) {
 		os.Exit(1)
 	}
 
-	for i := 0; i < len(session.Xs); i++ {
+	for i := range session.Xs {
 		fmt.Printf("[CRYPTO] X%d: %02x\n", i, (session.Xs)[i][:4])
 	}
 
 	pids := make([][gake.PidLen]byte, len(config.GetNamesOrAddrs()))
 	stringPids := config.GetNamesOrAddrs()
-	for i := 0; i < len(config.GetNamesOrAddrs()); i++ {
+	for i := range config.GetNamesOrAddrs() {
 		var byteArr [gake.PidLen]byte
 		copy(byteArr[:], []byte(stringPids[i]))
 		pids[i] = byteArr
@@ -152,7 +151,7 @@ func getAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
 		config.GetDecodedSecretKey(),
 		config.GetDecodedPublicKey(msg.SenderID))
 
-	fmt.Println("Established shared key with left neighbor")
+	fmt.Println("[CRYPTO] Established shared key with left neighbor")
 
 	msg = Message{
 		ID:         uuid.New().String(),
@@ -219,7 +218,7 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 
 func EncryptAndHMAC(masterKey []byte, config ConfigAccessor, key []byte) Message {
 	ciphertext := make([]byte, gake.SsLen)
-	for i := 0; i < gake.SsLen; i++ {
+	for i := range gake.SsLen {
 		ciphertext[i] = masterKey[i] ^ key[i]
 	}
 	hmacKey := key[gake.SsLen:]
@@ -248,7 +247,7 @@ func DecryptAndCheckHMAC(encryptedText []byte, key []byte) ([]byte, error) {
 		return nil, errors.New("tag mismatch")
 	}
 	recoveredKey := make([]byte, gake.SsLen)
-	for i := 0; i < gake.SsLen; i++ {
+	for i := range gake.SsLen {
 		recoveredKey[i] = key[i] ^ ciphertext[i]
 	}
 	return recoveredKey, nil
@@ -317,7 +316,7 @@ func HandleXi(
 func LoadClusterKey(filePath string) ([gake.SsLen]byte, error) {
 	var key [gake.SsLen]byte
 
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return key, err
 	}

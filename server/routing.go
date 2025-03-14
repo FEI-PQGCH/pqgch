@@ -7,6 +7,29 @@ import (
 	"time"
 )
 
+type Client struct {
+	name  string
+	conn  net.Conn
+	index int
+	queue MessageQueue
+}
+
+type MessageQueue []shared.Message
+
+func (mq *MessageQueue) add(msg shared.Message) {
+	*mq = append(*mq, msg)
+}
+
+func (mq *MessageQueue) remove(msg shared.Message) {
+	tmp := MessageQueue{}
+	for _, x := range *mq {
+		if x.ID != msg.ID {
+			tmp.add(x)
+		}
+	}
+	*mq = tmp
+}
+
 type ClusterTransport struct {
 	shared.BaseTransport
 }
@@ -59,7 +82,7 @@ func sendToClient(msg shared.Message) {
 	client := clients[msg.ReceiverID]
 
 	if client.conn == nil {
-		queues[msg.ReceiverID].add(msg)
+		clients[msg.ReceiverID].queue.add(msg)
 		fmt.Printf("[DEBUG] Route: stored message\n")
 		return
 	}
@@ -79,7 +102,7 @@ func broadcastToCluster(msg shared.Message) {
 		}
 
 		if client.conn == nil {
-			queues[i].add(msg)
+			clients[i].queue.add(msg)
 			continue
 		}
 
