@@ -186,6 +186,13 @@ func (c *ServConfig) GetRightNeighbor() string {
 	return c.ServAddrs[c.Index+1]
 }
 
+func (c *ServConfig) GetLeftNeighbor() string {
+	if c.Index == 0 {
+		return c.ServAddrs[len(c.ServAddrs)-1]
+	}
+	return c.ServAddrs[c.Index-1]
+}
+
 func (c *ServConfig) GetCurrentServer() string {
 	return c.ServAddrs[c.Index]
 }

@@ -2,29 +2,20 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"pqgch-client/shared"
-	"sync"
 	"time"
 )
 
-type ServerTransport struct {
-	messageHandler func(shared.Message)
-	mu             sync.Mutex
+type ClusterTransport struct {
+	shared.BaseTransport
 }
 
-func NewServerTransport() *ServerTransport {
-	t := &ServerTransport{}
-	return t
+func NewClusterTransport() *ClusterTransport {
+	return &ClusterTransport{}
 }
 
-func (t *ServerTransport) SetMessageHandler(handler func(shared.Message)) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	t.messageHandler = handler
-}
-
-func (t *ServerTransport) Send(msg shared.Message) {
+func (t *ClusterTransport) Send(msg shared.Message) {
 	switch msg.Type {
 	case shared.XiMsg:
 		broadcastToCluster(msg)
@@ -37,11 +28,33 @@ func (t *ServerTransport) Send(msg shared.Message) {
 	}
 }
 
-func (t *ServerTransport) Receive(msg shared.Message) {
-	t.messageHandler(msg)
+func (t *ClusterTransport) Receive(msg shared.Message) {
+	t.MessageHandler(msg)
 }
 
-// send a message to a client in this cluster
+type LeaderTransport struct {
+	shared.BaseTransport
+}
+
+func NewLeaderTransport() *LeaderTransport {
+	return &LeaderTransport{}
+}
+
+func (t *LeaderTransport) Send(msg shared.Message) {
+	switch msg.Type {
+	case shared.LeaderAkeAMsg:
+		sendToLeader(config.GetNamesOrAddrs()[msg.ReceiverID], msg)
+	case shared.LeaderAkeBMsg:
+		sendToLeader(config.GetNamesOrAddrs()[msg.ReceiverID], msg)
+	case shared.LeaderXiMsg:
+		broadcastToLeaders(msg)
+	}
+}
+
+func (t *LeaderTransport) Receive(msg shared.Message) {
+	t.MessageHandler(msg)
+}
+
 func sendToClient(msg shared.Message) {
 	client := clients[msg.ReceiverID]
 
@@ -54,7 +67,6 @@ func sendToClient(msg shared.Message) {
 	msg.Send(client.conn)
 }
 
-// broadcast a message to all clients in this cluster except the sender
 func broadcastToCluster(msg shared.Message) {
 	muClients.Lock()
 	defer muClients.Unlock()
@@ -75,40 +87,34 @@ func broadcastToCluster(msg shared.Message) {
 		if err != nil {
 			fmt.Println("error sending message to client:", err)
 			client.conn.Close()
-			/* TODO: handle error */
 			return
 		}
 	}
-	fmt.Printf("ROUTE: broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName)
+	fmt.Printf("[ROUTE] Broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName)
 }
 
-// forward a message to the right neighbor.
-func forwardToNeighbor(msg shared.Message) {
-	muNeighborConn.Lock()
-	defer muNeighborConn.Unlock()
-
-	for {
-		if neighborConn == nil {
-			fmt.Println("no connection to right neighbor; waiting.")
-			muNeighborConn.Unlock()
-			time.Sleep(1 * time.Second)
-			muNeighborConn.Lock()
+func broadcastToLeaders(msg shared.Message) {
+	for i, addr := range config.GetNamesOrAddrs() {
+		if i == config.Index {
 			continue
 		}
-
-		err := msg.Send(neighborConn)
-		if err != nil {
-			fmt.Println("error forwarding message to right neighbor:", err)
-			neighborConn.Close()
-			neighborConn = nil
-			return
-		}
-		fmt.Printf("ROUTE: forwarded message %s from %s\n", msg.TypeName(), msg.SenderName)
-		break
+		sendToLeader(addr, msg)
 	}
 }
 
-func broadcast(msg shared.Message) {
-	broadcastToCluster(msg)
-	forwardToNeighbor(msg)
+func sendToLeader(address string, msg shared.Message) {
+	var conn net.Conn
+	for {
+		var err error
+		conn, err = net.Dial("tcp", address)
+		if err != nil {
+			fmt.Printf("[ERROR] Leader (%s) connection error: %v. Retrying...\n", address, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
+	}
+	fmt.Printf("[INFO] Sending message %s to Leader %s\n", msg.TypeName(), address)
+
+	msg.Send(conn)
 }

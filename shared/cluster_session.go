@@ -36,7 +36,7 @@ func NewDevSession(transport Transport, config ConfigAccessor) *DevSession {
 	return s
 }
 
-func NewLeaderDevSession(transport Transport, config ConfigAccessor, mainSession *Session) *DevSession {
+func NewClusterLeaderSession(transport Transport, config ConfigAccessor, keyRef *[32]byte) *DevSession {
 	s := &DevSession{
 		transport: transport,
 		session:   MakeSession(config),
@@ -45,7 +45,7 @@ func NewLeaderDevSession(transport Transport, config ConfigAccessor, mainSession
 
 	s.session.OnSharedKey = func() {
 		fmt.Println("[CRYPTO] Broadcasting master key to cluster")
-		keyMsg := EncryptAndHMAC(mainSession.SharedSecret[:], config, s.session.SharedSecret[:])
+		keyMsg := EncryptAndHMAC(keyRef[:], config, s.session.SharedSecret[:])
 		s.transport.Send(keyMsg)
 	}
 

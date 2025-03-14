@@ -12,11 +12,22 @@ type Transport interface {
 	SetMessageHandler(handler func(Message))
 }
 
-type TCPTransport struct {
-	conn           net.Conn
-	messageHandler func(Message)
+type BaseTransport struct {
+	MessageHandler func(Message)
 	mu             sync.Mutex
-	cond           *sync.Cond
+}
+
+func (t *BaseTransport) SetMessageHandler(handler func(Message)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.MessageHandler = handler
+}
+
+type TCPTransport struct {
+	conn net.Conn
+	BaseTransport
+	cond *sync.Cond
 }
 
 func NewTCPTransport(address string) (*TCPTransport, error) {
@@ -39,7 +50,7 @@ func (t *TCPTransport) SetMessageHandler(handler func(Message)) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.messageHandler = handler
+	t.MessageHandler = handler
 	t.cond.Broadcast()
 }
 
@@ -65,10 +76,10 @@ func (t *TCPTransport) listen() {
 	reader := NewMessageReader(t.conn)
 
 	t.mu.Lock()
-	for t.messageHandler == nil {
+	for t.MessageHandler == nil {
 		t.cond.Wait()
 	}
-	handler := t.messageHandler
+	handler := t.MessageHandler
 	t.mu.Unlock()
 
 	for reader.HasMessage() {
