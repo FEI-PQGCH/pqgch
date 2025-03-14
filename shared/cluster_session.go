@@ -14,6 +14,7 @@ type DevSession struct {
 	session        Session
 	keyCiphertext  []byte
 	mainSessionKey [32]byte
+	Received       chan Message
 }
 
 func NewDevSession(transport Transport, config ConfigAccessor) *DevSession {
@@ -21,6 +22,7 @@ func NewDevSession(transport Transport, config ConfigAccessor) *DevSession {
 		transport: transport,
 		session:   MakeSession(config),
 		config:    config,
+		Received:  make(chan Message, 10),
 	}
 
 	s.session.OnSharedKey = func() {
@@ -78,11 +80,6 @@ func (s *DevSession) xi(msg Message) {
 	HandleXi(msg, s.config, &s.session)
 }
 
-func print(msg Message) {
-	fmt.Printf("\r\033[K%s: %s\n", msg.SenderName, msg.Content)
-	fmt.Print("You: ")
-}
-
 func (s *DevSession) keyHandler(msg Message) {
 	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
@@ -124,7 +121,7 @@ func (s *DevSession) text(msg Message) {
 		return
 	}
 	msg.Content = plainText
-	print(msg)
+	s.Received <- msg
 }
 
 func (s *DevSession) handleMessage(msg Message) {

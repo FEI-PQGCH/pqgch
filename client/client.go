@@ -39,11 +39,26 @@ func main() {
 	devSession := shared.NewDevSession(transport, &config.ClusterConfig)
 	devSession.Init()
 
+	input := make(chan string)
 	reader := bufio.NewReader(os.Stdin)
+	go func() {
+		for {
+			text, _ := reader.ReadString('\n')
+			text = strings.TrimSpace(text)
+			if text != "" {
+				input <- text
+			}
+		}
+	}()
+
 	for {
 		fmt.Print("You: ")
-		text, _ := reader.ReadString('\n')
-		text = strings.TrimSpace(text)
-		devSession.SendText(text)
+		select {
+		case msg := <-devSession.Received:
+			fmt.Printf("\r\033[K%s: %s\n", msg.SenderName, msg.Content)
+
+		case text := <-input:
+			devSession.SendText(text)
+		}
 	}
 }
