@@ -94,7 +94,7 @@ func handleConnection(
 			return
 		}
 		fmt.Printf("[INFO] Received %s message from Leader\n", msg.TypeName())
-		if msg.Type == shared.BroadcastMsg {
+		if msg.Type == shared.TextMsg {
 			broadcastToCluster(msg, clients)
 			return
 		}
@@ -162,7 +162,7 @@ func handleConnection(
 			clusterTransport.Receive(msg)
 			broadcastToCluster(msg, clients)
 		}
-		if msg.Type == shared.BroadcastMsg {
+		if msg.Type == shared.TextMsg {
 			broadcastToCluster(msg, clients)
 			broadcastToLeaders(msg)
 		}

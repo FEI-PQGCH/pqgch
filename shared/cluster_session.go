@@ -154,7 +154,7 @@ func (s *DevSession) SendText(text string) {
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.GetName(),
 		Content:    cipherText,
-		Type:       BroadcastMsg,
+		Type:       TextMsg,
 		ClusterID:  s.config.GetIndex(),
 	}
 	s.transport.Send(msg)

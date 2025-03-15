@@ -22,7 +22,7 @@ type Message struct {
 
 var MessageTypeNames = map[int]string{
 	LoginMsg:      "LoginMsg",
-	BroadcastMsg:  "BroadcastMsg",
+	TextMsg:       "TextMsg",
 	AkeAMsg:       "AkeAMsg",
 	AkeBMsg:       "AkeBMsg",
 	XiMsg:         "XiMsg",
@@ -38,7 +38,7 @@ func (m Message) TypeName() string {
 
 const (
 	LoginMsg = iota
-	BroadcastMsg
+	TextMsg
 	AkeAMsg
 	AkeBMsg
 	XiMsg
