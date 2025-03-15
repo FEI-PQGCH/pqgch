@@ -16,7 +16,7 @@ import (
 	"pqgch-client/gake"
 )
 
-type Session struct {
+type CryptoSession struct {
 	TkRight      []byte
 	EskaRight    []byte
 	KeyLeft      [gake.SsLen]byte
@@ -28,8 +28,8 @@ type Session struct {
 	OnSharedKey  func()
 }
 
-func MakeSession(config ConfigAccessor) Session {
-	return Session{
+func MakeSession(config ConfigAccessor) CryptoSession {
+	return CryptoSession{
 		Xs:          make([][gake.SsLen]byte, len(config.GetNamesOrAddrs())),
 		OnSharedKey: func() {},
 		Commitments: make([]gake.Commitment, len(config.GetNamesOrAddrs())),
@@ -37,7 +37,7 @@ func MakeSession(config ConfigAccessor) Session {
 	}
 }
 
-func checkLeftRightKeys(session *Session, config ConfigAccessor) Message {
+func checkLeftRightKeys(session *CryptoSession, config ConfigAccessor) Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
 		fmt.Println("[CRYPTO] Established shared keys with both neighbors")
 		xcmMsg := getXiCommitmentCoinMsg(session, config)
@@ -48,7 +48,7 @@ func checkLeftRightKeys(session *Session, config ConfigAccessor) Message {
 	return Message{}
 }
 
-func getXiCommitmentCoinMsg(session *Session, config ConfigAccessor) Message {
+func getXiCommitmentCoinMsg(session *CryptoSession, config ConfigAccessor) Message {
 	xi, coin, commitment := gake.ComputeXsCommitment(
 		config.GetIndex(),
 		session.KeyRight,
@@ -78,7 +78,7 @@ func getXiCommitmentCoinMsg(session *Session, config ConfigAccessor) Message {
 	return msg
 }
 
-func tryFinalizeProtocol(session *Session, config ConfigAccessor) {
+func tryFinalizeProtocol(session *CryptoSession, config ConfigAccessor) {
 	for i := range session.Xs {
 		if (session.Xs)[i] == [gake.SsLen]byte{} {
 			return
@@ -123,7 +123,7 @@ func tryFinalizeProtocol(session *Session, config ConfigAccessor) {
 	session.OnSharedKey()
 }
 
-func GetAkeAMsg(session *Session, config ConfigAccessor) Message {
+func GetAkeAMsg(session *CryptoSession, config ConfigAccessor) Message {
 	var rightIndex = (config.GetIndex() + 1) % len(config.GetNamesOrAddrs())
 	var akeSendARight []byte
 	akeSendARight, session.TkRight, session.EskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
@@ -140,7 +140,7 @@ func GetAkeAMsg(session *Session, config ConfigAccessor) Message {
 	return msg
 }
 
-func getAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
+func getAkeBMsg(session *CryptoSession, msg Message, config ConfigAccessor) Message {
 	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
 
 	var akeSendB []byte
@@ -254,7 +254,7 @@ func DecryptAndCheckHMAC(encryptedText []byte, key []byte) ([]byte, error) {
 func HandleAkeA(
 	msg Message,
 	config ConfigAccessor,
-	session *Session,
+	session *CryptoSession,
 ) (Message, Message) {
 	akeB := getAkeBMsg(session, msg, config)
 	xi := checkLeftRightKeys(session, config)
@@ -264,7 +264,7 @@ func HandleAkeA(
 func HandleAkeB(
 	msg Message,
 	config ConfigAccessor,
-	session *Session,
+	session *CryptoSession,
 ) Message {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
@@ -275,7 +275,7 @@ func HandleAkeB(
 func HandleXi(
 	msg Message,
 	config ConfigAccessor,
-	session *Session,
+	session *CryptoSession,
 ) {
 	if msg.SenderID == config.GetIndex() {
 		return

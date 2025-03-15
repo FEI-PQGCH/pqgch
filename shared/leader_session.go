@@ -4,14 +4,14 @@ import (
 	"fmt"
 )
 
-type LeaderDevSession struct {
+type LeaderSession struct {
 	transport Transport
 	config    ConfigAccessor
-	session   Session
+	session   CryptoSession
 }
 
-func NewLeaderDevSession(transport Transport, config ConfigAccessor) *LeaderDevSession {
-	s := &LeaderDevSession{
+func NewLeaderSession(transport Transport, config ConfigAccessor) *LeaderSession {
+	s := &LeaderSession{
 		transport: transport,
 		session:   MakeSession(config),
 		config:    config,
@@ -22,16 +22,16 @@ func NewLeaderDevSession(transport Transport, config ConfigAccessor) *LeaderDevS
 	return s
 }
 
-func (s *LeaderDevSession) Init() {
+func (s *LeaderSession) Init() {
 	msg := GetAkeAMsg(&s.session, s.config)
 	s.transport.Send(msg)
 }
 
-func (s *LeaderDevSession) GetKeyRef() *[32]byte {
+func (s *LeaderSession) GetKeyRef() *[32]byte {
 	return &s.session.SharedSecret
 }
 
-func (s *LeaderDevSession) akeALeader(msg Message) {
+func (s *LeaderSession) akeALeader(msg Message) {
 	akeB, xi := HandleAkeA(msg, s.config, &s.session)
 	s.transport.Send(akeB)
 	if !xi.IsEmpty() {
@@ -39,18 +39,18 @@ func (s *LeaderDevSession) akeALeader(msg Message) {
 	}
 }
 
-func (s *LeaderDevSession) akeBLeader(msg Message) {
+func (s *LeaderSession) akeBLeader(msg Message) {
 	xi := HandleAkeB(msg, s.config, &s.session)
 	if !xi.IsEmpty() {
 		s.transport.Send(xi)
 	}
 }
 
-func (s *LeaderDevSession) xiLeader(msg Message) {
+func (s *LeaderSession) xiLeader(msg Message) {
 	HandleXi(msg, s.config, &s.session)
 }
 
-func (s *LeaderDevSession) handleMessage(msg Message) {
+func (s *LeaderSession) handleMessage(msg Message) {
 	switch msg.Type {
 	case LeaderAkeAMsg:
 		s.akeALeader(msg)

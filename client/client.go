@@ -34,8 +34,8 @@ func main() {
 		ClusterID:  config.ClusterConfig.Index,
 	}
 	transport.Send(loginMsg)
-	devSession := shared.NewDevSession(transport, &config.ClusterConfig)
-	devSession.Init()
+	session := shared.NewClusterSession(transport, &config.ClusterConfig)
+	session.Init()
 
 	input := make(chan string)
 	reader := bufio.NewReader(os.Stdin)
@@ -52,11 +52,11 @@ func main() {
 	for {
 		fmt.Print("You: ")
 		select {
-		case msg := <-devSession.Received:
+		case msg := <-session.Received:
 			fmt.Printf("\r\033[K%s: %s\n", msg.SenderName, msg.Content)
 
 		case text := <-input:
-			devSession.SendText(text)
+			session.SendText(text)
 		}
 	}
 }

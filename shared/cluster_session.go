@@ -6,17 +6,17 @@ import (
 	"pqgch-client/gake"
 )
 
-type DevSession struct {
+type ClusterSession struct {
 	transport      Transport
 	config         ConfigAccessor
-	session        Session
+	session        CryptoSession
 	keyCiphertext  []byte
 	mainSessionKey [32]byte
 	Received       chan Message
 }
 
-func NewDevSession(transport Transport, config ConfigAccessor) *DevSession {
-	s := &DevSession{
+func NewClusterSession(transport Transport, config ConfigAccessor) *ClusterSession {
+	s := &ClusterSession{
 		transport: transport,
 		session:   MakeSession(config),
 		config:    config,
@@ -36,8 +36,8 @@ func NewDevSession(transport Transport, config ConfigAccessor) *DevSession {
 	return s
 }
 
-func NewClusterLeaderSession(transport Transport, config ConfigAccessor, keyRef *[32]byte) *DevSession {
-	s := &DevSession{
+func NewClusterLeaderSession(transport Transport, config ConfigAccessor, keyRef *[32]byte) *ClusterSession {
+	s := &ClusterSession{
 		transport: transport,
 		session:   MakeSession(config),
 		config:    config,
@@ -54,12 +54,12 @@ func NewClusterLeaderSession(transport Transport, config ConfigAccessor, keyRef 
 	return s
 }
 
-func (s *DevSession) Init() {
+func (s *ClusterSession) Init() {
 	msg := GetAkeAMsg(&s.session, s.config)
 	s.transport.Send(msg)
 }
 
-func (s *DevSession) akeA(msg Message) {
+func (s *ClusterSession) akeA(msg Message) {
 	akeB, xi := HandleAkeA(msg, s.config, &s.session)
 	s.transport.Send(akeB)
 	if !xi.IsEmpty() {
@@ -67,18 +67,18 @@ func (s *DevSession) akeA(msg Message) {
 	}
 }
 
-func (s *DevSession) akeB(msg Message) {
+func (s *ClusterSession) akeB(msg Message) {
 	xi := HandleAkeB(msg, s.config, &s.session)
 	if !xi.IsEmpty() {
 		s.transport.Send(xi)
 	}
 }
 
-func (s *DevSession) xi(msg Message) {
+func (s *ClusterSession) xi(msg Message) {
 	HandleXi(msg, s.config, &s.session)
 }
 
-func (s *DevSession) keyHandler(msg Message) {
+func (s *ClusterSession) keyHandler(msg Message) {
 	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
 		fmt.Printf("[ERROR] Failed to decode key message: %v\n", err)
@@ -100,7 +100,7 @@ func (s *DevSession) keyHandler(msg Message) {
 	fmt.Printf("[CRYPTO] Main session established: %02x\n", s.mainSessionKey[:4])
 }
 
-func (s *DevSession) getMasterKey(decodedContent []byte) {
+func (s *ClusterSession) getMasterKey(decodedContent []byte) {
 	recoveredKey, err := DecryptAndCheckHMAC(decodedContent, s.session.SharedSecret[:])
 
 	if err != nil {
@@ -112,7 +112,7 @@ func (s *DevSession) getMasterKey(decodedContent []byte) {
 	fmt.Printf("[CRYPTO] Main session established: %02x\n", s.mainSessionKey[:4])
 }
 
-func (s *DevSession) text(msg Message) {
+func (s *ClusterSession) text(msg Message) {
 	plainText, err := DecryptAesGcm(msg.Content, s.mainSessionKey[:])
 	if err != nil {
 		fmt.Println("[ERROR] Failed decrypting message:", err)
@@ -122,7 +122,7 @@ func (s *DevSession) text(msg Message) {
 	s.Received <- msg
 }
 
-func (s *DevSession) handleMessage(msg Message) {
+func (s *ClusterSession) handleMessage(msg Message) {
 	switch msg.Type {
 	case AkeAMsg:
 		s.akeA(msg)
@@ -137,7 +137,7 @@ func (s *DevSession) handleMessage(msg Message) {
 	}
 }
 
-func (s *DevSession) SendText(text string) {
+func (s *ClusterSession) SendText(text string) {
 	if [32]byte(s.mainSessionKey) == [32]byte{} {
 		fmt.Println("[CRYPTO] No master key available, skipping")
 		return

@@ -44,7 +44,7 @@ func main() {
 	tracker := shared.NewMessageTracker()
 
 	leaderTransport := NewLeaderTransport()
-	mainDevSession := shared.NewLeaderDevSession(leaderTransport, &config)
+	leaderSession := shared.NewLeaderSession(leaderTransport, &config)
 
 	var clients Clients
 	for i, addr := range config.ClusterConfig.GetNamesOrAddrs() {
@@ -60,9 +60,9 @@ func main() {
 	}
 
 	clusterTransport := NewClusterTransport(&clients)
-	devSession := shared.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, mainDevSession.GetKeyRef())
+	clusterSession := shared.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, leaderSession.GetKeyRef())
 
-	mainDevSession.Init()
+	leaderSession.Init()
 
 	for {
 		conn, err := listener.Accept()
@@ -70,7 +70,7 @@ func main() {
 			fmt.Println("[ERROR] Error accepting connection:", err)
 			continue
 		}
-		go handleConnection(&clients, conn, tracker, devSession, clusterTransport, leaderTransport)
+		go handleConnection(&clients, conn, tracker, clusterSession, clusterTransport, leaderTransport)
 	}
 }
 
@@ -78,7 +78,7 @@ func handleConnection(
 	clients *Clients,
 	conn net.Conn,
 	tracker *shared.MessageTracker,
-	devSession *shared.DevSession,
+	session *shared.ClusterSession,
 	clusterTransport *ClusterTransport,
 	leaderTransport *LeaderTransport) {
 	reader := shared.NewMessageReader(conn)
@@ -131,7 +131,7 @@ func handleConnection(
 		}
 	}
 	if onlineClients == len(config.Names)-1 {
-		devSession.Init()
+		session.Init()
 	}
 
 	for reader.HasMessage() {
