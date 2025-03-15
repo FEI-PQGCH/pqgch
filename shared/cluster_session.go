@@ -4,8 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"pqgch-client/gake"
-
-	"github.com/google/uuid"
 )
 
 type DevSession struct {
@@ -150,7 +148,7 @@ func (s *DevSession) SendText(text string) {
 		return
 	}
 	msg := Message{
-		ID:         uuid.New().String(),
+		ID:         GenerateUniqueID(),
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.GetName(),
 		Content:    cipherText,

@@ -7,8 +7,6 @@ import (
 	"os"
 	"pqgch-client/shared"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 var (
@@ -29,7 +27,7 @@ func main() {
 
 	transport, _ := shared.NewTCPTransport(config.LeadAddr)
 	loginMsg := shared.Message{
-		ID:         uuid.New().String(),
+		ID:         shared.GenerateUniqueID(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		Type:       shared.LoginMsg,

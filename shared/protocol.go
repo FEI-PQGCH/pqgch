@@ -14,8 +14,6 @@ import (
 	"io"
 	"os"
 	"pqgch-client/gake"
-
-	"github.com/google/uuid"
 )
 
 type Session struct {
@@ -70,7 +68,7 @@ func getXiCommitmentCoinMsg(session *Session, config ConfigAccessor) Message {
 	buffer.Write(coin[:])
 
 	msg := Message{
-		ID:         uuid.New().String(),
+		ID:         GenerateUniqueID(),
 		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
 		Type:       config.GetMessageType(XiMsg),
@@ -131,7 +129,7 @@ func GetAkeAMsg(session *Session, config ConfigAccessor) Message {
 	akeSendARight, session.TkRight, session.EskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
 
 	msg := Message{
-		ID:         uuid.New().String(),
+		ID:         GenerateUniqueID(),
 		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
 		Type:       config.GetMessageType(AkeAMsg),
@@ -154,7 +152,7 @@ func getAkeBMsg(session *Session, msg Message, config ConfigAccessor) Message {
 	fmt.Println("[CRYPTO] Established shared key with left neighbor")
 
 	msg = Message{
-		ID:         uuid.New().String(),
+		ID:         GenerateUniqueID(),
 		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
 		Type:       config.GetMessageType(AkeBMsg),
@@ -227,7 +225,7 @@ func EncryptAndHMAC(masterKey []byte, config ConfigAccessor, key []byte) Message
 	tag := mac.Sum(nil)
 	ciphertext = append(ciphertext, tag...)
 	msg := Message{
-		ID:         uuid.New().String(),
+		ID:         GenerateUniqueID(),
 		SenderID:   -1,
 		SenderName: config.GetName(),
 		Type:       KeyMsg,

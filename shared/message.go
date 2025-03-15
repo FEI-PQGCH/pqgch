@@ -2,6 +2,8 @@ package shared
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -62,6 +64,15 @@ func (m Message) Send(conn net.Conn) error {
 	}
 
 	return nil
+}
+
+func GenerateUniqueID() string {
+	bytes := make([]byte, 16)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(bytes)
 }
 
 type MessageReader struct {
