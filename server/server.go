@@ -111,19 +111,17 @@ func handleConnection(
 		queue: MessageQueue{},
 	}
 
-	if msg.SenderID != -1 {
-		clients.mu.Lock()
-		clients.cs[msg.SenderID].conn = conn
-		clients.mu.Unlock()
-		defer func() {
-			client.conn.Close()
-			fmt.Println("[INFO] Client disconnected:", client.conn.RemoteAddr())
-		}()
+	clients.mu.Lock()
+	clients.cs[msg.SenderID].conn = conn
+	clients.mu.Unlock()
+	defer func() {
+		client.conn.Close()
+		fmt.Println("[INFO] Client disconnected:", client.conn.RemoteAddr())
+	}()
 
-		for _, msg := range clients.cs[client.index].queue {
-			msg.Send(client.conn)
-			clients.cs[client.index].queue.remove(msg)
-		}
+	for _, msg := range clients.cs[client.index].queue {
+		msg.Send(client.conn)
+		clients.cs[client.index].queue.remove(msg)
 	}
 
 	onlineClients := 0
