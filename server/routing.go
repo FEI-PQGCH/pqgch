@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"net"
 	"pqgch-client/shared"
+	"sync"
 	"time"
 )
+
+type Clients struct {
+	cs []Client
+	mu sync.Mutex
+}
 
 type Client struct {
 	name  string
@@ -31,23 +37,26 @@ func (mq *MessageQueue) remove(msg shared.Message) {
 }
 
 type ClusterTransport struct {
+	clients *Clients
 	shared.BaseTransport
 }
 
-func NewClusterTransport() *ClusterTransport {
-	return &ClusterTransport{}
+func NewClusterTransport(clients *Clients) *ClusterTransport {
+	return &ClusterTransport{
+		clients: clients,
+	}
 }
 
 func (t *ClusterTransport) Send(msg shared.Message) {
 	switch msg.Type {
 	case shared.XiMsg:
-		broadcastToCluster(msg)
+		broadcastToCluster(msg, t.clients)
 	case shared.AkeAMsg:
-		sendToClient(msg)
+		sendToClient(msg, t.clients)
 	case shared.AkeBMsg:
-		sendToClient(msg)
+		sendToClient(msg, t.clients)
 	case shared.KeyMsg:
-		broadcastToCluster(msg)
+		broadcastToCluster(msg, t.clients)
 	}
 }
 
@@ -78,11 +87,13 @@ func (t *LeaderTransport) Receive(msg shared.Message) {
 	t.MessageHandler(msg)
 }
 
-func sendToClient(msg shared.Message) {
-	client := clients[msg.ReceiverID]
+func sendToClient(msg shared.Message, clients *Clients) {
+	clients.mu.Lock()
+	defer clients.mu.Unlock()
 
+	client := &clients.cs[msg.ReceiverID]
 	if client.conn == nil {
-		clients[msg.ReceiverID].queue.add(msg)
+		client.queue.add(msg)
 		fmt.Printf("[DEBUG] Route: stored message\n")
 		return
 	}
@@ -90,26 +101,24 @@ func sendToClient(msg shared.Message) {
 	msg.Send(client.conn)
 }
 
-func broadcastToCluster(msg shared.Message) {
-	muClients.Lock()
-	defer muClients.Unlock()
+func broadcastToCluster(msg shared.Message, clients *Clients) {
+	clients.mu.Lock()
+	defer clients.mu.Unlock()
 
-	for i := range clients {
-		client := clients[i]
-
-		if client.index == msg.SenderID && msg.ClusterID == config.Index {
+	for i, c := range clients.cs {
+		if c.index == msg.SenderID && msg.ClusterID == config.Index {
 			continue
 		}
 
-		if client.conn == nil {
-			clients[i].queue.add(msg)
+		if c.conn == nil {
+			clients.cs[i].queue.add(msg)
 			continue
 		}
 
-		err := msg.Send(client.conn)
+		err := msg.Send(c.conn)
 		if err != nil {
 			fmt.Println("error sending message to client:", err)
-			client.conn.Close()
+			c.conn.Close()
 			return
 		}
 	}

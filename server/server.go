@@ -4,14 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"pqgch-client/shared"
-	"sync"
 )
 
 var (
-	clients   []Client
-	muClients sync.Mutex
-	config    shared.ServConfig
+	config shared.ServConfig
 )
 
 func main() {
@@ -22,7 +20,7 @@ func main() {
 		config = shared.GetServConfig(*configFlag)
 	} else {
 		fmt.Printf("[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
-		panic("no configuration file provided")
+		os.Exit(1)
 	}
 
 	fmt.Println("[CRYPTO] Using GAKE handshake to derive master key")
@@ -30,7 +28,7 @@ func main() {
 	_, selfPort, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
 		fmt.Println("[ERROR] Error parsing self address from config:", err)
-		panic("error parsing self address from config")
+		os.Exit(1)
 	}
 	port := selfPort
 	address := fmt.Sprintf(":%s", port)
@@ -48,20 +46,21 @@ func main() {
 	leaderTransport := NewLeaderTransport()
 	mainDevSession := shared.NewLeaderDevSession(leaderTransport, &config)
 
-	clusterTransport := NewClusterTransport()
-	devSession := shared.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, mainDevSession.GetKeyRef())
-
-	for i := range config.ClusterConfig.GetNamesOrAddrs() {
+	var clients Clients
+	for i, addr := range config.ClusterConfig.GetNamesOrAddrs() {
 		if i == config.ClusterConfig.GetIndex() {
 			continue
 		}
 		client := Client{
-			name:  config.ClusterConfig.GetNamesOrAddrs()[i],
+			name:  addr,
 			conn:  nil,
 			index: i,
 		}
-		clients = append(clients, client)
+		clients.cs = append(clients.cs, client)
 	}
+
+	clusterTransport := NewClusterTransport(&clients)
+	devSession := shared.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, mainDevSession.GetKeyRef())
 
 	mainDevSession.Init()
 
@@ -71,11 +70,12 @@ func main() {
 			fmt.Println("[ERROR] Error accepting connection:", err)
 			continue
 		}
-		go handleConnection(conn, tracker, devSession, clusterTransport, leaderTransport)
+		go handleConnection(&clients, conn, tracker, devSession, clusterTransport, leaderTransport)
 	}
 }
 
 func handleConnection(
+	clients *Clients,
 	conn net.Conn,
 	tracker *shared.MessageTracker,
 	devSession *shared.DevSession,
@@ -95,7 +95,7 @@ func handleConnection(
 		}
 		fmt.Printf("[INFO] Received %s message from Leader\n", msg.TypeName())
 		if msg.Type == shared.BroadcastMsg {
-			broadcastToCluster(msg)
+			broadcastToCluster(msg, clients)
 			return
 		}
 		leaderTransport.Receive(msg)
@@ -112,27 +112,27 @@ func handleConnection(
 	}
 
 	if msg.SenderID != -1 {
-		muClients.Lock()
-		clients[msg.SenderID].conn = conn
-		muClients.Unlock()
+		clients.mu.Lock()
+		clients.cs[msg.SenderID].conn = conn
+		clients.mu.Unlock()
 		defer func() {
 			client.conn.Close()
 			fmt.Println("[INFO] Client disconnected:", client.conn.RemoteAddr())
 		}()
 
-		for _, msg := range clients[client.index].queue {
+		for _, msg := range clients.cs[client.index].queue {
 			msg.Send(client.conn)
-			clients[client.index].queue.remove(msg)
+			clients.cs[client.index].queue.remove(msg)
 		}
 	}
 
-	clusterClientCount := 0
-	for i := range clients {
-		if clients[i].conn != nil {
-			clusterClientCount++
+	onlineClients := 0
+	for _, c := range clients.cs {
+		if c.conn != nil {
+			onlineClients++
 		}
 	}
-	if clusterClientCount == len(config.Names)-1 {
+	if onlineClients == len(config.Names)-1 {
 		devSession.Init()
 	}
 
@@ -155,17 +155,17 @@ func handleConnection(
 			clusterTransport.Receive(msg)
 		}
 		if msg.ReceiverID != config.ClusterConfig.Index && msg.Type == shared.AkeAMsg {
-			sendToClient(msg)
+			sendToClient(msg, clients)
 		}
 		if msg.ReceiverID != config.ClusterConfig.Index && msg.Type == shared.AkeBMsg {
-			sendToClient(msg)
+			sendToClient(msg, clients)
 		}
 		if msg.Type == shared.XiMsg {
 			clusterTransport.Receive(msg)
-			broadcastToCluster(msg)
+			broadcastToCluster(msg, clients)
 		}
 		if msg.Type == shared.BroadcastMsg {
-			broadcastToCluster(msg)
+			broadcastToCluster(msg, clients)
 			broadcastToLeaders(msg)
 		}
 		if msg.Type == shared.LeaderAkeAMsg || msg.Type == shared.LeaderAkeBMsg || msg.Type == shared.LeaderXiMsg {
