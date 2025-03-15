@@ -103,25 +103,23 @@ func handleConnection(
 		return
 	}
 	fmt.Printf("[INFO] New client (%s, %s) joined\n", msg.SenderName, conn.RemoteAddr())
-
-	client := Client{
-		name:  msg.SenderName,
-		conn:  conn,
-		index: msg.SenderID,
-		queue: MessageQueue{},
-	}
+	clientID := msg.SenderID
 
 	clients.mu.Lock()
-	clients.cs[msg.SenderID].conn = conn
+	clients.cs[clientID].conn = conn
 	clients.mu.Unlock()
 	defer func() {
-		client.conn.Close()
-		fmt.Println("[INFO] Client disconnected:", client.conn.RemoteAddr())
+		clients.mu.Lock()
+		clients.cs[clientID].conn.Close()
+		clients.mu.Unlock()
+		fmt.Println("[INFO] Client disconnected:", clients.cs[clientID].conn.RemoteAddr())
 	}()
 
-	for _, msg := range clients.cs[client.index].queue {
-		msg.Send(client.conn)
-		clients.cs[client.index].queue.remove(msg)
+	for _, msg := range clients.cs[clientID].queue {
+		msg.Send(clients.cs[clientID].conn)
+		clients.mu.Lock()
+		clients.cs[clientID].queue.remove(msg)
+		clients.mu.Unlock()
 	}
 
 	onlineClients := 0
@@ -142,20 +140,12 @@ func handleConnection(
 			continue
 		}
 
-		if client.index != -1 {
-			msg.ClusterID = config.Index
-		}
+		msg.ClusterID = config.Index
 
-		if msg.ReceiverID == config.ClusterConfig.Index && msg.Type == shared.AkeAMsg {
+		if msg.ReceiverID == config.ClusterConfig.Index && (msg.Type == shared.AkeAMsg || msg.Type == shared.AkeBMsg) {
 			clusterTransport.Receive(msg)
 		}
-		if msg.ReceiverID == config.ClusterConfig.Index && msg.Type == shared.AkeBMsg {
-			clusterTransport.Receive(msg)
-		}
-		if msg.ReceiverID != config.ClusterConfig.Index && msg.Type == shared.AkeAMsg {
-			sendToClient(msg, clients)
-		}
-		if msg.ReceiverID != config.ClusterConfig.Index && msg.Type == shared.AkeBMsg {
+		if msg.ReceiverID != config.ClusterConfig.Index && (msg.Type == shared.AkeAMsg || msg.Type == shared.AkeBMsg) {
 			sendToClient(msg, clients)
 		}
 		if msg.Type == shared.XiMsg {
