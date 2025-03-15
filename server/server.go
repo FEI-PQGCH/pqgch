@@ -36,7 +36,7 @@ func main() {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		fmt.Println("[ERROR] Error starting TCP server:", err)
-		panic("error starting TCP server")
+		os.Exit(1)
 	}
 	defer listener.Close()
 	fmt.Println("server listening on", address)

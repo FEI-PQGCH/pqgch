@@ -21,7 +21,7 @@ func main() {
 		config = shared.GetUserConfig(*configFlag)
 	} else {
 		fmt.Printf("[ERROR] Configuration file missing. Please provide it using the -config flag\n")
-		panic("no configuration file provided")
+		os.Exit(1)
 	}
 	config = shared.GetUserConfig(*configFlag)
 
