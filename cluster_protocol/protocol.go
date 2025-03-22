@@ -253,7 +253,7 @@ func checkLeftRightKeys(session *CryptoSession, config shared.ConfigAccessor) sh
 }
 
 func getXiCommitmentCoinMsg(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
-	xi, coin, commitment := gake.ComputeXsCommitment(
+	xi, coin, commitment := gake.ComputeXiCommitment(
 		config.GetIndex(),
 		session.KeyRight,
 		session.KeyLeft,

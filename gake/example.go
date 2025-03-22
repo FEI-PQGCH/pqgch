@@ -51,7 +51,7 @@ func Example() {
 	}
 	// Compute Xs and commitments
 	for i := 0; i < numParties; i++ {
-		xi, ri, commitment := ComputeXsCommitment(
+		xi, ri, commitment := ComputeXiCommitment(
 			i,
 			parties[i].KeyRight,
 			parties[i].KeyLeft,

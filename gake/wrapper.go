@@ -108,15 +108,15 @@ func KexAkeSharedA(ake_sendb []byte, tk []byte, eska []byte, ska []byte) [32]byt
 	return ka
 }
 
-func XorKeys(key_right [32]byte, key_left [32]byte) [32]byte {
-	var xi [32]byte
+func XorKeys(x [32]byte, y [32]byte) [32]byte {
+	var out [32]byte
 
 	C.xor_keys(
-		(*C.uchar)(unsafe.Pointer(&key_right[0])),
-		(*C.uchar)(unsafe.Pointer(&key_left[0])),
-		(*C.uchar)(unsafe.Pointer(&xi[0])))
+		(*C.uchar)(unsafe.Pointer(&x[0])),
+		(*C.uchar)(unsafe.Pointer(&y[0])),
+		(*C.uchar)(unsafe.Pointer(&out[0])))
 
-	return xi
+	return out
 }
 
 func GetRi() [44]byte {
@@ -159,7 +159,7 @@ func mod(i int, j int) int {
 
 // Protocol logic
 
-func ComputeXsCommitment(
+func ComputeXiCommitment(
 	i int,
 	key_right [32]byte,
 	key_left [32]byte,
