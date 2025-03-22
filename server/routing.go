@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
-	"pqgch-client/shared"
+	"pqgch/shared"
 	"sync"
 	"time"
 )

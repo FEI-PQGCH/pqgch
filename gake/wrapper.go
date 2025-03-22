@@ -106,13 +106,32 @@ func KexAkeSharedA(ake_sendb []byte, tk []byte, eska []byte, ska []byte) [32]byt
 	return ka
 }
 
+func XorKeys(key_right [32]byte, key_left [32]byte) [32]byte {
+	var xi [32]byte
+
+	C.xor_keys(
+		(*C.uchar)(unsafe.Pointer(&key_right[0])),
+		(*C.uchar)(unsafe.Pointer(&key_left[0])),
+		(*C.uchar)(unsafe.Pointer(&xi[0])))
+
+	return xi
+}
+
+func GetRi() [44]byte {
+	var coin [44]byte
+
+	C.randombytes(
+		(*C.uchar)(unsafe.Pointer(&coin[0])),
+		44)
+
+	return coin
+}
+
 func ComputeXsCommitment(
 	i int,
 	key_right [32]byte,
 	key_left [32]byte,
 	public_key [1184]byte) ([32]byte, [44]byte, Commitment) {
-	var xi [32]byte
-	var coin [44]byte
 	var commitment Commitment
 
 	var msg [36]byte
@@ -123,14 +142,8 @@ func ComputeXsCommitment(
 	buf_int[2] = byte(i >> 8)
 	buf_int[3] = byte(i)
 
-	C.xor_keys(
-		(*C.uchar)(unsafe.Pointer(&key_right[0])),
-		(*C.uchar)(unsafe.Pointer(&key_left[0])),
-		(*C.uchar)(unsafe.Pointer(&xi[0])))
-
-	C.randombytes(
-		(*C.uchar)(unsafe.Pointer(&coin[0])),
-		44)
+	xi := XorKeys(key_right, key_left)
+	ri := GetRi()
 
 	copy(msg[:], xi[:])
 	copy(msg[32:], buf_int[:])
@@ -139,10 +152,10 @@ func ComputeXsCommitment(
 		(*C.uchar)(unsafe.Pointer(&public_key[0])),
 		(*C.uchar)(unsafe.Pointer(&msg[0])),
 		36,
-		(*C.uchar)(unsafe.Pointer(&coin[0])),
+		(*C.uchar)(unsafe.Pointer(&ri[0])),
 		(*C.Commitment)(unsafe.Pointer(&commitment)))
 
-	return xi, coin, commitment
+	return xi, ri, commitment
 }
 
 func CheckXs(xs [][32]byte, numParties int) bool {

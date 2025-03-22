@@ -5,7 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"pqgch-client/shared"
+	"pqgch/cluster_protocol"
+	"pqgch/shared"
 	"strings"
 )
 
@@ -34,7 +35,7 @@ func main() {
 		ClusterID:  config.ClusterConfig.Index,
 	}
 	transport.Send(loginMsg)
-	session := shared.NewClusterSession(transport, &config.ClusterConfig)
+	session := cluster_protocol.NewClusterSession(transport, &config.ClusterConfig)
 	session.Init()
 
 	input := make(chan string)

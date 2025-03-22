@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"pqgch-client/gake"
+	"pqgch/gake"
 )
 
 type ConfigAccessor interface {

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"pqgch-client/shared"
+	"pqgch/cluster_protocol"
+	"pqgch/leader_protocol"
+	"pqgch/shared"
 )
 
 var (
@@ -44,7 +46,7 @@ func main() {
 	tracker := shared.NewMessageTracker()
 
 	leaderTransport := NewLeaderTransport()
-	leaderSession := shared.NewLeaderSession(leaderTransport, &config)
+	leaderSession := leader_protocol.NewLeaderSession(leaderTransport, &config)
 
 	var clients Clients
 	for i, addr := range config.ClusterConfig.GetNamesOrAddrs() {
@@ -60,7 +62,7 @@ func main() {
 	}
 
 	clusterTransport := NewClusterTransport(&clients)
-	clusterSession := shared.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, leaderSession.GetKeyRef())
+	clusterSession := cluster_protocol.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, leaderSession.GetKeyRef())
 
 	leaderSession.Init()
 
@@ -78,7 +80,7 @@ func handleConnection(
 	clients *Clients,
 	conn net.Conn,
 	tracker *shared.MessageTracker,
-	session *shared.ClusterSession,
+	session *cluster_protocol.ClusterSession,
 	clusterTransport *ClusterTransport,
 	leaderTransport *LeaderTransport) {
 	reader := shared.NewMessageReader(conn)

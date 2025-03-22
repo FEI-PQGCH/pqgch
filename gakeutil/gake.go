@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"pqgch-client/gake"
+	"pqgch/gake"
 )
 
 func main() {

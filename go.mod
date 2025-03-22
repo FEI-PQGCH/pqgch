@@ -1,3 +1,3 @@
-module pqgch-client
+module pqgch
 
 go 1.22.3
