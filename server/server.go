@@ -46,7 +46,7 @@ func main() {
 	tracker := shared.NewMessageTracker()
 
 	leaderTransport := NewLeaderTransport()
-	leaderSession := leader_protocol.NewLeaderSession(leaderTransport, &config)
+	leaderSession := leader_protocol.NewSession(leaderTransport, &config)
 
 	var clients Clients
 	for i, addr := range config.ClusterConfig.GetNamesOrAddrs() {
@@ -62,7 +62,7 @@ func main() {
 	}
 
 	clusterTransport := NewClusterTransport(&clients)
-	clusterSession := cluster_protocol.NewClusterLeaderSession(clusterTransport, &config.ClusterConfig, leaderSession.GetKeyRef())
+	clusterSession := cluster_protocol.NewLeaderSession(clusterTransport, &config.ClusterConfig, leaderSession.GetKeyRef())
 
 	leaderSession.Init()
 
@@ -80,7 +80,7 @@ func handleConnection(
 	clients *Clients,
 	conn net.Conn,
 	tracker *shared.MessageTracker,
-	session *cluster_protocol.ClusterSession,
+	session *cluster_protocol.Session,
 	clusterTransport *ClusterTransport,
 	leaderTransport *LeaderTransport) {
 	reader := shared.NewMessageReader(conn)

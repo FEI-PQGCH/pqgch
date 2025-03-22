@@ -35,7 +35,7 @@ func main() {
 		ClusterID:  config.ClusterConfig.Index,
 	}
 	transport.Send(loginMsg)
-	session := cluster_protocol.NewClusterSession(transport, &config.ClusterConfig)
+	session := cluster_protocol.NewSession(transport, &config.ClusterConfig)
 	session.Init()
 
 	input := make(chan string)

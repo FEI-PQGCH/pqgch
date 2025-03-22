@@ -11,7 +11,7 @@ import (
 	"slices"
 )
 
-type CryptoLeaderSession struct {
+type CryptoSession struct {
 	TkRight      []byte
 	EskaRight    []byte
 	KeyLeft      [gake.SsLen]byte
@@ -23,8 +23,8 @@ type CryptoLeaderSession struct {
 	OnSharedKey  func()
 }
 
-func NewCryptoLeaderSession(config shared.ConfigAccessor) CryptoLeaderSession {
-	return CryptoLeaderSession{
+func NewCryptoSession(config shared.ConfigAccessor) CryptoSession {
+	return CryptoSession{
 		Xs:          make([][gake.SsLen]byte, len(config.GetNamesOrAddrs())),
 		OnSharedKey: func() {},
 		Commitments: make([][32]byte, len(config.GetNamesOrAddrs())),
@@ -32,16 +32,16 @@ func NewCryptoLeaderSession(config shared.ConfigAccessor) CryptoLeaderSession {
 	}
 }
 
-type LeaderSession struct {
+type Session struct {
 	transport shared.Transport
 	config    shared.ConfigAccessor
-	session   CryptoLeaderSession
+	session   CryptoSession
 }
 
-func NewLeaderSession(transport shared.Transport, config shared.ConfigAccessor) *LeaderSession {
-	s := &LeaderSession{
+func NewSession(transport shared.Transport, config shared.ConfigAccessor) *Session {
+	s := &Session{
 		transport: transport,
-		session:   NewCryptoLeaderSession(config),
+		session:   NewCryptoSession(config),
 		config:    config,
 	}
 
@@ -50,59 +50,59 @@ func NewLeaderSession(transport shared.Transport, config shared.ConfigAccessor) 
 	return s
 }
 
-func (s *LeaderSession) Init() {
-	msg := getAkeAMsgLeader(&s.session, s.config)
+func (s *Session) Init() {
+	msg := getAkeAMsg(&s.session, s.config)
 	s.transport.Send(msg)
 }
 
-func (s *LeaderSession) GetKeyRef() *[32]byte {
+func (s *Session) GetKeyRef() *[32]byte {
 	return &s.session.SharedSecret
 }
 
-func (s *LeaderSession) akeALeader(msg shared.Message) {
-	akeB, xi := handleAkeALeader(msg, s.config, &s.session)
+func (s *Session) akeA(msg shared.Message) {
+	akeB, xi := handleAkeA(msg, s.config, &s.session)
 	s.transport.Send(akeB)
 	if !xi.IsEmpty() {
 		s.transport.Send(xi)
 	}
 }
 
-func (s *LeaderSession) akeBLeader(msg shared.Message) {
-	xi := handleAkeBLeader(msg, s.config, &s.session)
+func (s *Session) akeB(msg shared.Message) {
+	xi := handleAkeB(msg, s.config, &s.session)
 	if !xi.IsEmpty() {
 		s.transport.Send(xi)
 	}
 }
 
-func (s *LeaderSession) xiLeader(msg shared.Message) {
-	handleXiLeader(msg, s.config, &s.session)
+func (s *Session) xi(msg shared.Message) {
+	handleXi(msg, s.config, &s.session)
 }
 
-func (s *LeaderSession) handleMessage(msg shared.Message) {
+func (s *Session) handleMessage(msg shared.Message) {
 	switch msg.Type {
 	case shared.LeaderAkeAMsg:
-		s.akeALeader(msg)
+		s.akeA(msg)
 	case shared.LeaderAkeBMsg:
-		s.akeBLeader(msg)
+		s.akeB(msg)
 	case shared.LeaderXiMsg:
-		s.xiLeader(msg)
+		s.xi(msg)
 	default:
 		fmt.Printf("[ERROR] Unknown message type encountered\n")
 	}
 }
 
-func checkLeftRightKeysLeader(session *CryptoLeaderSession, config shared.ConfigAccessor) shared.Message {
+func checkLeftRightKeys(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
 		fmt.Println("[CRYPTO] Established shared keys with both neighbors")
-		xcmMsg := getXiCommitmentCoinMsgLeader(session, config)
-		tryFinalizeProtocolLeader(session, config)
+		xcmMsg := getXiCommitmentCoinMsg(session, config)
+		tryFinalizeProtocol(session, config)
 		return xcmMsg
 	}
 
 	return shared.Message{}
 }
 
-func getXiCommitmentCoinMsgLeader(session *CryptoLeaderSession, config shared.ConfigAccessor) shared.Message {
+func getXiCommitmentCoinMsg(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
 	xi := gake.XorKeys(session.KeyRight, session.KeyLeft)
 	ri := gake.GetRi()
 	x := append(xi[:], ri[:]...)
@@ -129,7 +129,7 @@ func getXiCommitmentCoinMsgLeader(session *CryptoLeaderSession, config shared.Co
 	return msg
 }
 
-func checkCommitmentsLeader(
+func checkCommitments(
 	numParties int,
 	xs [][32]byte,
 	coins [][44]byte,
@@ -148,7 +148,7 @@ func checkCommitmentsLeader(
 	return true
 }
 
-func tryFinalizeProtocolLeader(session *CryptoLeaderSession, config shared.ConfigAccessor) {
+func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 	if slices.Contains(session.Xs, [gake.SsLen]byte{}) {
 		return
 	}
@@ -163,7 +163,7 @@ func tryFinalizeProtocolLeader(session *CryptoLeaderSession, config shared.Confi
 		os.Exit(1)
 	}
 
-	ok = checkCommitmentsLeader(len(config.GetNamesOrAddrs()), session.Xs, session.Coins, session.Commitments)
+	ok = checkCommitments(len(config.GetNamesOrAddrs()), session.Xs, session.Coins, session.Commitments)
 	if ok {
 		fmt.Println("[CRYPTO] Commitments check: success")
 	} else {
@@ -191,7 +191,7 @@ func tryFinalizeProtocolLeader(session *CryptoLeaderSession, config shared.Confi
 	session.OnSharedKey()
 }
 
-func getAkeAMsgLeader(session *CryptoLeaderSession, config shared.ConfigAccessor) shared.Message {
+func getAkeAMsg(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
 	var rightIndex = (config.GetIndex() + 1) % len(config.GetNamesOrAddrs())
 	var akeSendARight []byte
 	akeSendARight, session.TkRight, session.EskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
@@ -208,7 +208,7 @@ func getAkeAMsgLeader(session *CryptoLeaderSession, config shared.ConfigAccessor
 	return msg
 }
 
-func getAkeBMsgLeader(session *CryptoLeaderSession, msg shared.Message, config shared.ConfigAccessor) shared.Message {
+func getAkeBMsg(session *CryptoSession, msg shared.Message, config shared.ConfigAccessor) shared.Message {
 	akeSendA, _ := base64.StdEncoding.DecodeString(msg.Content)
 
 	var akeSendB []byte
@@ -231,31 +231,31 @@ func getAkeBMsgLeader(session *CryptoLeaderSession, msg shared.Message, config s
 	return msg
 }
 
-func handleAkeALeader(
+func handleAkeA(
 	msg shared.Message,
 	config shared.ConfigAccessor,
-	session *CryptoLeaderSession,
+	session *CryptoSession,
 ) (shared.Message, shared.Message) {
-	akeB := getAkeBMsgLeader(session, msg, config)
-	xi := checkLeftRightKeysLeader(session, config)
+	akeB := getAkeBMsg(session, msg, config)
+	xi := checkLeftRightKeys(session, config)
 	return akeB, xi
 }
 
-func handleAkeBLeader(
+func handleAkeB(
 	msg shared.Message,
 	config shared.ConfigAccessor,
-	session *CryptoLeaderSession,
+	session *CryptoSession,
 ) shared.Message {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	session.KeyRight = gake.KexAkeSharedA(akeSendB, session.TkRight, session.EskaRight, config.GetDecodedSecretKey())
-	xi := checkLeftRightKeysLeader(session, config)
+	xi := checkLeftRightKeys(session, config)
 	return xi
 }
 
-func handleXiLeader(
+func handleXi(
 	msg shared.Message,
 	config shared.ConfigAccessor,
-	session *CryptoLeaderSession,
+	session *CryptoSession,
 ) {
 	if msg.SenderID == config.GetIndex() {
 		return
@@ -277,5 +277,5 @@ func handleXiLeader(
 	session.Commitments[msg.SenderID] = commitmentArr
 	session.Coins[msg.SenderID] = coinArr
 	session.Xs[msg.SenderID] = xiArr
-	tryFinalizeProtocolLeader(session, config)
+	tryFinalizeProtocol(session, config)
 }

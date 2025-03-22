@@ -30,7 +30,7 @@ func MakeSession(config shared.ConfigAccessor) CryptoSession {
 	}
 }
 
-type ClusterSession struct {
+type Session struct {
 	transport      shared.Transport
 	config         shared.ConfigAccessor
 	session        CryptoSession
@@ -39,8 +39,8 @@ type ClusterSession struct {
 	Received       chan shared.Message
 }
 
-func NewClusterSession(transport shared.Transport, config shared.ConfigAccessor) *ClusterSession {
-	s := &ClusterSession{
+func NewSession(transport shared.Transport, config shared.ConfigAccessor) *Session {
+	s := &Session{
 		transport: transport,
 		session:   MakeSession(config),
 		config:    config,
@@ -60,8 +60,8 @@ func NewClusterSession(transport shared.Transport, config shared.ConfigAccessor)
 	return s
 }
 
-func NewClusterLeaderSession(transport shared.Transport, config shared.ConfigAccessor, keyRef *[32]byte) *ClusterSession {
-	s := &ClusterSession{
+func NewLeaderSession(transport shared.Transport, config shared.ConfigAccessor, keyRef *[32]byte) *Session {
+	s := &Session{
 		transport: transport,
 		session:   MakeSession(config),
 		config:    config,
@@ -78,12 +78,12 @@ func NewClusterLeaderSession(transport shared.Transport, config shared.ConfigAcc
 	return s
 }
 
-func (s *ClusterSession) Init() {
-	msg := GetAkeAMsg(&s.session, s.config)
+func (s *Session) Init() {
+	msg := getAkeAMsg(&s.session, s.config)
 	s.transport.Send(msg)
 }
 
-func (s *ClusterSession) akeA(msg shared.Message) {
+func (s *Session) akeA(msg shared.Message) {
 	akeB, xi := handleAkeA(msg, s.config, &s.session)
 	s.transport.Send(akeB)
 	if !xi.IsEmpty() {
@@ -91,18 +91,18 @@ func (s *ClusterSession) akeA(msg shared.Message) {
 	}
 }
 
-func (s *ClusterSession) akeB(msg shared.Message) {
+func (s *Session) akeB(msg shared.Message) {
 	xi := handleAkeB(msg, s.config, &s.session)
 	if !xi.IsEmpty() {
 		s.transport.Send(xi)
 	}
 }
 
-func (s *ClusterSession) xi(msg shared.Message) {
+func (s *Session) xi(msg shared.Message) {
 	handleXi(msg, s.config, &s.session)
 }
 
-func (s *ClusterSession) keyHandler(msg shared.Message) {
+func (s *Session) keyHandler(msg shared.Message) {
 	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
 		fmt.Printf("[ERROR] Failed to decode key message: %v\n", err)
@@ -124,7 +124,7 @@ func (s *ClusterSession) keyHandler(msg shared.Message) {
 	fmt.Printf("[CRYPTO] Main session established: %02x\n", s.mainSessionKey[:4])
 }
 
-func (s *ClusterSession) getMasterKey(decodedContent []byte) {
+func (s *Session) getMasterKey(decodedContent []byte) {
 	recoveredKey, err := shared.DecryptAndCheckHMAC(decodedContent, s.session.SharedSecret[:])
 
 	if err != nil {
@@ -136,7 +136,7 @@ func (s *ClusterSession) getMasterKey(decodedContent []byte) {
 	fmt.Printf("[CRYPTO] Main session established: %02x\n", s.mainSessionKey[:4])
 }
 
-func (s *ClusterSession) text(msg shared.Message) {
+func (s *Session) text(msg shared.Message) {
 	plainText, err := shared.DecryptAesGcm(msg.Content, s.mainSessionKey[:])
 	if err != nil {
 		fmt.Println("[ERROR] Failed decrypting message:", err)
@@ -146,7 +146,7 @@ func (s *ClusterSession) text(msg shared.Message) {
 	s.Received <- msg
 }
 
-func (s *ClusterSession) handleMessage(msg shared.Message) {
+func (s *Session) handleMessage(msg shared.Message) {
 	switch msg.Type {
 	case shared.AkeAMsg:
 		s.akeA(msg)
@@ -161,7 +161,7 @@ func (s *ClusterSession) handleMessage(msg shared.Message) {
 	}
 }
 
-func (s *ClusterSession) SendText(text string) {
+func (s *Session) SendText(text string) {
 	if [32]byte(s.mainSessionKey) == [32]byte{} {
 		fmt.Println("[CRYPTO] No master key available, skipping")
 		return
@@ -327,7 +327,7 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 	session.OnSharedKey()
 }
 
-func GetAkeAMsg(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
+func getAkeAMsg(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
 	var rightIndex = (config.GetIndex() + 1) % len(config.GetNamesOrAddrs())
 	var akeSendARight []byte
 	akeSendARight, session.TkRight, session.EskaRight = gake.KexAkeInitA(config.GetDecodedPublicKey(rightIndex))
