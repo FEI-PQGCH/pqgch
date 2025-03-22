@@ -21,8 +21,6 @@ func main() {
 	switch *programFlag {
 	case "gen":
 		keyGen(countFlag)
-	case "test":
-		gake.Example()
 	}
 }
 

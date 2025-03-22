@@ -54,8 +54,6 @@ type Commitment struct {
 	Tag           [TagLen]byte
 }
 
-// C Wrappers
-
 func GetKemKeyPair() KemKeyPair {
 	var pk [PkLen]byte
 	var sk [SkLen]byte
@@ -129,7 +127,7 @@ func GetRi() [44]byte {
 	return coin
 }
 
-func sha3_512(x []byte) [64]byte {
+func Sha3_512(x []byte) [64]byte {
 	var out [64]byte
 
 	C.hash_g_fn(
@@ -140,7 +138,7 @@ func sha3_512(x []byte) [64]byte {
 	return out
 }
 
-func commit_pke(pk [PkLen]byte, xi_i [36]byte, ri [44]byte) Commitment {
+func Commit_pke(pk [PkLen]byte, xi_i [36]byte, ri [44]byte) Commitment {
 	var commitment Commitment
 
 	C.commit(
@@ -153,134 +151,6 @@ func commit_pke(pk [PkLen]byte, xi_i [36]byte, ri [44]byte) Commitment {
 	return commitment
 }
 
-func mod(i int, j int) int {
+func Mod(i int, j int) int {
 	return int(C.mod(C.int(i), C.int(j)))
-}
-
-// Protocol logic
-
-func ComputeXiCommitment(
-	i int,
-	key_right [32]byte,
-	key_left [32]byte,
-	public_key [1184]byte) ([32]byte, [44]byte, Commitment) {
-	var xi_i [36]byte
-	var buf_int [4]byte
-
-	buf_int[0] = byte(i >> 24)
-	buf_int[1] = byte(i >> 16)
-	buf_int[2] = byte(i >> 8)
-	buf_int[3] = byte(i)
-
-	xi := XorKeys(key_right, key_left)
-	ri := GetRi()
-
-	copy(xi_i[:], xi[:])
-	copy(xi_i[32:], buf_int[:])
-
-	commitment := commit_pke(public_key, xi_i, ri)
-
-	return xi, ri, commitment
-}
-
-func CheckXs(xs [][32]byte, numParties int) bool {
-	var check [32]byte
-	copy(check[:], xs[0][:])
-
-	for i := range numParties - 1 {
-		check = XorKeys(xs[i+1], check)
-	}
-
-	for i := range 32 {
-		if check[i] != 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
-func CheckCommitments(
-	numParties int,
-	xs [][32]byte,
-	public_keys [][1184]byte,
-	coins [][44]byte,
-	commitments []Commitment) bool {
-	for i := range numParties {
-		var xi_i [36]byte
-		var buf_int [4]byte
-
-		buf_int[0] = byte(i >> 24)
-		buf_int[1] = byte(i >> 16)
-		buf_int[2] = byte(i >> 8)
-		buf_int[3] = byte(i)
-
-		copy(xi_i[:32], xs[i][:])
-		copy(xi_i[32:], buf_int[:])
-
-		commitment := commit_pke(public_keys[i], xi_i, coins[i])
-
-		for j := range 1088 {
-			if commitment.CipherTextKem[j] != commitments[i].CipherTextKem[j] {
-				return false
-			}
-		}
-
-		for j := range 36 {
-			if commitment.CipherTextDem[j] != commitments[i].CipherTextDem[j] {
-				return false
-			}
-		}
-
-		for j := range 16 {
-			if commitment.Tag[j] != commitments[i].Tag[j] {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
-func ComputeSharedKey(numParties int, partyIndex int, key_left [32]byte, xs [][32]byte, pids [][20]byte) ([32]byte, [32]byte) {
-	masterKey := make([][32]byte, numParties)
-	copy(masterKey[partyIndex][:], key_left[:])
-
-	for i := 1; i < numParties; i++ {
-		var mk [32]byte
-		copy(mk[:], key_left[:])
-
-		for j := range i {
-			var index = mod(partyIndex-j-1, numParties)
-			mk = XorKeys(mk, xs[index])
-		}
-
-		var index = mod(partyIndex-i, numParties)
-		copy(masterKey[index][:], mk[:])
-	}
-
-	mki := concatMasterKey(masterKey, pids, numParties)
-	sksid := sha3_512(mki)
-
-	var sharedSecret [32]byte
-	var sessionId [32]byte
-
-	copy(sharedSecret[:], sksid[:32])
-	copy(sessionId[:], sksid[32:])
-
-	return sharedSecret, sessionId
-}
-
-func concatMasterKey(masterKeys [][32]byte, pids [][20]byte, numParties int) []byte {
-	mki := make([]byte, 52*numParties)
-
-	for i := range masterKeys {
-		copy(mki[i*32:(i+1)*32], masterKeys[i][:])
-	}
-
-	for i := range pids {
-		copy(mki[len(masterKeys)*32+i*20:len(masterKeys)*32+(i+1)*20], pids[i][:])
-	}
-
-	return mki
 }

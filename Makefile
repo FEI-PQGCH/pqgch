@@ -37,7 +37,3 @@ qkds%:
 gen:
 	@echo "[Make]: Generating the KEM keypairs..."
 	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run gakeutil/gake.go -p gen -c $(or $(n),1)
-
-test: build
-	@echo "[Make]: Running GAKE test..."
-	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run gakeutil/gake.go -p test

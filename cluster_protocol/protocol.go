@@ -68,7 +68,7 @@ func NewLeaderSession(transport shared.Transport, config shared.ConfigAccessor, 
 	}
 
 	s.session.OnSharedKey = func() {
-		fmt.Println("[CRYPTO] Broadcasting master key to cluster")
+		fmt.Println("[CRYPTO] Broadcasting main session key to cluster")
 		keyMsg := shared.EncryptAndHMAC(keyRef[:], config, s.session.SharedSecret[:])
 		s.transport.Send(keyMsg)
 	}
@@ -253,7 +253,7 @@ func checkLeftRightKeys(session *CryptoSession, config shared.ConfigAccessor) sh
 }
 
 func getXiCommitmentCoinMsg(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
-	xi, coin, commitment := gake.ComputeXiCommitment(
+	xi, coin, commitment := computeXiCommitment(
 		config.GetIndex(),
 		session.KeyRight,
 		session.KeyLeft,
@@ -282,6 +282,30 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config shared.ConfigAccessor
 	return msg
 }
 
+func computeXiCommitment(
+	i int,
+	key_right [32]byte,
+	key_left [32]byte,
+	public_key [1184]byte) ([32]byte, [44]byte, gake.Commitment) {
+	var xi_i [36]byte
+	var buf_int [4]byte
+
+	buf_int[0] = byte(i >> 24)
+	buf_int[1] = byte(i >> 16)
+	buf_int[2] = byte(i >> 8)
+	buf_int[3] = byte(i)
+
+	xi := gake.XorKeys(key_right, key_left)
+	ri := gake.GetRi()
+
+	copy(xi_i[:], xi[:])
+	copy(xi_i[32:], buf_int[:])
+
+	commitment := gake.Commit_pke(public_key, xi_i, ri)
+
+	return xi, ri, commitment
+}
+
 func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 	for i := range session.Xs {
 		if (session.Xs)[i] == [gake.SsLen]byte{} {
@@ -291,7 +315,7 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 
 	fmt.Println("[CRYPTO] Received all Xs")
 
-	ok := gake.CheckXs(session.Xs, len(config.GetNamesOrAddrs()))
+	ok := shared.CheckXs(session.Xs, len(config.GetNamesOrAddrs()))
 	if ok {
 		fmt.Println("[CRYPTO] Xs check: success")
 	} else {
@@ -299,7 +323,7 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 		os.Exit(1)
 	}
 
-	ok = gake.CheckCommitments(len(config.GetNamesOrAddrs()), session.Xs, config.GetDecodedPublicKeys(), session.Coins, session.Commitments)
+	ok = checkCommitments(len(config.GetNamesOrAddrs()), session.Xs, config.GetDecodedPublicKeys(), session.Coins, session.Commitments)
 	if ok {
 		fmt.Println("[CRYPTO] Commitments check: success")
 	} else {
@@ -319,12 +343,82 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 		pids[i] = byteArr
 	}
 
-	sharedSecret, sessioId := gake.ComputeSharedKey(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, pids)
+	otherLeftKeys := shared.ComputeAllLeftKeys(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, pids)
+	sharedSecret, sessionId := computeSessionKeyAndID(otherLeftKeys, pids, len(config.GetNamesOrAddrs()))
+
 	fmt.Printf("[CRYPTO] SharedSecret%d: %02x...\n", config.GetIndex(), sharedSecret[:4])
-	fmt.Printf("[CRYPTO] SessionId%d: %02x...\n", config.GetIndex(), sessioId[:4])
+	fmt.Printf("[CRYPTO] SessionId%d: %02x...\n", config.GetIndex(), sessionId[:4])
 
 	session.SharedSecret = sharedSecret
 	session.OnSharedKey()
+}
+
+// Recalculate the commitments and compare them to the received ones.
+// If they do not match, it is an error and the protocol stops.
+func checkCommitments(
+	numParties int,
+	xs [][32]byte,
+	public_keys [][1184]byte,
+	coins [][44]byte,
+	commitments []gake.Commitment) bool {
+	for i := range numParties {
+		var xi_i [36]byte
+		var buf_int [4]byte
+
+		buf_int[0] = byte(i >> 24)
+		buf_int[1] = byte(i >> 16)
+		buf_int[2] = byte(i >> 8)
+		buf_int[3] = byte(i)
+
+		copy(xi_i[:32], xs[i][:])
+		copy(xi_i[32:], buf_int[:])
+
+		commitment := gake.Commit_pke(public_keys[i], xi_i, coins[i])
+
+		for j := range 1088 {
+			if commitment.CipherTextKem[j] != commitments[i].CipherTextKem[j] {
+				return false
+			}
+		}
+
+		for j := range 36 {
+			if commitment.CipherTextDem[j] != commitments[i].CipherTextDem[j] {
+				return false
+			}
+		}
+
+		for j := range 16 {
+			if commitment.Tag[j] != commitments[i].Tag[j] {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// We define the master key as the concatenation of all the numParties left keys, together with party identifiers.
+// Then, we hash the master key with SHA3-512 to obtain the 32 byte session key and 32 byte session ID.
+func computeSessionKeyAndID(otherLeftKeys [][32]byte, pids [][20]byte, numParties int) ([32]byte, [32]byte) {
+	masterKey := make([]byte, 52*numParties)
+
+	for i := range otherLeftKeys {
+		copy(masterKey[i*32:(i+1)*32], otherLeftKeys[i][:])
+	}
+
+	for i := range pids {
+		copy(masterKey[len(otherLeftKeys)*32+i*20:len(otherLeftKeys)*32+(i+1)*20], pids[i][:])
+	}
+
+	sksid := gake.Sha3_512(masterKey)
+
+	var sessionKey [32]byte
+	var sessionId [32]byte
+
+	copy(sessionKey[:], sksid[:32])
+	copy(sessionId[:], sksid[32:])
+
+	return sessionKey, sessionId
 }
 
 func getAkeAMsg(session *CryptoSession, config shared.ConfigAccessor) shared.Message {

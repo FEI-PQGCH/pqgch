@@ -216,7 +216,7 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 		fmt.Printf("[CRYPTO] X%d: %02x\n", i, (session.Xs)[i][:4])
 	}
 
-	ok := gake.CheckXs(session.Xs, len(config.GetNamesOrAddrs()))
+	ok := shared.CheckXs(session.Xs, len(config.GetNamesOrAddrs()))
 	if ok {
 		fmt.Println("[CRYPTO] Xs check: success")
 	} else {
@@ -240,11 +240,41 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 		pids[i] = byteArr
 	}
 
-	sharedSecret, sessioId := gake.ComputeSharedKey(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, pids)
+	otherLeftKeys := shared.ComputeAllLeftKeys(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, pids)
+	sharedSecret, sessionID := computeSessionKeyAndID(otherLeftKeys, pids, len(config.GetNamesOrAddrs()))
+
 	fmt.Printf("[CRYPTO] SharedSecret%d: %02x...\n", config.GetIndex(), sharedSecret[:4])
-	fmt.Printf("[CRYPTO] SessionId%d: %02x...\n", config.GetIndex(), sessioId[:4])
+	fmt.Printf("[CRYPTO] SessionId%d: %02x...\n", config.GetIndex(), sessionID[:4])
 
 	session.SharedSecret = sharedSecret
+}
+
+// Compute the session key and ID from the left keys of the protocol participants.
+// Note that the session key itself is computed from the first numParties - 1 left keys.
+// Only the session ID is computed from all of the left keys.
+func computeSessionKeyAndID(otherLeftKeys [][32]byte, pids [][20]byte, numParties int) ([32]byte, [32]byte) {
+	// For the session key, we use the left keys of protocol participants 0..n-2, so we skip one.
+	sessionKeyTemp := make([]byte, 32*(numParties-1)+20*numParties)
+	for i := range numParties - 1 {
+		copy(sessionKeyTemp[i*32:(i+1)*32], otherLeftKeys[i][:])
+	}
+	for i := range numParties - 1 {
+		copy(sessionKeyTemp[(numParties-1)*32+i*20:(numParties-1)*32+(i+1)*20], pids[i][:])
+	}
+
+	// For the session ID, we use the left keys of all protocol participants
+	sessionIDTemp := make([]byte, 32*numParties+20*numParties)
+	for i := range numParties {
+		copy(sessionIDTemp[i*32:(i+1)*32], otherLeftKeys[i][:])
+	}
+	for i := range numParties {
+		copy(sessionIDTemp[len(otherLeftKeys)*32+i*20:len(otherLeftKeys)*32+(i+1)*20], pids[i][:])
+	}
+
+	sessionKey := sha256.Sum256(sessionKeyTemp)
+	sessionID := sha256.Sum256(sessionIDTemp)
+
+	return sessionKey, sessionID
 }
 
 // We have received the commitments from other protocol participants. We also have received Rs and Xs from them.

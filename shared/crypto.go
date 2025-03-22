@@ -12,6 +12,49 @@ import (
 	"pqgch/gake"
 )
 
+// XOR all the Xs together. The result should be the zero byte array.
+// If it is not, abort the protocol.
+func CheckXs(xs [][32]byte, numParties int) bool {
+	var check [32]byte
+	copy(check[:], xs[0][:])
+
+	for i := range numParties - 1 {
+		check = gake.XorKeys(xs[i+1], check)
+	}
+
+	for i := range 32 {
+		if check[i] != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Compute all the left keys of all the protocol participants.
+func ComputeAllLeftKeys(numParties int, partyIndex int, keyLeft [32]byte, xs [][32]byte, pids [][20]byte) [][32]byte {
+	otherLeftKeys := make([][32]byte, numParties)  // Left keys of the other protocol participants.
+	copy(otherLeftKeys[partyIndex][:], keyLeft[:]) // We already know our keyLeft.
+
+	// Here, we compute the numParties-1 left keys of participant (partyIndex-j) mod numParties for j = 1..n-1.
+	// These are the left keys of every other participant.
+	// We can compute them using the Xs.
+	for j := 1; j < numParties; j++ {
+		var otherLeftKey [32]byte
+		copy(otherLeftKey[:], keyLeft[:])
+
+		for x := range j {
+			var index = gake.Mod(partyIndex-x-1, numParties)
+			otherLeftKey = gake.XorKeys(otherLeftKey, xs[index])
+		}
+
+		var index = gake.Mod(partyIndex-j, numParties)
+		copy(otherLeftKeys[index][:], otherLeftKey[:])
+	}
+
+	return otherLeftKeys
+}
+
 func EncryptAesGcm(plaintext string, key []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -63,12 +106,12 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 	return string(plainText), nil
 }
 
-func EncryptAndHMAC(masterKey []byte, config ConfigAccessor, key []byte) Message {
+func EncryptAndHMAC(mainSessionKey []byte, config ConfigAccessor, clusterSessionKey []byte) Message {
 	ciphertext := make([]byte, gake.SsLen)
 	for i := range gake.SsLen {
-		ciphertext[i] = masterKey[i] ^ key[i]
+		ciphertext[i] = mainSessionKey[i] ^ clusterSessionKey[i]
 	}
-	hmacKey := key[gake.SsLen:]
+	hmacKey := clusterSessionKey[gake.SsLen:]
 	mac := hmac.New(sha256.New, hmacKey)
 	mac.Write(ciphertext)
 	tag := mac.Sum(nil)
