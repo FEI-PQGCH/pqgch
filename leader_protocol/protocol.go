@@ -26,9 +26,9 @@ type CryptoSession struct {
 func NewCryptoSession(config shared.ConfigAccessor) CryptoSession {
 	return CryptoSession{
 		Xs:          make([][gake.SsLen]byte, len(config.GetNamesOrAddrs())),
-		OnSharedKey: func() {},
 		Commitments: make([][32]byte, len(config.GetNamesOrAddrs())),
 		Coins:       make([][gake.CoinLen]byte, len(config.GetNamesOrAddrs())),
+		OnSharedKey: func() {},
 	}
 }
 

@@ -54,6 +54,8 @@ type Commitment struct {
 	Tag           [TagLen]byte
 }
 
+// C Wrappers
+
 func GetKemKeyPair() KemKeyPair {
 	var pk [PkLen]byte
 	var sk [SkLen]byte
@@ -127,14 +129,42 @@ func GetRi() [44]byte {
 	return coin
 }
 
+func sha3_512(x []byte) [64]byte {
+	var out [64]byte
+
+	C.hash_g_fn(
+		(*C.uchar)(unsafe.Pointer(&out[0])),
+		(*C.uchar)(unsafe.Pointer(&x[0])),
+		(C.ulonglong)(len(x)))
+
+	return out
+}
+
+func commit_pke(pk [PkLen]byte, xi_i [36]byte, ri [44]byte) Commitment {
+	var commitment Commitment
+
+	C.commit(
+		(*C.uchar)(unsafe.Pointer(&pk[0])),
+		(*C.uchar)(unsafe.Pointer(&xi_i[0])),
+		36,
+		(*C.uchar)(unsafe.Pointer(&ri[0])),
+		(*C.Commitment)(unsafe.Pointer(&commitment)))
+
+	return commitment
+}
+
+func mod(i int, j int) int {
+	return int(C.mod(C.int(i), C.int(j)))
+}
+
+// Protocol logic
+
 func ComputeXsCommitment(
 	i int,
 	key_right [32]byte,
 	key_left [32]byte,
 	public_key [1184]byte) ([32]byte, [44]byte, Commitment) {
-	var commitment Commitment
-
-	var msg [36]byte
+	var xi_i [36]byte
 	var buf_int [4]byte
 
 	buf_int[0] = byte(i >> 24)
@@ -145,34 +175,24 @@ func ComputeXsCommitment(
 	xi := XorKeys(key_right, key_left)
 	ri := GetRi()
 
-	copy(msg[:], xi[:])
-	copy(msg[32:], buf_int[:])
+	copy(xi_i[:], xi[:])
+	copy(xi_i[32:], buf_int[:])
 
-	C.commit(
-		(*C.uchar)(unsafe.Pointer(&public_key[0])),
-		(*C.uchar)(unsafe.Pointer(&msg[0])),
-		36,
-		(*C.uchar)(unsafe.Pointer(&ri[0])),
-		(*C.Commitment)(unsafe.Pointer(&commitment)))
+	commitment := commit_pke(public_key, xi_i, ri)
 
 	return xi, ri, commitment
 }
 
 func CheckXs(xs [][32]byte, numParties int) bool {
-	zero := make([]byte, 32)
-	check := make([]byte, 32)
-
+	var check [32]byte
 	copy(check[:], xs[0][:])
-	for i := 0; i < numParties-1; i++ {
-		C.xor_keys(
-			(*C.uchar)(unsafe.Pointer(&xs[i+1][0])),
-			(*C.uchar)(unsafe.Pointer(&check[0])),
-			(*C.uchar)(unsafe.Pointer(&check[0])),
-		)
+
+	for i := range numParties - 1 {
+		check = XorKeys(xs[i+1], check)
 	}
 
-	for i := 0; i < 32; i++ {
-		if check[i] != zero[i] {
+	for i := range 32 {
+		if check[i] != 0 {
 			return false
 		}
 	}
@@ -186,40 +206,33 @@ func CheckCommitments(
 	public_keys [][1184]byte,
 	coins [][44]byte,
 	commitments []Commitment) bool {
-	for i := 0; i < numParties; i++ {
-		msg := make([]byte, 32+4)
-
+	for i := range numParties {
+		var xi_i [36]byte
 		var buf_int [4]byte
+
 		buf_int[0] = byte(i >> 24)
 		buf_int[1] = byte(i >> 16)
 		buf_int[2] = byte(i >> 8)
 		buf_int[3] = byte(i)
 
-		copy(msg[:32], xs[i][:])
-		copy(msg[32:], buf_int[:])
+		copy(xi_i[:32], xs[i][:])
+		copy(xi_i[32:], buf_int[:])
 
-		var commitment Commitment
+		commitment := commit_pke(public_keys[i], xi_i, coins[i])
 
-		C.commit(
-			(*C.uchar)(unsafe.Pointer(&public_keys[i][0])),
-			(*C.uchar)(unsafe.Pointer(&msg[0])),
-			36,
-			(*C.uchar)(unsafe.Pointer(&coins[i][0])),
-			(*C.Commitment)(unsafe.Pointer(&commitment)))
-
-		for j := 0; j < 1088; j++ {
+		for j := range 1088 {
 			if commitment.CipherTextKem[j] != commitments[i].CipherTextKem[j] {
 				return false
 			}
 		}
 
-		for j := 0; j < 36; j++ {
+		for j := range 36 {
 			if commitment.CipherTextDem[j] != commitments[i].CipherTextDem[j] {
 				return false
 			}
 		}
 
-		for j := 0; j < 16; j++ {
+		for j := range 16 {
 			if commitment.Tag[j] != commitments[i].Tag[j] {
 				return false
 			}
@@ -231,35 +244,23 @@ func CheckCommitments(
 
 func ComputeSharedKey(numParties int, partyIndex int, key_left [32]byte, xs [][32]byte, pids [][20]byte) ([32]byte, [32]byte) {
 	masterKey := make([][32]byte, numParties)
-
 	copy(masterKey[partyIndex][:], key_left[:])
 
 	for i := 1; i < numParties; i++ {
 		var mk [32]byte
 		copy(mk[:], key_left[:])
 
-		for j := 0; j < i; j++ {
-			var index = C.mod(C.int(partyIndex-j-1), C.int(numParties))
-
-			C.xor_keys(
-				(*C.uchar)(unsafe.Pointer(&mk[0])),
-				(*C.uchar)(unsafe.Pointer(&xs[index][0])),
-				(*C.uchar)(unsafe.Pointer(&mk[0])))
+		for j := range i {
+			var index = mod(partyIndex-j-1, numParties)
+			mk = XorKeys(mk, xs[index])
 		}
 
-		var index = C.mod(C.int(partyIndex-i), C.int(numParties))
-
+		var index = mod(partyIndex-i, numParties)
 		copy(masterKey[index][:], mk[:])
 	}
 
 	mki := concatMasterKey(masterKey, pids, numParties)
-
-	var sksid [64]byte
-
-	C.hash_g_fn(
-		(*C.uchar)(unsafe.Pointer(&sksid[0])),
-		(*C.uchar)(unsafe.Pointer(&mki[0])),
-		(C.ulonglong)(52*numParties))
+	sksid := sha3_512(mki)
 
 	var sharedSecret [32]byte
 	var sessionId [32]byte
@@ -273,11 +274,11 @@ func ComputeSharedKey(numParties int, partyIndex int, key_left [32]byte, xs [][3
 func concatMasterKey(masterKeys [][32]byte, pids [][20]byte, numParties int) []byte {
 	mki := make([]byte, 52*numParties)
 
-	for i := 0; i < len(masterKeys); i++ {
+	for i := range masterKeys {
 		copy(mki[i*32:(i+1)*32], masterKeys[i][:])
 	}
 
-	for i := 0; i < len(pids); i++ {
+	for i := range pids {
 		copy(mki[len(masterKeys)*32+i*20:len(masterKeys)*32+(i+1)*20], pids[i][:])
 	}
 
