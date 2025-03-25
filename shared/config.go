@@ -130,6 +130,9 @@ type ServConfig struct {
 	ServAddrs     []string `json:"servers"`
 	PublicKeys    []string `json:"publicKeys"`
 	SecretKey     string   `json:"secretKey"`
+
+	ETSIKeyLeftEndpoint  string `json:"ETSIKeyLeftEndpoint"`
+	ETSIKeyRightEndpoint string `json:"ETSIKeyRightEndpoint"`
 }
 
 func GetUserConfig(path string) UserConfig {
