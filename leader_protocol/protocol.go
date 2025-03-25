@@ -38,7 +38,9 @@ type Session struct {
 	session   CryptoSession
 }
 
-// Create a new Cluster Leader session. The Transport defines how the messages produced by the protocol will be routed.
+// Create a new Cluster Leader session. This is the session that is used for interacting between cluster leaders.
+// It does not take the cluster members into account.
+// The Transport defines how the messages produced by the protocol will be routed.
 func NewSession(transport shared.Transport, config shared.ConfigAccessor) *Session {
 	s := &Session{
 		transport: transport,
@@ -73,7 +75,7 @@ func (s *Session) GetKeyRef() *[32]byte {
 	return &s.session.SharedSecret
 }
 
-// Process the second message of 2-AKE, holding as a result either keyLeft or keyRight. The second message of 2-AKE is then sent.
+// Process the first message of 2-AKE, holding as a result either keyLeft or keyRight. The second message of 2-AKE is then sent.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
 func (s *Session) akeA(akeBMsg shared.Message) {
 	akeSendA, _ := base64.StdEncoding.DecodeString(akeBMsg.Content)
