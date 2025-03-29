@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"pqgch/gake"
 )
@@ -28,7 +28,7 @@ func GetKeyFromETSI(apiEndpoint string) ([gake.SsLen]byte, error) {
 		return key, fmt.Errorf("ETSI API returned non-OK status: %s", resp.Status)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return key, fmt.Errorf("failed to read ETSI API response: %v", err)
 	}

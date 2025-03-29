@@ -100,8 +100,8 @@ func (c *ServConfig) GetName() string {
 
 func (c *ServConfig) GetMessageType(msgType int) int {
 	switch msgType {
-	case XiMsg:
-		return LeaderXiMsg
+	case XiRiCommitmentMsg:
+		return LeaderXiRiCommitmentMsg
 	case AkeAMsg:
 		return LeaderAkeAMsg
 	case AkeBMsg:

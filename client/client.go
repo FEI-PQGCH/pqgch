@@ -18,6 +18,7 @@ func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
+	// Load config.
 	if *configFlag != "" {
 		config = shared.GetUserConfig(*configFlag)
 	} else {
@@ -26,6 +27,7 @@ func main() {
 	}
 	config = shared.GetUserConfig(*configFlag)
 
+	// Create TCP transport (connection to server).
 	transport, _ := shared.NewTCPTransport(config.LeadAddr)
 	loginMsg := shared.Message{
 		ID:         shared.GenerateUniqueID(),
@@ -34,10 +36,14 @@ func main() {
 		Type:       shared.LoginMsg,
 		ClusterID:  config.ClusterConfig.Index,
 	}
+	// Login to the server, so it recognizes us as a client.
 	transport.Send(loginMsg)
+
+	// Create and initialize the cluster session.
 	session := cluster_protocol.NewSession(transport, &config.ClusterConfig)
 	session.Init()
 
+	// Goroutine for reading user input.
 	input := make(chan string)
 	reader := bufio.NewReader(os.Stdin)
 	go func() {
@@ -50,6 +56,7 @@ func main() {
 		}
 	}()
 
+	// Infinite loop for printing out received messages and sending the input ones.
 	for {
 		fmt.Print("You: ")
 		select {

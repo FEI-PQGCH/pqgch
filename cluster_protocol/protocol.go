@@ -239,7 +239,7 @@ func (s *Session) handleMessage(msg shared.Message) {
 		s.akeA(msg)
 	case shared.AkeBMsg:
 		s.akeB(msg)
-	case shared.XiMsg:
+	case shared.XiRiCommitmentMsg:
 		s.xiRiCommitment(msg)
 	case shared.KeyMsg:
 		s.keyHandler(msg)
@@ -314,7 +314,7 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config shared.ConfigAccessor
 		ID:         shared.GenerateUniqueID(),
 		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
-		Type:       config.GetMessageType(shared.XiMsg),
+		Type:       config.GetMessageType(shared.XiRiCommitmentMsg),
 		Content:    base64.StdEncoding.EncodeToString(buffer.Bytes()),
 	}
 

@@ -23,15 +23,15 @@ type Message struct {
 }
 
 var MessageTypeNames = map[int]string{
-	LoginMsg:      "LoginMsg",
-	TextMsg:       "TextMsg",
-	AkeAMsg:       "AkeAMsg",
-	AkeBMsg:       "AkeBMsg",
-	XiMsg:         "XiMsg",
-	KeyMsg:        "KeyMsg",
-	LeaderAkeAMsg: "LeaderAkeAMsg",
-	LeaderAkeBMsg: "LeaderAkeBMsg",
-	LeaderXiMsg:   "LeaderXiMsg",
+	LoginMsg:                "LoginMsg",
+	TextMsg:                 "TextMsg",
+	AkeAMsg:                 "AkeAMsg",
+	AkeBMsg:                 "AkeBMsg",
+	XiRiCommitmentMsg:       "XiRiCommitmentMsg",
+	KeyMsg:                  "KeyMsg",
+	LeaderAkeAMsg:           "LeaderAkeAMsg",
+	LeaderAkeBMsg:           "LeaderAkeBMsg",
+	LeaderXiRiCommitmentMsg: "LeaderXiRiCommitmentMsg",
 }
 
 func (m Message) TypeName() string {
@@ -43,11 +43,11 @@ const (
 	TextMsg
 	AkeAMsg
 	AkeBMsg
-	XiMsg
+	XiRiCommitmentMsg
 	KeyMsg
 	LeaderAkeAMsg
 	LeaderAkeBMsg
-	LeaderXiMsg
+	LeaderXiRiCommitmentMsg
 )
 
 func (m Message) Send(conn net.Conn) error {
@@ -126,6 +126,9 @@ func (m Message) IsEmpty() bool {
 	return m == Message{}
 }
 
+// Message Tracker for tracking received messages.
+// We track them so we do not process the same message twice.
+// We distinguish messages according to their ID.
 type MessageTracker struct {
 	mu       sync.Mutex
 	messages map[string]bool
@@ -146,4 +149,21 @@ func (mt *MessageTracker) AddMessage(msgID string) bool {
 	}
 	mt.messages[msgID] = true
 	return true
+}
+
+// Message Queue for storing messages that we could not deliver.
+type MessageQueue []Message
+
+func (mq *MessageQueue) Add(msg Message) {
+	*mq = append(*mq, msg)
+}
+
+func (mq *MessageQueue) Remove(msg Message) {
+	tmp := MessageQueue{}
+	for _, x := range *mq {
+		if x.ID != msg.ID {
+			tmp.Add(x)
+		}
+	}
+	*mq = tmp
 }

@@ -150,7 +150,7 @@ func (s *Session) handleMessage(msg shared.Message) {
 		s.akeA(msg)
 	case shared.LeaderAkeBMsg:
 		s.akeB(msg)
-	case shared.LeaderXiMsg:
+	case shared.LeaderXiRiCommitmentMsg:
 		s.xiRiCommitment(msg)
 	default:
 		fmt.Printf("[ERROR] Unknown message type encountered\n")
@@ -195,7 +195,7 @@ func getXiRiCommitmentMsg(session *CryptoSession, config shared.ConfigAccessor) 
 		ID:         shared.GenerateUniqueID(),
 		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
-		Type:       config.GetMessageType(shared.XiMsg),
+		Type:       config.GetMessageType(shared.XiRiCommitmentMsg),
 		Content:    base64.StdEncoding.EncodeToString(buffer.Bytes()),
 	}
 

@@ -18,6 +18,7 @@ func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 
+	// Load config.
 	if *configFlag != "" {
 		config = shared.GetServConfig(*configFlag)
 	} else {
@@ -25,14 +26,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("[CRYPTO] Using GAKE handshake to derive master key")
-
-	_, selfPort, err := net.SplitHostPort(config.GetCurrentServer())
+	// Start listening at configured port.
+	_, port, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
 		fmt.Println("[ERROR] Error parsing self address from config:", err)
 		os.Exit(1)
 	}
-	port := selfPort
 	address := fmt.Sprintf(":%s", port)
 
 	listener, err := net.Listen("tcp", address)
@@ -41,12 +40,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer listener.Close()
-	fmt.Println("server listening on", address)
+	fmt.Println("ROUTE: server listening on", address)
 
+	// Create message tracker so we do not process the same message twice.
 	tracker := shared.NewMessageTracker()
-
-	leaderTransport := NewLeaderTransport()
-	leaderSession := leader_protocol.NewSession(leaderTransport, &config)
 
 	var clients Clients
 	for i, addr := range config.ClusterConfig.GetNamesOrAddrs() {
@@ -61,11 +58,16 @@ func main() {
 		clients.cs = append(clients.cs, client)
 	}
 
+	// Initialize transports and sessions.
+	leaderTransport := NewLeaderTransport()
+	leaderSession := leader_protocol.NewSession(leaderTransport, &config)
 	clusterTransport := NewClusterTransport(&clients)
 	clusterSession := cluster_protocol.NewLeaderSession(clusterTransport, &config.ClusterConfig, leaderSession.GetKeyRef())
 
+	// Start the protocol between cluster leaders.
 	leaderSession.Init()
 
+	// Handle incoming connections.
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -84,12 +86,18 @@ func handleConnection(
 	clusterTransport *ClusterTransport,
 	leaderTransport *LeaderTransport) {
 	reader := shared.NewMessageReader(conn)
+	// Verify that the client sent some message.
 	if !reader.HasMessage() {
 		fmt.Println("[ERROR] Client did not send any message")
 		conn.Close()
 		return
 	}
 
+	// Check whether message is a Login message.
+	// If it is not, we received a message from some other cluster leader.
+	// We handle the Text message explicitly by broadcasting it to our cluster.
+	// We handle other messages through Leader Transport since they shoould
+	// be a part of the protocol between leaders.
 	msg := reader.GetMessage()
 	if msg.Type != shared.LoginMsg {
 		if !tracker.AddMessage(msg.ID) {
@@ -104,9 +112,10 @@ func handleConnection(
 		conn.Close()
 		return
 	}
+
+	// If the message sent was a Login message (which comes from clients), we save the client and his connection in memory.
 	fmt.Printf("[INFO] New client (%s, %s) joined\n", msg.SenderName, conn.RemoteAddr())
 	clientID := msg.SenderID
-
 	clients.mu.Lock()
 	clients.cs[clientID].conn = conn
 	clients.mu.Unlock()
@@ -117,13 +126,20 @@ func handleConnection(
 		fmt.Println("[INFO] Client disconnected:", clients.cs[clientID].conn.RemoteAddr())
 	}()
 
+	// Send to the newly connected client every message from his queue.
 	for _, msg := range clients.cs[clientID].queue {
 		msg.Send(clients.cs[clientID].conn)
 		clients.mu.Lock()
-		clients.cs[clientID].queue.remove(msg)
+		clients.cs[clientID].queue.Remove(msg)
 		clients.mu.Unlock()
 	}
 
+	// Check whether all the clients are connected.
+	// If so, begin the cluster protocol from the Leader side.
+	//
+	// TODO: refactor this. We do not need to wait until everyone joined, we only need to start the protocol
+	// when our right neighbour (in the cluster) joined. Then, if we try to deliver some messages to offline clients,
+	// we just store them in their queues.
 	onlineClients := 0
 	for _, c := range clients.cs {
 		if c.conn != nil {
@@ -134,6 +150,7 @@ func handleConnection(
 		session.Init()
 	}
 
+	// Handle messages from this client in an infinite loop.
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
 		fmt.Printf("[INFO] Received %s from %s \n", msg.TypeName(), msg.SenderName)
@@ -150,7 +167,7 @@ func handleConnection(
 		if msg.ReceiverID != config.ClusterConfig.Index && (msg.Type == shared.AkeAMsg || msg.Type == shared.AkeBMsg) {
 			sendToClient(msg, clients)
 		}
-		if msg.Type == shared.XiMsg {
+		if msg.Type == shared.XiRiCommitmentMsg {
 			clusterTransport.Receive(msg)
 			broadcastToCluster(msg, clients)
 		}
@@ -158,7 +175,7 @@ func handleConnection(
 			broadcastToCluster(msg, clients)
 			broadcastToLeaders(msg)
 		}
-		if msg.Type == shared.LeaderAkeAMsg || msg.Type == shared.LeaderAkeBMsg || msg.Type == shared.LeaderXiMsg {
+		if msg.Type == shared.LeaderAkeAMsg || msg.Type == shared.LeaderAkeBMsg || msg.Type == shared.LeaderXiRiCommitmentMsg {
 			leaderTransport.Receive(msg)
 		}
 	}
