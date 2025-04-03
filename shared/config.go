@@ -2,10 +2,14 @@ package shared
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io/ioutil"
 	"log"
 	"os"
 	"pqgch/gake"
+	"strings"
 )
 
 type ConfigAccessor interface {
@@ -125,14 +129,42 @@ type UserConfig struct {
 }
 
 type ServConfig struct {
-	ClusterConfig `json:"clusterConfig"`
-	Index         int      `json:"index"`
-	ServAddrs     []string `json:"servers"`
-	PublicKeys    []string `json:"publicKeys"`
-	SecretKey     string   `json:"secretKey"`
+	ClusterConfig    `json:"clusterConfig"`
+	Index            int      `json:"index"`
+	ServAddrs        []string `json:"servers"`
+	PublicKeys       []string `json:"publicKeys"`
+	SecretKey        string   `json:"secretKey"`
+	CurrentServerQKD bool     `json:"CurrentServerQKD"`
+	LeftServerQKD    bool     `json:"LeftServerQKD"`
+	RightServerQKD   bool     `json:"RightServerQKD"`
 
 	ETSIKeyLeftEndpoint  string `json:"ETSIKeyLeftEndpoint"`
 	ETSIKeyRightEndpoint string `json:"ETSIKeyRightEndpoint"`
+	KeyLeftFile          string `json:"KeyLeftFile"`
+	KeyRightFile         string `json:"KeyRightFile"`
+}
+
+func GetTKey(filePath string) ([gake.SsLen]byte, error) {
+	return LoadClusterKey(filePath)
+}
+
+func LoadClusterKey(filePath string) ([gake.SsLen]byte, error) {
+	var key [gake.SsLen]byte
+
+	data, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return key, err
+	}
+	trimmed := strings.TrimSpace(string(data))
+	decoded, err := hex.DecodeString(trimmed)
+	if err != nil {
+		return key, err
+	}
+	if len(decoded) < gake.SsLen {
+		return key, errors.New("cluster key file is too short")
+	}
+	copy(key[:], decoded)
+	return key, nil
 }
 
 func GetUserConfig(path string) UserConfig {
