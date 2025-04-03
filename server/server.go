@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"net"
@@ -8,6 +9,8 @@ import (
 	"pqgch/cluster_protocol"
 	"pqgch/leader_protocol"
 	"pqgch/shared"
+	"strconv"
+	"strings"
 )
 
 var (
@@ -67,6 +70,42 @@ func main() {
 	// Start the protocol between cluster leaders.
 	leaderSession.Init()
 
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			fmt.Print("[INFO] Server Chat started: ")
+			text, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("[ERROR] Reading input:", err)
+				continue
+			}
+			text = strings.TrimSpace(text)
+			if text == "" {
+				continue
+			}
+
+			masterKey := leaderSession.GetKeyRef()
+
+			encryptedText, err := shared.EncryptAesGcm(text, masterKey[:])
+			if err != nil {
+				fmt.Println("[ERROR] Encrypting message:", err)
+				continue
+			}
+
+			msg := shared.Message{
+				ID:         shared.GenerateUniqueID(),
+				SenderID:   config.Index,
+				SenderName: config.GetName() + " " + strconv.Itoa(config.Index+1),
+				Type:       shared.LeaderTextMsg,
+				ClusterID:  config.ClusterConfig.Index,
+				Content:    encryptedText,
+			}
+
+			leaderTransport.Send(msg)
+			fmt.Println("Sent:", text)
+		}
+	}()
+
 	// Handle incoming connections.
 	for {
 		conn, err := listener.Accept()
@@ -106,8 +145,13 @@ func handleConnection(
 		fmt.Printf("[INFO] Received %s message from Leader\n", msg.TypeName())
 		if msg.Type == shared.TextMsg {
 			broadcastToCluster(msg, clients)
-			return
+			broadcastToLeaders(msg)
 		}
+		if msg.Type == shared.LeaderTextMsg {
+			broadcastToCluster(msg, clients)
+			broadcastToLeaders(msg)
+		}
+
 		leaderTransport.Receive(msg)
 		conn.Close()
 		return
@@ -173,6 +217,9 @@ func handleConnection(
 		}
 		if msg.Type == shared.TextMsg {
 			broadcastToCluster(msg, clients)
+			broadcastToLeaders(msg)
+		}
+		if msg.Type == shared.LeaderTextMsg {
 			broadcastToLeaders(msg)
 		}
 		if msg.Type == shared.LeaderAkeAMsg || msg.Type == shared.LeaderAkeBMsg || msg.Type == shared.LeaderXiRiCommitmentMsg {

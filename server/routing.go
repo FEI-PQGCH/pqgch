@@ -43,6 +43,10 @@ func (t *ClusterTransport) Send(msg shared.Message) {
 		sendToClient(msg, t.clients)
 	case shared.KeyMsg:
 		broadcastToCluster(msg, t.clients)
+	case shared.TextMsg:
+		broadcastToLeaders(msg)
+	case shared.LeaderTextMsg:
+		broadcastToLeaders(msg)
 	}
 }
 
