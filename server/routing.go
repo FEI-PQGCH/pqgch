@@ -72,6 +72,8 @@ func (t *LeaderTransport) Send(msg shared.Message) {
 		sendToLeader(config.GetNamesOrAddrs()[msg.ReceiverID], msg)
 	case shared.LeaderXiRiCommitmentMsg:
 		broadcastToLeaders(msg)
+	case shared.LeaderTextMsg:
+		broadcastToLeaders(msg)
 	}
 }
 
