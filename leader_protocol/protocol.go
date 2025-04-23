@@ -173,8 +173,6 @@ func (s *Session) handleMessage(msg shared.Message) {
 		s.akeB(msg)
 	case shared.LeaderXiRiCommitmentMsg:
 		s.xiRiCommitment(msg)
-	case shared.LeaderTextMsg:
-		break
 	default:
 		fmt.Printf("[ERROR] Unknown message type encountered\n")
 	}

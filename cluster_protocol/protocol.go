@@ -46,17 +46,18 @@ type Session struct {
 	config         shared.ConfigAccessor
 	session        CryptoSession
 	keyCiphertext  []byte
-	mainSessionKey [32]byte
+	mainSessionKey *[32]byte
 	Received       chan shared.Message
 }
 
 // Create a new Cluster Member session. The Transport defines how the messages produced by the protocol will be routed.
 func NewSession(transport shared.Transport, config shared.ConfigAccessor) *Session {
 	s := &Session{
-		transport: transport,
-		session:   NewCryptoSession(config),
-		config:    config,
-		Received:  make(chan shared.Message, 10),
+		transport:      transport,
+		session:        NewCryptoSession(config),
+		config:         config,
+		Received:       make(chan shared.Message, 10),
+		mainSessionKey: &[32]byte{},
 	}
 
 	s.session.OnSharedKey = func() {
@@ -89,6 +90,7 @@ func NewLeaderSession(transport shared.Transport, config shared.ConfigAccessor, 
 		transport: transport,
 		session:   NewCryptoSession(config),
 		config:    config,
+		Received:  make(chan shared.Message, 10),
 	}
 
 	s.session.OnSharedKey = func() {
@@ -98,6 +100,7 @@ func NewLeaderSession(transport shared.Transport, config shared.ConfigAccessor, 
 	}
 
 	transport.SetMessageHandler(s.handleMessage)
+	s.mainSessionKey = keyRef
 
 	return s
 }
@@ -250,7 +253,7 @@ func (s *Session) handleMessage(msg shared.Message) {
 
 // Encrypt and send the text message. To be used by client code.
 func (s *Session) SendText(text string) {
-	if [32]byte(s.mainSessionKey) == [32]byte{} {
+	if [32]byte(*s.mainSessionKey) == [32]byte{} {
 		fmt.Println("[CRYPTO] No master key available, skipping")
 		return
 	}

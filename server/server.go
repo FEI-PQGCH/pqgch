@@ -9,7 +9,6 @@ import (
 	"pqgch/cluster_protocol"
 	"pqgch/leader_protocol"
 	"pqgch/shared"
-	"strconv"
 	"strings"
 )
 
@@ -72,36 +71,20 @@ func main() {
 	masterKey := leaderSession.GetKeyRef()
 
 	go func() {
-		fmt.Print("[INFO] Server Chat started: ")
 		reader := bufio.NewReader(os.Stdin)
 		for {
-			text, err := reader.ReadString('\n')
-			if err != nil {
-				fmt.Println("[ERROR] Reading input:", err)
-				continue
-			}
+			text, _ := reader.ReadString('\n')
 			text = strings.TrimSpace(text)
-			if text == "" {
-				continue
+			if text != "" {
+				clusterSession.SendText(text)
 			}
+		}
+	}()
 
-			encryptedText, err := shared.EncryptAesGcm(text, masterKey[:])
-			if err != nil {
-				fmt.Println("[ERROR] Encrypting message:", err)
-				continue
-			}
-
-			msg := shared.Message{
-				ID:         shared.GenerateUniqueID(),
-				SenderID:   config.Index,
-				SenderName: config.GetName() + " " + strconv.Itoa(config.Index+1),
-				Type:       shared.LeaderTextMsg,
-				ClusterID:  config.ClusterConfig.Index,
-				Content:    encryptedText,
-			}
-
-			leaderTransport.Send(msg)
-			fmt.Println("Sent:", text)
+	go func() {
+		for {
+			msg := <-clusterSession.Received
+			fmt.Printf("\r\033[K%s: %s\n", msg.SenderName, msg.Content)
 		}
 	}()
 
@@ -144,15 +127,10 @@ func handleConnection(
 			return
 		}
 		fmt.Printf("[INFO] Received %s message from Leader\n", msg.TypeName())
-		if msg.Type == shared.TextMsg || msg.Type == shared.LeaderTextMsg {
-			decrypted, err := shared.DecryptAesGcm(msg.Content, (*masterKey)[:])
-			if err != nil {
-				fmt.Printf("[ERROR] Failed decrypting message from %s: %v\n", msg.SenderName, err)
-			} else {
-				fmt.Printf("[MESSAGE] %s: %s\n", msg.SenderName, decrypted)
-			}
+		if msg.Type == shared.TextMsg {
+			clusterTransport.Receive(msg)
 			broadcastToCluster(msg, clients)
-			broadcastToLeaders(msg)
+			return
 		}
 
 		leaderTransport.Receive(msg)
@@ -219,25 +197,20 @@ func handleConnection(
 			broadcastToCluster(msg, clients)
 		}
 		if msg.Type == shared.TextMsg {
-			decrypted, err := shared.DecryptAesGcm(msg.Content, (*masterKey)[:])
-			if err != nil {
-				fmt.Printf("[ERROR] Failed decrypting message from %s: %v\n", msg.SenderName, err)
-			} else {
-				fmt.Printf("[DISPLAY] %s: %s\n", msg.SenderName, decrypted)
-			}
+			clusterTransport.Receive(msg)
 			broadcastToCluster(msg, clients)
 			broadcastToLeaders(msg)
 		}
 
-		if msg.Type == shared.LeaderTextMsg {
-			decrypted, err := shared.DecryptAesGcm(msg.Content, (*masterKey)[:])
-			if err != nil {
-				fmt.Printf("[ERROR] Failed decrypting leader message from %s: %v\n", msg.SenderName, err)
-			} else {
-				fmt.Printf("[DISPLAY] %s: %s\n", msg.SenderName, decrypted)
-			}
-			broadcastToLeaders(msg)
-		}
+		// if msg.Type == shared.LeaderTextMsg {
+		// 	decrypted, err := shared.DecryptAesGcm(msg.Content, (*masterKey)[:])
+		// 	if err != nil {
+		// 		fmt.Printf("[ERROR] Failed decrypting leader message from %s: %v\n", msg.SenderName, err)
+		// 	} else {
+		// 		fmt.Printf("[DISPLAY] %s: %s\n", msg.SenderName, decrypted)
+		// 	}
+		// 	broadcastToLeaders(msg)
+		// }
 
 		if msg.Type == shared.LeaderAkeAMsg || msg.Type == shared.LeaderAkeBMsg || msg.Type == shared.LeaderXiRiCommitmentMsg {
 			leaderTransport.Receive(msg)

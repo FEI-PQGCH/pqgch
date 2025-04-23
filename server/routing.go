@@ -44,8 +44,7 @@ func (t *ClusterTransport) Send(msg shared.Message) {
 	case shared.KeyMsg:
 		broadcastToCluster(msg, t.clients)
 	case shared.TextMsg:
-		broadcastToLeaders(msg)
-	case shared.LeaderTextMsg:
+		broadcastToCluster(msg, t.clients)
 		broadcastToLeaders(msg)
 	}
 }
@@ -71,8 +70,6 @@ func (t *LeaderTransport) Send(msg shared.Message) {
 	case shared.LeaderAkeBMsg:
 		sendToLeader(config.GetNamesOrAddrs()[msg.ReceiverID], msg)
 	case shared.LeaderXiRiCommitmentMsg:
-		broadcastToLeaders(msg)
-	case shared.LeaderTextMsg:
 		broadcastToLeaders(msg)
 	}
 }
