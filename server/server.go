@@ -68,7 +68,6 @@ func main() {
 
 	// Start the protocol between cluster leaders.
 	leaderSession.Init()
-	masterKey := leaderSession.GetKeyRef()
 
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
@@ -95,7 +94,7 @@ func main() {
 			fmt.Println("[ERROR] Error accepting connection:", err)
 			continue
 		}
-		go handleConnection(&clients, conn, tracker, clusterSession, clusterTransport, leaderTransport, masterKey)
+		go handleConnection(&clients, conn, tracker, clusterSession, clusterTransport, leaderTransport)
 	}
 }
 
@@ -106,7 +105,6 @@ func handleConnection(
 	session *cluster_protocol.Session,
 	clusterTransport *ClusterTransport,
 	leaderTransport *LeaderTransport,
-	masterKey *[32]byte,
 ) {
 	reader := shared.NewMessageReader(conn)
 	// Verify that the client sent some message.
@@ -201,17 +199,6 @@ func handleConnection(
 			broadcastToCluster(msg, clients)
 			broadcastToLeaders(msg)
 		}
-
-		// if msg.Type == shared.LeaderTextMsg {
-		// 	decrypted, err := shared.DecryptAesGcm(msg.Content, (*masterKey)[:])
-		// 	if err != nil {
-		// 		fmt.Printf("[ERROR] Failed decrypting leader message from %s: %v\n", msg.SenderName, err)
-		// 	} else {
-		// 		fmt.Printf("[DISPLAY] %s: %s\n", msg.SenderName, decrypted)
-		// 	}
-		// 	broadcastToLeaders(msg)
-		// }
-
 		if msg.Type == shared.LeaderAkeAMsg || msg.Type == shared.LeaderAkeBMsg || msg.Type == shared.LeaderXiRiCommitmentMsg {
 			leaderTransport.Receive(msg)
 		}
