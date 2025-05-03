@@ -28,10 +28,6 @@ func (c *ClusterConfig) GetIndex() int {
 	return c.Index
 }
 
-func (c *ClusterConfig) GetKeys() []string {
-	return c.PublicKeys
-}
-
 func (c *ClusterConfig) GetSecretKey() string {
 	return c.SecretKey
 }
@@ -40,17 +36,35 @@ func (c *ClusterConfig) GetNamesOrAddrs() []string {
 	return c.Names
 }
 
-func (c *ClusterConfig) GetDecodedPublicKey(index int) [gake.PkLen]byte {
-	return getDecodedPublicKey(c.PublicKeys, index)
+func (c *ClusterConfig) loadClusterKeys() []string {
+	data, err := ioutil.ReadFile(c.PublicKeys)
+	if err != nil {
+		log.Fatalf("couldn't load cluster public-keys from %s: %v", c.PublicKeys, err)
+	}
+	var blob struct {
+		PublicKeys []string `json:"publicKeys"`
+	}
+	if err := json.Unmarshal(data, &blob); err != nil {
+		log.Fatalf("bad JSON in %s: %v", c.PublicKeys, err)
+	}
+	return blob.PublicKeys
+}
+
+func (c *ClusterConfig) GetKeys() []string {
+	return c.loadClusterKeys()
+}
+
+func (c *ClusterConfig) GetDecodedPublicKey(i int) [gake.PkLen]byte {
+	return getDecodedPublicKey(c.loadClusterKeys(), i)
 }
 
 func (c *ClusterConfig) GetDecodedPublicKeys() [][gake.PkLen]byte {
-	keys := make([][gake.PkLen]byte, len(c.GetNamesOrAddrs()))
-	for i := 0; i < len(c.GetNamesOrAddrs()); i++ {
-		keys[i] = c.GetDecodedPublicKey(i)
+	raw := c.loadClusterKeys()
+	out := make([][gake.PkLen]byte, len(raw))
+	for i := range raw {
+		out[i] = getDecodedPublicKey(raw, i)
 	}
-
-	return keys
+	return out
 }
 
 func (c *ClusterConfig) GetDecodedSecretKey() []byte {
@@ -65,12 +79,42 @@ func (c *ClusterConfig) GetMessageType(msgType int) int {
 	return msgType
 }
 
+const serverKeysPath = "../.keys/server_public_keys.json"
+
+var (
+	serverPubKeys       []string
+	serverDecodedPubKey [][gake.PkLen]byte
+)
+
+func init() {
+	data, err := ioutil.ReadFile(serverKeysPath)
+	if err != nil {
+		log.Fatalf("failed to read %s: %v", serverKeysPath, err)
+	}
+	var blob struct {
+		PublicKeys []string `json:"publicKeys"`
+	}
+	if err := json.Unmarshal(data, &blob); err != nil {
+		log.Fatalf("failed to parse %s: %v", serverKeysPath, err)
+	}
+
+	serverPubKeys = blob.PublicKeys
+	serverDecodedPubKey = make([][gake.PkLen]byte, len(serverPubKeys))
+	for i, b64 := range serverPubKeys {
+		raw, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			log.Fatalf("invalid base64 at publicKeys[%d]: %v", i, err)
+		}
+		copy(serverDecodedPubKey[i][:], raw)
+	}
+}
+
 func (c *ServConfig) GetIndex() int {
 	return c.Index
 }
 
 func (c *ServConfig) GetKeys() []string {
-	return c.PublicKeys
+	return serverPubKeys
 }
 
 func (c *ServConfig) GetSecretKey() string {
@@ -82,16 +126,11 @@ func (c *ServConfig) GetNamesOrAddrs() []string {
 }
 
 func (c *ServConfig) GetDecodedPublicKey(index int) [gake.PkLen]byte {
-	return getDecodedPublicKey(c.PublicKeys, index)
+	return serverDecodedPubKey[index]
 }
 
 func (c *ServConfig) GetDecodedPublicKeys() [][gake.PkLen]byte {
-	keys := make([][gake.PkLen]byte, len(c.GetNamesOrAddrs()))
-	for i := 0; i < len(c.GetNamesOrAddrs()); i++ {
-		keys[i] = c.GetDecodedPublicKey(i)
-	}
-
-	return keys
+	return serverDecodedPubKey
 }
 
 func (c *ServConfig) GetDecodedSecretKey() []byte {
@@ -99,7 +138,7 @@ func (c *ServConfig) GetDecodedSecretKey() []byte {
 }
 
 func (c *ServConfig) GetName() string {
-	return c.ClusterConfig.Names[c.ClusterConfig.Index]
+	return c.ClusterConfig.GetName()
 }
 
 func (c *ServConfig) GetMessageType(msgType int) int {
@@ -116,11 +155,10 @@ func (c *ServConfig) GetMessageType(msgType int) int {
 }
 
 type ClusterConfig struct {
-	Names          []string `json:"names"`
-	Index          int      `json:"index"`
-	PublicKeys     []string `json:"publicKeys"`
-	SecretKey      string   `json:"secretKey"`
-	ClusterKeyFile string   `json:"clusterKeyFile"`
+	Names      []string `json:"names"`
+	Index      int      `json:"index"`
+	PublicKeys string   `json:"publicKeys"`
+	SecretKey  string   `json:"secretKey"`
 }
 
 type UserConfig struct {
@@ -132,23 +170,19 @@ type ServConfig struct {
 	ClusterConfig `json:"clusterConfig"`
 	Index         int      `json:"index"`
 	ServAddrs     []string `json:"servers"`
-	PublicKeys    []string `json:"publicKeys"`
 	SecretKey     string   `json:"secretKey"`
-
-	KeyLeft  string `json:"keyLeft"`
-	KeyRight string `json:"keyRight"`
+	KeyLeft       string   `json:"keyLeft"`
+	KeyRight      string   `json:"keyRight"`
 }
 
 func (c *ServConfig) IsLeftQKD() bool {
-	return strings.HasPrefix(strings.ToLower(c.KeyLeft), "path ") || strings.HasPrefix(strings.ToLower(c.KeyLeft), "url ")
+	return strings.HasPrefix(strings.ToLower(c.KeyLeft), "path ") ||
+		strings.HasPrefix(strings.ToLower(c.KeyLeft), "url ")
 }
 
 func (c *ServConfig) IsRightQKD() bool {
-	return strings.HasPrefix(strings.ToLower(c.KeyRight), "path ") || strings.HasPrefix(strings.ToLower(c.KeyRight), "url ")
-}
-
-func GetTKey(filePath string) ([gake.SsLen]byte, error) {
-	return LoadClusterKey(filePath)
+	return strings.HasPrefix(strings.ToLower(c.KeyRight), "path ") ||
+		strings.HasPrefix(strings.ToLower(c.KeyRight), "url ")
 }
 
 func (c *ServConfig) GetLeftKey() string {
@@ -163,6 +197,10 @@ func (c *ServConfig) GetRightKey() string {
 		return strings.TrimSpace(c.KeyRight[5:])
 	}
 	return c.KeyRight
+}
+
+func GetTKey(filePath string) ([gake.SsLen]byte, error) {
+	return LoadClusterKey(filePath)
 }
 
 func LoadClusterKey(filePath string) ([gake.SsLen]byte, error) {
@@ -193,12 +231,25 @@ func GetUserConfig(path string) UserConfig {
 	}
 	defer configFile.Close()
 
-	jsonParser := json.NewDecoder(configFile)
-	err = jsonParser.Decode(&config)
-	if err != nil {
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
 		log.Fatalf("Error parsing config file: %v", err)
 	}
 
+	return config
+}
+
+func GetServConfig(path string) ServConfig {
+	config := ServConfig{}
+
+	configFile, err := os.Open(path)
+	if err != nil {
+		log.Fatalf("Error opening config file at %s: %v", path, err)
+	}
+	defer configFile.Close()
+
+	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
+		log.Fatalf("Error parsing config file: %v", err)
+	}
 	return config
 }
 
@@ -212,23 +263,6 @@ func getDecodedPublicKey(publicKeys []string, index int) [gake.PkLen]byte {
 	decodedPubKey, _ := base64.StdEncoding.DecodeString(publicKeys[index])
 	copy(decodedPublicKey[:], decodedPubKey)
 	return decodedPublicKey
-}
-
-func GetServConfig(path string) ServConfig {
-	config := ServConfig{}
-
-	configFile, err := os.Open(path)
-	if err != nil {
-		log.Fatalf("Error opening config file at %s: %v", path, err)
-	}
-	defer configFile.Close()
-
-	jsonParser := json.NewDecoder(configFile)
-	err = jsonParser.Decode(&config)
-	if err != nil {
-		log.Fatalf("Error parsing config file: %v", err)
-	}
-	return config
 }
 
 func (c *ServConfig) GetRightNeighbor() string {
