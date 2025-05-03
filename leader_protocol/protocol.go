@@ -84,8 +84,8 @@ func (s *Session) akeA(akeBMsg shared.Message) {
 	akeSendA, _ := base64.StdEncoding.DecodeString(akeBMsg.Content)
 
 	var akeSendB []byte
-	if s.config.(*shared.ServConfig).CurrentServerQKD && s.config.(*shared.ServConfig).LeftServerQKD {
-		tkey, err := shared.GetTKey(s.config.(*shared.ServConfig).KeyLeftFile)
+	if s.config.(*shared.ServConfig).IsLeftQKD() {
+		tkey, err := shared.GetTKey(s.config.(*shared.ServConfig).GetLeftKey())
 		if err != nil {
 			fmt.Printf("[ERROR] Loading external left key: %v\n", err)
 			os.Exit(1)
@@ -121,8 +121,8 @@ func (s *Session) akeA(akeBMsg shared.Message) {
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
 func (s *Session) akeB(msg shared.Message) {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
-	if s.config.(*shared.ServConfig).CurrentServerQKD && s.config.(*shared.ServConfig).RightServerQKD {
-		tkey, err := shared.GetTKey(s.config.(*shared.ServConfig).KeyRightFile)
+	if s.config.(*shared.ServConfig).IsRightQKD() {
+		tkey, err := shared.GetTKey(s.config.(*shared.ServConfig).GetRightKey())
 		if err != nil {
 			fmt.Printf("[ERROR] Loading external right key: %v\n", err)
 			os.Exit(1)

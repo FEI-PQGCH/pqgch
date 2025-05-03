@@ -116,37 +116,55 @@ func (c *ServConfig) GetMessageType(msgType int) int {
 }
 
 type ClusterConfig struct {
-	Names          []string `json:"names"`
-	Index          int      `json:"index"`
-	PublicKeys     []string `json:"publicKeys"`
-	SecretKey      string   `json:"secretKey"`
-	ClusterKeyFile string   `json:"clusterKeyFile"`
+	Names          []string json:"names"
+	Index          int      json:"index"
+	PublicKeys     []string json:"publicKeys"
+	SecretKey      string   json:"secretKey"
+	ClusterKeyFile string   json:"clusterKeyFile"
 }
 
 type UserConfig struct {
-	ClusterConfig `json:"clusterConfig"`
-	LeadAddr      string `json:"leadAddr"`
+	ClusterConfig json:"clusterConfig"
+	LeadAddr      string json:"leadAddr"
 }
 
 type ServConfig struct {
-	ClusterConfig    `json:"clusterConfig"`
-	Index            int      `json:"index"`
-	ServAddrs        []string `json:"servers"`
-	PublicKeys       []string `json:"publicKeys"`
-	SecretKey        string   `json:"secretKey"`
-	CurrentServerQKD bool     `json:"CurrentServerQKD"`
-	LeftServerQKD    bool     `json:"LeftServerQKD"`
-	RightServerQKD   bool     `json:"RightServerQKD"`
+	ClusterConfig json:"clusterConfig"
+	Index         int      json:"index"
+	ServAddrs     []string json:"servers"
+	PublicKeys    []string json:"publicKeys"
+	SecretKey     string   json:"secretKey"
 
-	ETSIKeyLeftEndpoint  string `json:"ETSIKeyLeftEndpoint"`
-	ETSIKeyRightEndpoint string `json:"ETSIKeyRightEndpoint"`
-	KeyLeftFile          string `json:"KeyLeftFile"`
-	KeyRightFile         string `json:"KeyRightFile"`
+	KeyLeft  string json:"keyLeft"
+	KeyRight string json:"keyRight"
+}
+
+func (c *ServConfig) IsLeftQKD() bool {
+	return strings.HasPrefix(strings.ToLower(c.KeyLeft), "path ") || strings.HasPrefix(strings.ToLower(c.KeyLeft), "url ")
+}
+
+func (c *ServConfig) IsRightQKD() bool {
+	return strings.HasPrefix(strings.ToLower(c.KeyRight), "path ") || strings.HasPrefix(strings.ToLower(c.KeyRight), "url ")
 }
 
 func GetTKey(filePath string) ([gake.SsLen]byte, error) {
 	return LoadClusterKey(filePath)
 }
+
+func (c *ServConfig) GetLeftKey() string {
+	if c.IsLeftQKD() {
+		return strings.TrimSpace(c.KeyLeft[5:])
+	}
+	return c.KeyLeft
+}
+
+func (c *ServConfig) GetRightKey() string {
+	if c.IsRightQKD() {
+		return strings.TrimSpace(c.KeyRight[5:])
+	}
+	return c.KeyRight
+}
+
 
 func LoadClusterKey(filePath string) ([gake.SsLen]byte, error) {
 	var key [gake.SsLen]byte
