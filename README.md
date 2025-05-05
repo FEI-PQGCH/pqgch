@@ -57,6 +57,18 @@ Then start the container:
 docker run -dit --name pqgch-instance -v $(pwd):/workspace pqgch:latest
 ```
 
+If you want to forward the ports to your machine, use for example this:
+
+```bash
+docker run -dit \
+  --name pqgch-instance \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -p 9002:9002 \
+  -v $(pwd):/workspace \
+  pqgch:latest
+```
+
 Then you can connect to the container with multiple shells using:
 
 ```bash
@@ -139,6 +151,7 @@ When everything is ready to go, the protocol initializes automatically at each o
     - After receiving all of the **Xs** from its peers, each client computes the **MasterKey** and the **SkSid** is generated and printed.
 
 - **Message Exchange**:
+
   - Intra-cluster messaging among clients is fully functional:
     - Messages are successfully sent between clients and clusters.
     - Clients on receiving end from other clusters are currently able to encrypt and decrypt the messages.
@@ -148,6 +161,8 @@ When everything is ready to go, the protocol initializes automatically at each o
   - Implemented message queue per client.
 
 ### Run Time Dependencies
+
 #### Dependencies used in this project:
+
 - OpenSSL
 - C standard library(libc)
