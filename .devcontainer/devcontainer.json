@@ -9,5 +9,5 @@
       "extensions": ["golang.go"]
     }
   },
-  "forwardPorts": [8080, 3000]
+  "forwardPorts": [9000,9001,9002,9003,9004]
 }
