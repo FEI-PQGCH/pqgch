@@ -68,7 +68,7 @@ func (c *ClusterConfig) GetDecodedPublicKeys() [][gake.PkLen]byte {
 }
 
 func (c *ClusterConfig) GetDecodedSecretKey() []byte {
-	return getDecodedSecretKey(c.SecretKey)
+	return getDecodedKey(c.SecretKey)
 }
 
 func (c *ClusterConfig) GetName() string {
@@ -86,29 +86,6 @@ var (
 	serverDecodedPubKey [][gake.PkLen]byte
 )
 
-func init() {
-	data, err := ioutil.ReadFile(serverKeysPath)
-	if err != nil {
-		log.Fatalf("failed to read %s: %v", serverKeysPath, err)
-	}
-	var blob struct {
-		PublicKeys []string `json:"publicKeys"`
-	}
-	if err := json.Unmarshal(data, &blob); err != nil {
-		log.Fatalf("failed to parse %s: %v", serverKeysPath, err)
-	}
-
-	serverPubKeys = blob.PublicKeys
-	serverDecodedPubKey = make([][gake.PkLen]byte, len(serverPubKeys))
-	for i, b64 := range serverPubKeys {
-		raw, err := base64.StdEncoding.DecodeString(b64)
-		if err != nil {
-			log.Fatalf("invalid base64 at publicKeys[%d]: %v", i, err)
-		}
-		copy(serverDecodedPubKey[i][:], raw)
-	}
-}
-
 func (c *ServConfig) GetIndex() int {
 	return c.Index
 }
@@ -125,16 +102,8 @@ func (c *ServConfig) GetNamesOrAddrs() []string {
 	return c.ServAddrs
 }
 
-func (c *ServConfig) GetDecodedPublicKey(index int) [gake.PkLen]byte {
-	return serverDecodedPubKey[index]
-}
-
-func (c *ServConfig) GetDecodedPublicKeys() [][gake.PkLen]byte {
-	return serverDecodedPubKey
-}
-
 func (c *ServConfig) GetDecodedSecretKey() []byte {
-	return getDecodedSecretKey(c.SecretKey)
+	return getDecodedKey(c.SecretKey)
 }
 
 func (c *ServConfig) GetName() string {
@@ -199,11 +168,29 @@ func (c *ServConfig) GetRightKey() string {
 	return c.KeyRight
 }
 
-func GetTKey(filePath string) ([gake.SsLen]byte, error) {
-	return LoadClusterKey(filePath)
+func (c *ServConfig) GetDecodedLeftKeyPublic() [gake.PkLen]byte {
+	return decodePublicKey(c.GetLeftKey())
 }
 
-func LoadClusterKey(filePath string) ([gake.SsLen]byte, error) {
+func (c *ServConfig) GetDecodedRightKeyPublic() [gake.PkLen]byte {
+	return decodePublicKey(c.GetRightKey())
+}
+
+func decodePublicKey(key string) [gake.PkLen]byte {
+	var decoded [gake.PkLen]byte
+	raw := getDecodedKey(key)
+	copy(decoded[:], raw)
+	return decoded
+}
+
+func (c *ServConfig) GetDecodedLeftKeyQKD() ([gake.SsLen]byte, error){
+	return openAndDecodeQKDKey(c.GetLeftKey())
+}
+func (c *ServConfig) GetDecodedRightKeyQKD() ([gake.SsLen]byte, error){
+	return openAndDecodeQKDKey(c.GetRightKey())
+}
+
+func openAndDecodeQKDKey(filePath string) ([gake.SsLen]byte, error) {
 	var key [gake.SsLen]byte
 
 	data, err := ioutil.ReadFile(filePath)
@@ -216,7 +203,7 @@ func LoadClusterKey(filePath string) ([gake.SsLen]byte, error) {
 		return key, err
 	}
 	if len(decoded) < gake.SsLen {
-		return key, errors.New("cluster key file is too short")
+		return key, errors.New("[ERROR]cluster key file is too short")
 	}
 	copy(key[:], decoded)
 	return key, nil
@@ -253,7 +240,7 @@ func GetServConfig(path string) ServConfig {
 	return config
 }
 
-func getDecodedSecretKey(secretKey string) []byte {
+func getDecodedKey(secretKey string) []byte {
 	decodedSecretKey, _ := base64.StdEncoding.DecodeString(secretKey)
 	return decodedSecretKey
 }
