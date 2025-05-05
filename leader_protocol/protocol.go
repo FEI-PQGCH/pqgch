@@ -83,20 +83,20 @@ func (s *Session) Init() {
 	}
 
 	if !s.config.(*shared.ServConfig).IsRightQKD() {
-	var rightIndex = (s.config.GetIndex() + 1) % len(s.config.GetNamesOrAddrs())
-	var akeSendARight []byte
-	akeSendARight, s.session.TkRight, s.session.EskaRight = gake.KexAkeInitA(s.config.(*shared.ServConfig).GetDecodedRightKeyPublic())
+		var rightIndex = (s.config.GetIndex() + 1) % len(s.config.GetNamesOrAddrs())
+		var akeSendARight []byte
+		akeSendARight, s.session.TkRight, s.session.EskaRight = gake.KexAkeInitA(s.config.(*shared.ServConfig).GetDecodedRightKeyPublic())
 
-	msg := shared.Message{
-		ID:         shared.GenerateUniqueID(),
-		SenderID:   s.config.GetIndex(),
-		SenderName: s.config.GetName(),
-		Type:       s.config.GetMessageType(shared.AkeAMsg),
-		ReceiverID: rightIndex,
-		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
-	}
+		msg := shared.Message{
+			ID:         shared.GenerateUniqueID(),
+			SenderID:   s.config.GetIndex(),
+			SenderName: s.config.GetName(),
+			Type:       s.config.GetMessageType(shared.AkeAMsg),
+			ReceiverID: rightIndex,
+			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
+		}
 
-	s.transport.Send(msg)
+		s.transport.Send(msg)
 	}
 }
 
@@ -110,20 +110,10 @@ func (s *Session) akeA(akeBMsg shared.Message) {
 	akeSendA, _ := base64.StdEncoding.DecodeString(akeBMsg.Content)
 
 	var akeSendB []byte
-	if s.config.(*shared.ServConfig).IsLeftQKD() {
-		tkey, err := s.config.(*shared.ServConfig).GetDecodedLeftKeyQKD()
-		if err != nil {
-			fmt.Printf("[ERROR] Loading external left key: %v\n", err)
-			os.Exit(1)
-		}
-		s.session.KeyLeft = tkey
-		akeSendB = []byte("")
-	} else {
-				akeSendB, s.session.KeyLeft = gake.KexAkeSharedB(
-			akeSendA,
-			s.config.GetDecodedSecretKey(),
-			s.config.(*shared.ServConfig).GetDecodedLeftKeyPublic())
-	}
+	akeSendB, s.session.KeyLeft = gake.KexAkeSharedB(
+		akeSendA,
+		s.config.GetDecodedSecretKey(),
+		s.config.(*shared.ServConfig).GetDecodedLeftKeyPublic())
 	fmt.Println("[CRYPTO] Established shared key with left neighbor")
 
 	akeBMsg = shared.Message{
@@ -147,16 +137,7 @@ func (s *Session) akeA(akeBMsg shared.Message) {
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
 func (s *Session) akeB(msg shared.Message) {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
-	if s.config.(*shared.ServConfig).IsRightQKD() {
-		tkey, err := s.config.(*shared.ServConfig).GetDecodedRightKeyQKD()
-		if err != nil {
-			fmt.Printf("[ERROR] Loading external right key: %v\n", err)
-			os.Exit(1)
-		}
-		s.session.KeyRight = tkey
-	} else {
-		s.session.KeyRight = gake.KexAkeSharedA(akeSendB, s.session.TkRight, s.session.EskaRight, s.config.GetDecodedSecretKey())
-	}
+	s.session.KeyRight = gake.KexAkeSharedA(akeSendB, s.session.TkRight, s.session.EskaRight, s.config.GetDecodedSecretKey())
 	xi := checkLeftRightKeys(&s.session, s.config)
 
 	if !xi.IsEmpty() {
