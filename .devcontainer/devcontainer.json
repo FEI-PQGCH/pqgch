@@ -6,9 +6,8 @@
       "settings": {
         "terminal.integrated.shell.linux": "/bin/bash"
       },
-      "extensions": [
-        "golang.go"
-      ]
+      "extensions": ["golang.go"]
     }
-  }
+  },
+  "forwardPorts": [8080, 3000]
 }
