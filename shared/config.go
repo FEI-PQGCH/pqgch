@@ -79,19 +79,8 @@ func (c *ClusterConfig) GetMessageType(msgType int) int {
 	return msgType
 }
 
-const serverKeysPath = "../.keys/server_public_keys.json"
-
-var (
-	serverPubKeys       []string
-	serverDecodedPubKey [][gake.PkLen]byte
-)
-
 func (c *ServConfig) GetIndex() int {
 	return c.Index
-}
-
-func (c *ServConfig) GetKeys() []string {
-	return serverPubKeys
 }
 
 func (c *ServConfig) GetSecretKey() string {
@@ -183,10 +172,10 @@ func decodePublicKey(key string) [gake.PkLen]byte {
 	return decoded
 }
 
-func (c *ServConfig) GetDecodedLeftKeyQKD() ([gake.SsLen]byte, error){
+func (c *ServConfig) GetDecodedLeftKeyQKD() ([gake.SsLen]byte, error) {
 	return openAndDecodeQKDKey(c.GetLeftKey())
 }
-func (c *ServConfig) GetDecodedRightKeyQKD() ([gake.SsLen]byte, error){
+func (c *ServConfig) GetDecodedRightKeyQKD() ([gake.SsLen]byte, error) {
 	return openAndDecodeQKDKey(c.GetRightKey())
 }
 
