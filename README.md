@@ -1,39 +1,42 @@
 # Post-Quantum Group Chat using Authenticated Group Key Establishment
 
-This repository contains the code for the Post-Quantum Group Chat application.
+This repository contains the code for a post-quantum, authenticated group-chat application.
+It uses Kyber-GAKE for secure, quantum-resistant group key establishment among clients and cluster leaders.
+
 
 ## Directory Structure
 
-- `client/` - code for the cluster members.
+- `client/` - entrypoint for cluster member application.
   - `client.go`
     - Handles user input, connects to the server, and facilitates message broadcasting and receiving.
     - Implements cryptographic protocol initialization (AKE).
-  - `handler.go`
-    - Processes received messages using handlers for different types (AKE, Xi, etc.).
-    - Includes decryption for secure messages and displays plain text to the user.
-- `server/` - code for the servers, i.e. cluster leaders.
+- `cluster_protocol/`  - multi-party GAKE logic within each cluster.
+  - `protocol.go`
+- `leader_protocol/`   - GAKE logic among cluster-leaders.
+  - `protocol.go`
+- `server/` - entrypoint for cluster‐leader application.
   - `server.go`
     - Manages client connections, handles key exchange protocols, and routes messages within the cluster.
     - Establishes connections with neighboring servers for inter-cluster communication.
   - `routing.go`
     - Implements routing logic to send messages to specific clients, broadcast within the cluster, or forward to neighboring servers.
-  - `handler.go`
-    - Processes different message types (AKE, Broadcast, etc.) and forwards or broadcasts them as needed.
-    - Facilitates cryptographic key exchange and secure message handling.
-- `gake/` - Go wrapper code for the Kyber-GAKE protocol implementation in C.
-- `gakeutil/` - helper program for key generation and GAKE testing.
-- `shared/` - code shared between the client and server.
+- `gake/` - cgo wrapper for the Kyber-GAKE reference implementation.
+  - `wrapper.go`
+- `gakeutil/` - CLI for generating KEM keypairs (`make gen`).
+  - `gake.go`
+- `shared/` - common utilities for messaging, transport, config, and crypto.
   - `config.go`
     - Parses user and server configuration files into structured objects.
     - Provides utility functions for accessing cryptographic keys, cluster information, and neighbor details.
   - `message.go`
     - Defines the Message structure and constants for message types.
     - Implements serialization and transmission of messages over network connections.
-  - `protocol.go`
-    - Manages cryptographic operations, including AKE key exchanges, shared secret generation, and message encryption/decryption.
-    - Facilitates cluster-wide secure communication using shared secrets.
+  - `transport.go`
+  - `crypto.go`
+  - `etsi.go`
 - `.samples/` - sample configuration files for both the clients and servers.
-- `.config/` - directory for the configuration files for the clients and servers. IMPORTANT: you need to create this.
+- `.config/` - your `cXconf.json` and `sXconf.json` (copy/modify from `.samples/`). IMPORTANT: you need to create this.
+- `.keys/` - store your public‐keys and inter‐cluster key shares (copied from `.samples/`).
 
 ## Running the application
 
@@ -75,51 +78,49 @@ Then you can connect to the container with multiple shells using:
 docker exec -it pqgch-instance bash
 ```
 
-### Configuration
+### Configuration & Keys
 
-Before running the application, you need to set up the clients and servers. Create a `.config` directory and create some .json files. The files should be named cXconf.json and sXconf.json, where X is the number of the client or server you are configuring, starting from 1. The files should be in the same format as those in the `.samples` directory. Be careful to properly set the index in each of the config files. Client 1's index should be 0, client 2's 1 and so on. The same applies to servers.
+Before running the application, you need to set up the clients and servers. Create `.config/` and `.keys/` directories. Copy `*.json` from `.samples/` → `.config/` and adjust: `c1conf.json, c2conf.json, …` for clients and `s1conf.json, s2conf.json, …` for servers. Copy the corresponding `.public_keys.json` and `inter*.txt` into `.keys/`.The files should be named cXconf.json and sXconf.json, where X is the number of the client or server you are configuring, starting from 1. The files should be in the same format as those in the `.samples` directory. Be careful to properly set the index in each of the config files. Client 1's index should be 0, client 2's 1 and so on. The same applies to servers.
 
-#### Client config:
+#### Client config (`cXconf.json`):
 
 - `leadAddr` - the hostname of the cluster leader of the cluster this client belongs to.
 - `clusterConfig`
   - `names` - the names, or identifiers of ALL of the cluster members of the cluster this client belongs to.
   - `index` - the index of the client in the cluster.
   - `publicKeys` - the public keys of all of the cluster members of the cluster this client belongs to.
-  - `secretKey` - the secret key of this client.
+  - `secretKey` - Base64 Kyber secret key.
 
-#### Server config:
+#### Server config (`sXconf.json`):
 
-- `clusterConfig`
+- `clusterConfig` (same as client)
   - `names` - the names of the clients in the cluster this server is the leader of.
   - `index` - identifies this server in the cluster (e.g., 3 for "Server").
   - `publicKeys` - corresponds to the names list, providing each participant's public key for secure communication.
   - `secretKey` - the private key of the server for signing and decrypting data.
-- `servers` - the hostnames of other servers that are part of the communications.
-- `index` - identifies the server's position in the servers array.
-- `publicKeys` - A separate list of public keys for servers, similar to the clusterConfig.publicKeys but specific to server-to-server operations.
-- `secretKey` - The server's private key for server-to-server secure communications.
+- `keyLeft`   – optional QKD‐derived left neighbor secret.
+- `keyRight`  – path or Base64 for right neighbor secret.
+- `servers` - array of all leader addresses.
+- `index` - this server’s position in the `servers` list.
+- `secretKey` - Base64 Kyber secret key for this server.
 
-For generating KEM keypairs, use the provided key generation program:
-
+##### Generating KEM keypairs
 ```
-make gen n=3
+make gen n=3 # writes JSON‐encoded Base64 keypairs to stdout
 ```
 
 This will generate three KEM keypairs in a JSON friendly format, ready to copy and paste into the configuration files.
 
-To run the server, run the following command:
-
+##### Starting servers
 ```
-make sX
+make sX # start server X
 ```
 
 Where X is the number of the server you are starting.
 
-To run the client, run the following command:
-
+##### Starting clients
 ```
-make cX
+make cX # start client X
 ```
 
 Where X is the number of the client you are starting.
@@ -158,11 +159,12 @@ When everything is ready to go, the protocol initializes automatically at each o
       - Intra-cluster session keys are generated by the main protocol.
 
 - **Message Queue**
-  - Implemented message queue per client.
+  - Each server tracks per-client queues to handle offline/late messages.
 
 ### Run Time Dependencies
 
 #### Dependencies used in this project:
 
 - OpenSSL
-- C standard library(libc)
+- C standard library (libc)
+- Go 1.20+
