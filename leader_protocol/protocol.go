@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"os"
+	"log"
 	"pqgch/gake"
 	"pqgch/shared"
 	"slices"
@@ -61,8 +61,7 @@ func (s *Session) Init() {
 	if s.config.(*shared.ServConfig).IsRightQKD() {
 		rightKeyQKD, err := s.config.(*shared.ServConfig).GetDecodedRightKeyQKD()
 		if err != nil {
-			fmt.Printf("[ERROR] Loading external right key: %v\n", err)
-			os.Exit(1)
+			log.Fatalf("[ERROR] Loading external right key: %v\n", err)
 		}
 		s.session.KeyRight = rightKeyQKD
 	}
@@ -70,8 +69,7 @@ func (s *Session) Init() {
 	if s.config.(*shared.ServConfig).IsLeftQKD() {
 		leftKeyQKD, err := s.config.(*shared.ServConfig).GetDecodedLeftKeyQKD()
 		if err != nil {
-			fmt.Printf("[ERROR] Loading external left key: %v\n", err)
-			os.Exit(1)
+			log.Fatalf("[ERROR] Loading external left key: %v\n", err)
 		}
 		s.session.KeyLeft = leftKeyQKD
 	}
@@ -104,7 +102,7 @@ func (s *Session) GetKeyRef() *[32]byte {
 	return &s.session.SharedSecret
 }
 
-// Process the first message of 2-AKE, holding as a result either keyLeft or keyRight. The second message of 2-AKE is then sent.
+// Process the first message of 2-AKE, holding as a result keyLeft. The second message of 2-AKE is then sent.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
 func (s *Session) akeA(akeBMsg shared.Message) {
 	akeSendA, _ := base64.StdEncoding.DecodeString(akeBMsg.Content)
@@ -114,7 +112,7 @@ func (s *Session) akeA(akeBMsg shared.Message) {
 		akeSendA,
 		s.config.GetDecodedSecretKey(),
 		s.config.(*shared.ServConfig).GetDecodedLeftKeyPublic())
-	fmt.Println("[CRYPTO] Established shared key with left neighbor")
+	fmt.Println("[CRYPTO] Established 2-AKE shared key with left neighbor")
 
 	akeBMsg = shared.Message{
 		ID:         shared.GenerateUniqueID(),
@@ -133,11 +131,14 @@ func (s *Session) akeA(akeBMsg shared.Message) {
 	}
 }
 
-// Process the second message of 2-AKE, holding as a result either keyLeft or keyRight.
+// Process the second message of 2-AKE, holding as a result keyRight.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
 func (s *Session) akeB(msg shared.Message) {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	s.session.KeyRight = gake.KexAkeSharedA(akeSendB, s.session.TkRight, s.session.EskaRight, s.config.GetDecodedSecretKey())
+
+	fmt.Println("[CRYPTO] Established 2-AKE shared key with right neighbor")
+
 	xi := checkLeftRightKeys(&s.session, s.config)
 
 	if !xi.IsEmpty() {
@@ -189,7 +190,7 @@ func (s *Session) handleMessage(msg shared.Message) {
 // Also, try finalizing the protocol now, since the Xi we computed could have been the last one we needed.
 func checkLeftRightKeys(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
-		fmt.Println("[CRYPTO] Established shared keys with both neighbors")
+		fmt.Println("[CRYPTO] Established 2-AKE shared keys with both neighbors")
 		xcmMsg := getXiRiCommitmentMsg(session, config)
 		tryFinalizeProtocol(session, config)
 		return xcmMsg
@@ -250,16 +251,14 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 	if ok {
 		fmt.Println("[CRYPTO] Xs check: success")
 	} else {
-		fmt.Println("[CRYPTO] Xs check: fail")
-		os.Exit(1)
+		log.Fatalln("[CRYPTO] Xs check: fail")
 	}
 
 	ok = checkCommitments(len(config.GetNamesOrAddrs()), session.Xs, session.Rs, session.Commitments)
 	if ok {
 		fmt.Println("[CRYPTO] Commitments check: success")
 	} else {
-		fmt.Println("[CRYPTO] Commitments check: fail")
-		os.Exit(1)
+		log.Fatalln("[CRYPTO] Commitments check: fail")
 	}
 
 	pids := make([][gake.PidLen]byte, len(config.GetNamesOrAddrs()))
@@ -271,18 +270,17 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 	}
 
 	otherLeftKeys := shared.ComputeAllLeftKeys(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, pids)
-	sharedSecret, sessionID := computeSessionKeyAndID(otherLeftKeys, pids, len(config.GetNamesOrAddrs()))
+	sharedSecret := computeSharedSecret(otherLeftKeys, pids, len(config.GetNamesOrAddrs()))
 
-	fmt.Printf("[CRYPTO] SharedSecret%d: %02x...\n", config.GetIndex(), sharedSecret[:4])
-	fmt.Printf("[CRYPTO] SessionId%d: %02x...\n", config.GetIndex(), sessionID[:4])
+	fmt.Printf("[CRYPTO] Main Session Key established: %02x...\n", sharedSecret[:4])
 
 	session.SharedSecret = sharedSecret
 }
 
-// Compute the session key and ID from the left keys of the protocol participants.
+// Compute the shared secret from the left keys of the protocol participants.
 // Note that the session key itself is computed from the first numParties - 1 left keys.
-// Only the session ID is computed from all of the left keys.
-func computeSessionKeyAndID(otherLeftKeys [][32]byte, pids [][20]byte, numParties int) ([32]byte, [32]byte) {
+// NOTE: we do not compute the Session ID (sid), since we do not use it.
+func computeSharedSecret(otherLeftKeys [][32]byte, pids [][20]byte, numParties int) [32]byte {
 	// For the session key, we use the left keys of protocol participants 0..n-2, so we skip one.
 	sessionKeyTemp := make([]byte, 32*(numParties-1)+20*numParties)
 	for i := range numParties - 1 {
@@ -292,19 +290,9 @@ func computeSessionKeyAndID(otherLeftKeys [][32]byte, pids [][20]byte, numPartie
 		copy(sessionKeyTemp[(numParties-1)*32+i*20:(numParties-1)*32+(i+1)*20], pids[i][:])
 	}
 
-	// For the session ID, we use the left keys of all protocol participants
-	sessionIDTemp := make([]byte, 32*numParties+20*numParties)
-	for i := range numParties {
-		copy(sessionIDTemp[i*32:(i+1)*32], otherLeftKeys[i][:])
-	}
-	for i := range numParties {
-		copy(sessionIDTemp[len(otherLeftKeys)*32+i*20:len(otherLeftKeys)*32+(i+1)*20], pids[i][:])
-	}
-
 	sessionKey := sha256.Sum256(sessionKeyTemp)
-	sessionID := sha256.Sum256(sessionIDTemp)
 
-	return sessionKey, sessionID
+	return sessionKey
 }
 
 // We have received the commitments from other protocol participants. We also have received Rs and Xs from them.

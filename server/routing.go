@@ -87,7 +87,7 @@ func sendToClient(msg shared.Message, clients *Clients) {
 	client := &clients.cs[msg.ReceiverID]
 	if client.conn == nil {
 		client.queue.Add(msg)
-		fmt.Printf("[DEBUG] Route: stored message\n")
+		fmt.Printf("[ROUTE] Stored message\n")
 		return
 	}
 
@@ -112,7 +112,7 @@ func broadcastToCluster(msg shared.Message, clients *Clients) {
 
 		err := msg.Send(c.conn)
 		if err != nil {
-			fmt.Println("error sending message to client:", err)
+			fmt.Println("[ERROR] sending message to client:", err)
 			c.conn.Close()
 			return
 		}
@@ -143,7 +143,7 @@ func sendToLeader(address string, msg shared.Message) {
 		}
 		break
 	}
-	fmt.Printf("[INFO] Sending message %s to Leader %s\n", msg.TypeName(), address)
+	fmt.Printf("[ROUTE] Sending message %s to Leader %s\n", msg.TypeName(), address)
 
 	msg.Send(conn)
 }

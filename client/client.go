@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"pqgch/cluster_protocol"
 	"pqgch/shared"
@@ -22,8 +23,7 @@ func main() {
 	if *configFlag != "" {
 		config = shared.GetUserConfig(*configFlag)
 	} else {
-		fmt.Printf("[ERROR] Configuration file missing. Please provide it using the -config flag\n")
-		os.Exit(1)
+		log.Fatalln("[ERROR] Configuration file missing. Please provide it using the -config flag")
 	}
 	config = shared.GetUserConfig(*configFlag)
 

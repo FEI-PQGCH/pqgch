@@ -33,7 +33,7 @@ type TCPTransport struct {
 func NewTCPTransport(address string) (*TCPTransport, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %w", err)
+		return nil, fmt.Errorf("[ERROR] Failed to connect to server: %w", err)
 	}
 
 	t := &TCPTransport{
@@ -60,7 +60,7 @@ func (t *TCPTransport) Send(msg Message) {
 
 	msgData, err := json.Marshal(msg)
 	if err != nil {
-		fmt.Println("Error marshaling message:", err)
+		fmt.Println("[ERROR] Error marshaling message:", err)
 		return
 	}
 
@@ -68,7 +68,7 @@ func (t *TCPTransport) Send(msg Message) {
 
 	_, err = t.conn.Write(msgData)
 	if err != nil {
-		fmt.Println("Error sending message:", err)
+		fmt.Println("[ERROR] Error sending message:", err)
 	}
 }
 
@@ -84,7 +84,9 @@ func (t *TCPTransport) listen() {
 
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		fmt.Printf("[INFO] Received %s from %s \n", msg.TypeName(), msg.SenderName)
+		if msg.Type != TextMsg {
+			fmt.Printf("[ROUTE] Received %s from %s \n", msg.TypeName(), msg.SenderName)
+		}
 		handler(msg)
 	}
 }

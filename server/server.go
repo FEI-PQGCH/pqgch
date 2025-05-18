@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"pqgch/cluster_protocol"
@@ -24,25 +25,22 @@ func main() {
 	if *configFlag != "" {
 		config = shared.GetServConfig(*configFlag)
 	} else {
-		fmt.Printf("[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
-		os.Exit(1)
+		log.Fatalln("[ERROR] Configuration file missing. Please provide it using the -config flag.")
 	}
 
 	// Start listening at configured port.
 	_, port, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
-		fmt.Println("[ERROR] Error parsing self address from config:", err)
-		os.Exit(1)
+		log.Fatalln("[ERROR] Error parsing self address from config:", err)
 	}
 	address := fmt.Sprintf(":%s", port)
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		fmt.Println("[ERROR] Error starting TCP server:", err)
-		os.Exit(1)
+		log.Fatalln("[ERROR] Error starting TCP server:", err)
 	}
 	defer listener.Close()
-	fmt.Println("ROUTE: server listening on", address)
+	fmt.Println("[ROUTE]: server listening on", address)
 
 	// Create message tracker so we do not process the same message twice.
 	tracker := shared.NewMessageTracker()
@@ -124,7 +122,7 @@ func handleConnection(
 		if !tracker.AddMessage(msg.ID) {
 			return
 		}
-		fmt.Printf("[INFO] Received %s message from Leader\n", msg.TypeName())
+		fmt.Printf("[ROUTE] Received %s message from Leader\n", msg.TypeName())
 		if msg.Type == shared.TextMsg {
 			clusterTransport.Receive(msg)
 			broadcastToCluster(msg, clients)
@@ -176,7 +174,7 @@ func handleConnection(
 	// Handle messages from this client in an infinite loop.
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		fmt.Printf("[INFO] Received %s from %s \n", msg.TypeName(), msg.SenderName)
+		fmt.Printf("[ROUTE] Received %s from %s \n", msg.TypeName(), msg.SenderName)
 
 		if !tracker.AddMessage(msg.ID) {
 			continue

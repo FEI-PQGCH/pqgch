@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"log"
 	"os"
 	"pqgch/gake"
@@ -37,7 +36,7 @@ func (c *ClusterConfig) GetNamesOrAddrs() []string {
 }
 
 func (c *ClusterConfig) loadClusterKeys() []string {
-	data, err := ioutil.ReadFile(c.PublicKeys)
+	data, err := os.ReadFile(c.PublicKeys)
 	if err != nil {
 		log.Fatalf("couldn't load cluster public-keys from %s: %v", c.PublicKeys, err)
 	}
@@ -182,7 +181,7 @@ func (c *ServConfig) GetDecodedRightKeyQKD() ([gake.SsLen]byte, error) {
 func openAndDecodeQKDKey(filePath string) ([gake.SsLen]byte, error) {
 	var key [gake.SsLen]byte
 
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return key, err
 	}
@@ -192,7 +191,7 @@ func openAndDecodeQKDKey(filePath string) ([gake.SsLen]byte, error) {
 		return key, err
 	}
 	if len(decoded) < gake.SsLen {
-		return key, errors.New("[ERROR]cluster key file is too short")
+		return key, errors.New("[ERROR] Cluster key file is too short")
 	}
 	copy(key[:], decoded)
 	return key, nil
@@ -203,12 +202,12 @@ func GetUserConfig(path string) UserConfig {
 
 	configFile, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("Error opening config file at %s: %v", path, err)
+		log.Fatalf("[ERROR] Error opening config file at %s: %v", path, err)
 	}
 	defer configFile.Close()
 
 	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
-		log.Fatalf("Error parsing config file: %v", err)
+		log.Fatalf("[ERROR] Error parsing config file: %v", err)
 	}
 
 	return config
@@ -219,12 +218,12 @@ func GetServConfig(path string) ServConfig {
 
 	configFile, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("Error opening config file at %s: %v", path, err)
+		log.Fatalf("[ERROR] Error opening config file at %s: %v", path, err)
 	}
 	defer configFile.Close()
 
 	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
-		log.Fatalf("Error parsing config file: %v", err)
+		log.Fatalf("[ERROR] Error parsing config file: %v", err)
 	}
 	return config
 }

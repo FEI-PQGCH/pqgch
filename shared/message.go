@@ -53,14 +53,14 @@ const (
 func (m Message) Send(conn net.Conn) error {
 	msgData, err := json.Marshal(m)
 	if err != nil {
-		return fmt.Errorf("error marshaling message: %w", err)
+		return fmt.Errorf("[ERROR] Error marshaling message: %w", err)
 	}
 
 	msgData = append(msgData, '\n')
 
 	_, err = conn.Write(msgData)
 	if err != nil {
-		return fmt.Errorf("error sending message: %w", err)
+		return fmt.Errorf("[ERROR] Error sending message: %w", err)
 	}
 
 	return nil
@@ -95,14 +95,14 @@ func (mr *MessageReader) advance() {
 		var msg Message
 		err := json.Unmarshal(mr.scanner.Bytes(), &msg)
 		if err != nil {
-			fmt.Println("error unmarshaling message:", err)
+			fmt.Println("[ERROR] Error unmarshaling message:", err)
 		} else {
 			mr.nextMsg = &msg
 			mr.hasNext = true
 		}
 	} else {
 		if err := mr.scanner.Err(); err != nil {
-			fmt.Println("error reading from connection:", err)
+			fmt.Println("[ERROR] error reading from connection:", err)
 		} else {
 			fmt.Printf("[INFO] Connection closed\n")
 		}
