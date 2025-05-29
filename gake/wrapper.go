@@ -1,7 +1,7 @@
 package gake
 
 /*
-#cgo CFLAGS: -I./kyber-gake/ref -Wall -Wextra -Wpedantic -Werror -Wshadow -Wpointer-arith -O3 -fwrapv
+#cgo CFLAGS: -I./kyber-gake/ref -Wall  -Wextra -Wpedantic -Werror  -Wshadow -Wpointer-arith -O3 -fwrapv
 #cgo LDFLAGS: -L./kyber-gake/ref -lssl -lcrypto
 
 #include "gake.c"
@@ -33,14 +33,16 @@ import (
 )
 
 const (
-	PkLen    = 1184
-	SkLen    = 2400
-	CtKemLen = 1088
+	PkLen    = 1568
+	SkLen    = 3168
+	CtKemLen = 1568
 	CtDemLen = 36
 	TagLen   = 16
 	SsLen    = 32
 	CoinLen  = 44
 	PidLen   = 20
+	AkeSendB = 2 * CtKemLen
+	AkeSendA = PkLen + CtKemLen
 )
 
 type KemKeyPair struct {
@@ -66,9 +68,9 @@ func GetKemKeyPair() KemKeyPair {
 }
 
 func KexAkeInitA(pkb [PkLen]byte) ([]byte, []byte, []byte) {
-	var ake_senda [2272]byte
+	var ake_senda [AkeSendA]byte
 	var tk [SsLen]byte
-	var eska [2400]byte
+	var eska [SkLen]byte
 
 	C.kex_ake_initA(
 		(*C.uchar)(unsafe.Pointer(&ake_senda[0])),
@@ -79,8 +81,8 @@ func KexAkeInitA(pkb [PkLen]byte) ([]byte, []byte, []byte) {
 	return ake_senda[:], tk[:], eska[:]
 }
 
-func KexAkeSharedB(ake_senda []byte, skb []byte, pka [1184]byte) ([]byte, [32]byte) {
-	var ake_sendb [2176]byte
+func KexAkeSharedB(ake_senda []byte, skb []byte, pka [PkLen]byte) ([]byte, [32]byte) {
+	var ake_sendb [AkeSendB]byte
 	var kb [SsLen]byte
 
 	C.kex_ake_sharedB(

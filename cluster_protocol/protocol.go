@@ -334,7 +334,7 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config shared.ConfigAccessor
 // Compute the commitment as Kyber Public Key Encryption of Xi, Ri and i.
 func computeCommitment(
 	i int,
-	public_key [1184]byte,
+	public_key [1568]byte,
 	xi [32]byte,
 	ri [44]byte) gake.Commitment {
 	var xi_i [36]byte
@@ -408,7 +408,7 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 func checkCommitments(
 	numParties int,
 	xs [][32]byte,
-	public_keys [][1184]byte,
+	public_keys [][1568]byte,
 	coins [][44]byte,
 	commitments []gake.Commitment) bool {
 	for i := range numParties {
