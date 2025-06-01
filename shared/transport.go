@@ -14,13 +14,9 @@ type Transport interface {
 
 type BaseTransport struct {
 	MessageHandler func(Message)
-	mu             sync.Mutex
 }
 
 func (t *BaseTransport) SetMessageHandler(handler func(Message)) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	t.MessageHandler = handler
 }
 
@@ -28,6 +24,7 @@ type TCPTransport struct {
 	conn net.Conn
 	BaseTransport
 	cond *sync.Cond
+	mu   sync.Mutex
 }
 
 func NewTCPTransport(address string) (*TCPTransport, error) {

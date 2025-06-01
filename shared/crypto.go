@@ -119,7 +119,7 @@ func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, config ConfigAccessor, clus
 	tag := mac.Sum(nil)
 	ciphertext = append(ciphertext, tag...)
 	msg := Message{
-		ID:         GenerateUniqueID(),
+		ID:         UniqueID(),
 		SenderID:   -1,
 		SenderName: config.GetName(),
 		Type:       KeyMsg,

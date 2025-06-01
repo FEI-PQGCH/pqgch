@@ -86,7 +86,7 @@ func (s *Session) Init() {
 		akeSendARight, s.session.TkRight, s.session.EskaRight = gake.KexAkeInitA(s.config.(*shared.ServConfig).GetDecodedRightKeyPublic())
 
 		msg := shared.Message{
-			ID:         shared.GenerateUniqueID(),
+			ID:         shared.UniqueID(),
 			SenderID:   s.config.GetIndex(),
 			SenderName: s.config.GetName(),
 			Type:       s.config.GetMessageType(shared.AkeAMsg),
@@ -115,7 +115,7 @@ func (s *Session) akeA(akeBMsg shared.Message) {
 	fmt.Println("[CRYPTO] Established 2-AKE shared key with left neighbor")
 
 	akeBMsg = shared.Message{
-		ID:         shared.GenerateUniqueID(),
+		ID:         shared.UniqueID(),
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.GetName(),
 		Type:       s.config.GetMessageType(shared.AkeBMsg),
@@ -221,7 +221,7 @@ func getXiRiCommitmentMsg(session *CryptoSession, config shared.ConfigAccessor) 
 	buffer.Write(ri[:])
 
 	msg := shared.Message{
-		ID:         shared.GenerateUniqueID(),
+		ID:         shared.UniqueID(),
 		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
 		Type:       config.GetMessageType(shared.XiRiCommitmentMsg),

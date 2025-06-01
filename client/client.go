@@ -30,7 +30,7 @@ func main() {
 	// Create TCP transport (connection to server).
 	transport, _ := shared.NewTCPTransport(config.LeadAddr)
 	loginMsg := shared.Message{
-		ID:         shared.GenerateUniqueID(),
+		ID:         shared.UniqueID(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		Type:       shared.LoginMsg,

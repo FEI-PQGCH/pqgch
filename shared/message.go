@@ -66,7 +66,7 @@ func (m Message) Send(conn net.Conn) error {
 	return nil
 }
 
-func GenerateUniqueID() string {
+func UniqueID() string {
 	bytes := make([]byte, 16)
 	_, err := rand.Read(bytes)
 	if err != nil {
@@ -88,20 +88,20 @@ func NewMessageReader(conn net.Conn) *MessageReader {
 	return reader
 }
 
-func (mr *MessageReader) advance() {
-	mr.nextMsg = nil
-	mr.hasNext = false
-	if mr.scanner.Scan() {
+func (reader *MessageReader) advance() {
+	reader.nextMsg = nil
+	reader.hasNext = false
+	if reader.scanner.Scan() {
 		var msg Message
-		err := json.Unmarshal(mr.scanner.Bytes(), &msg)
+		err := json.Unmarshal(reader.scanner.Bytes(), &msg)
 		if err != nil {
 			fmt.Println("[ERROR] Error unmarshaling message:", err)
 		} else {
-			mr.nextMsg = &msg
-			mr.hasNext = true
+			reader.nextMsg = &msg
+			reader.hasNext = true
 		}
 	} else {
-		if err := mr.scanner.Err(); err != nil {
+		if err := reader.scanner.Err(); err != nil {
 			fmt.Println("[ERROR] error reading from connection:", err)
 		} else {
 			fmt.Printf("[INFO] Connection closed\n")
@@ -109,16 +109,16 @@ func (mr *MessageReader) advance() {
 	}
 }
 
-func (mr *MessageReader) HasMessage() bool {
-	mr.advance()
-	return mr.hasNext
+func (reader *MessageReader) HasMessage() bool {
+	reader.advance()
+	return reader.hasNext
 }
 
-func (mr *MessageReader) GetMessage() Message {
-	if mr.nextMsg == nil {
+func (reader *MessageReader) GetMessage() Message {
+	if reader.nextMsg == nil {
 		panic("getMsg called when no valid message is available")
 	}
-	msg := *mr.nextMsg
+	msg := *reader.nextMsg
 	return msg
 }
 
@@ -130,7 +130,7 @@ func (m Message) IsEmpty() bool {
 // We track them so we do not process the same message twice.
 // We distinguish messages according to their ID.
 type MessageTracker struct {
-	mu       sync.Mutex
+	lock     sync.Mutex
 	messages map[string]bool
 }
 
@@ -141,29 +141,29 @@ func NewMessageTracker() *MessageTracker {
 }
 
 // AddMessage adds a message ID to the tracker and returns true if it was not already present.
-func (mt *MessageTracker) AddMessage(msgID string) bool {
-	mt.mu.Lock()
-	defer mt.mu.Unlock()
-	if mt.messages[msgID] {
+func (tracker *MessageTracker) AddMessage(msgID string) bool {
+	tracker.lock.Lock()
+	defer tracker.lock.Unlock()
+	if tracker.messages[msgID] {
 		return false
 	}
-	mt.messages[msgID] = true
+	tracker.messages[msgID] = true
 	return true
 }
 
 // Message Queue for storing messages that we could not deliver.
 type MessageQueue []Message
 
-func (mq *MessageQueue) Add(msg Message) {
-	*mq = append(*mq, msg)
+func (queue *MessageQueue) Add(msg Message) {
+	*queue = append(*queue, msg)
 }
 
-func (mq *MessageQueue) Remove(msg Message) {
+func (queue *MessageQueue) Remove(msg Message) {
 	tmp := MessageQueue{}
-	for _, x := range *mq {
+	for _, x := range *queue {
 		if x.ID != msg.ID {
 			tmp.Add(x)
 		}
 	}
-	*mq = tmp
+	*queue = tmp
 }
