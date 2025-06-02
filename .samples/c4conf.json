@@ -3,7 +3,7 @@
   "clusterConfig": {
     "names": [
       "User1",
-      "Server"
+      "Server2"
     ],
     "index": 0,
     "publicKeys": "../.keys/cluster2_public_keys.json",

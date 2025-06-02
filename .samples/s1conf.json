@@ -4,7 +4,7 @@
       "Alice",
       "Bob",
       "Charlie",
-      "Server"
+      "Server1"
     ],
     "index": 3,
     "publicKeys": "../.keys/cluster1_public_keys.json",
