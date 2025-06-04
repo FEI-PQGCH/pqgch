@@ -1,0 +1,4 @@
+1. Doriesit concurrency pri sessionoch (Init a SendText)
+2. Moznost nastavit security parameters cez flagy (alebo nieco ine, ale jednoduche)
+3. QKD - pripravit kostru (GetKeys a GetKeys with IDs), dat potom vediet Fabsicovi
+4. Behom juna zazdielat repozitar 
