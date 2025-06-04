@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"pqgch/cluster_protocol"
 	"pqgch/shared"
-	"strings"
 )
 
 var config shared.UserConfig
@@ -24,7 +22,11 @@ func main() {
 	outputCh := make(chan string)
 	shared.HijackStdout(outputCh)
 
-	transport, _ := shared.NewTCPTransport(config.LeadAddr)
+	transport, err := shared.NewTCPTransport(config.LeadAddr)
+	if err != nil {
+		fmt.Fprintf(os.Stdout, "[ERROR] Unable to connect to server: %v\n", err)
+		os.Exit(1)
+	}
 	loginMsg := shared.Message{
 		ID:         shared.UniqueID(),
 		SenderID:   config.Index,
@@ -34,51 +36,90 @@ func main() {
 	}
 	transport.Send(loginMsg)
 
-	// Create and initialize the cluster session.
+	// Create and initialize cluster session.
 	session := cluster_protocol.NewSession(transport, &config.ClusterConfig)
 	session.Init()
 
-	// Our in‐memory "scrollback" of all lines we want to display.
+	// Prepare scrollable log and input buffer.
 	var logs []string
+	scrollOffset := 0
+	var inputBuffer []rune
 
-	// 1) Goroutine: capture anything that got printed/logged internally, then Redraw.
+	// Helper to compute maxOffset given current logs.
+	computeMaxOffset := func() int {
+		rows, _ := shared.GetTerminalSize()
+		limit := rows - 1
+		if limit < 0 {
+			limit = 0
+		}
+		n := len(logs)
+		if n <= limit {
+			return 0
+		}
+		return n - limit
+	}
+
+	// Goroutine: capture internal stdout lines, append, redraw.
 	go func() {
 		for line := range outputCh {
 			logs = append(logs, line)
-			shared.Redraw(logs)
+			scrollOffset = computeMaxOffset()
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
 		}
 	}()
 
-	// 2) Goroutine: capture incoming chat messages, color them green, append, and Redraw.
+	// Goroutine: capture incoming chat messages (green), append, redraw.
 	go func() {
 		for msg := range session.Received {
 			colored := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
 			logs = append(logs, colored)
-			shared.Redraw(logs)
+			scrollOffset = computeMaxOffset()
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
 		}
 	}()
 
-	// 3) Goroutine: read user input from stdin and push onto a channel.
-	inputCh := make(chan string)
-	go func() {
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			text, _ := reader.ReadString('\n')
-			text = strings.TrimSpace(text)
-			if text != "" {
-				inputCh <- text
+	// Start raw-mode input loop: ENTER→lineCh, arrows→scrollCh, chars/backspace→charCh.
+	lineCh := make(chan string)
+	scrollCh := make(chan int)
+	charCh := make(chan rune)
+	shared.StartInputLoop(lineCh, scrollCh, charCh)
+
+	// Initial empty draw.
+	shared.Redraw(logs, scrollOffset, "")
+
+	// Main loop: handle ENTER, arrows, and character input.
+	for {
+		select {
+		case _ = <-lineCh:
+			text := string(inputBuffer)
+			inputBuffer = inputBuffer[:0]
+			colored := fmt.Sprintf("\033[32mYou: %s\033[0m", text)
+			logs = append(logs, colored)
+			session.SendText(text)
+			scrollOffset = computeMaxOffset()
+			shared.Redraw(logs, scrollOffset, "")
+
+		case delta := <-scrollCh:
+			newOffset := scrollOffset + delta
+			maxOffset := computeMaxOffset()
+			if newOffset < 0 {
+				newOffset = 0
 			}
+			if newOffset > maxOffset {
+				newOffset = maxOffset
+			}
+			scrollOffset = newOffset
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
+
+		case r := <-charCh:
+			if r == 0 {
+				if len(inputBuffer) > 0 {
+					inputBuffer = inputBuffer[:len(inputBuffer)-1]
+				}
+			} else {
+				inputBuffer = append(inputBuffer, r)
+			}
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
 		}
-	}()
-
-	// 4) Initial draw (empty).
-	shared.Redraw(logs)
-
-	for text := range inputCh {
-		// Color "You: …" green, append to logs, send to server, Redraw.
-		colored := fmt.Sprintf("\033[32mYou: %s\033[0m", text)
-		logs = append(logs, colored)
-		session.SendText(text)
-		shared.Redraw(logs)
 	}
 }

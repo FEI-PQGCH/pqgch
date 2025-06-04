@@ -23,19 +23,18 @@ type winsize struct {
 }
 
 // GetTerminalSize returns the terminal’s number of rows and columns.
-// If the ioctl fails, it defaults to 24 rows.
-func GetTerminalSize() (int, int, error) {
+func GetTerminalSize() (int, int) {
 	ws := &winsize{}
-	ret, _, errno := syscall.Syscall(
+	r1, _, _ := syscall.Syscall(
 		syscall.SYS_IOCTL,
 		uintptr(oldStdout.Fd()),
 		uintptr(syscall.TIOCGWINSZ),
 		uintptr(unsafe.Pointer(ws)),
 	)
-	if int(ret) == -1 {
-		return 0, 0, errno
+	if int(r1) == -1 {
+		return 24, 80
 	}
-	return int(ws.Row), int(ws.Col), nil
+	return int(ws.Row), int(ws.Col)
 }
 
 // clearScreen sends the ANSI sequence to clear the entire terminal
@@ -47,29 +46,38 @@ func clearScreen() {
 // Redraw repaints the entire "buffer" of logs: first it displays the last (rows – 1) lines
 // from logs, then draws a bold ">" prompt on the last row. Each entry in logs may
 // already contain ANSI color codes.
-func Redraw(logs []string) {
-	rows, _, err := GetTerminalSize()
-	if err != nil {
-		rows = 24
-	}
-	clearScreen()
-
-	// Reserve the top (rows – 1) lines for log history.
+func Redraw(logs []string, scrollOffset int, inputBuffer string) {
+	rows, _ := GetTerminalSize()
 	limit := rows - 1
 	if limit < 0 {
 		limit = 0
 	}
 
-	start := 0
-	if len(logs) > limit {
-		start = len(logs) - limit
-	}
-	for i := start; i < len(logs); i++ {
-		fmt.Fprintln(oldStdout, logs[i])
+	clearScreen()
+
+	n := len(logs)
+	if n <= limit {
+		for _, line := range logs {
+			fmt.Fprintln(oldStdout, line)
+		}
+	} else {
+		// Clamp scrollOffset in [0, n-limit].
+		if scrollOffset < 0 {
+			scrollOffset = 0
+		}
+		maxOffset := n - limit
+		if scrollOffset > maxOffset {
+			scrollOffset = maxOffset
+		}
+		start := scrollOffset
+		end := scrollOffset + limit
+		for i := start; i < end; i++ {
+			fmt.Fprintln(oldStdout, logs[i])
+		}
 	}
 
-	// Draw a bold ">" prompt on the last row.
-	fmt.Fprintf(oldStdout, "\033[%d;1H\033[1m> \033[0m", rows)
+	// Bold prompt + inputBuffer on last line.
+	fmt.Fprintf(oldStdout, "\033[%d;1H\033[1m> %s\033[0m", rows, inputBuffer)
 }
 
 // HijackStdout redirects os.Stdout (and the default log output) into a pipe
@@ -91,6 +99,82 @@ func HijackStdout(outputCh chan<- string) {
 				return
 			}
 			outputCh <- strings.TrimSuffix(line, "\n")
+		}
+	}()
+}
+
+type termios struct {
+	Iflag, Oflag, Cflag, Lflag uint32
+	Cc                         [20]byte
+	Ispeed, Ospeed             uint32
+}
+
+var oldTermios termios
+
+func enableRawMode() {
+	fd := int(os.Stdin.Fd())
+	var newt termios
+
+	syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(fd),
+		uintptr(syscall.TCGETS),
+		uintptr(unsafe.Pointer(&oldTermios)),
+	)
+
+	newt = oldTermios
+	newt.Lflag &^= (syscall.ICANON | syscall.ECHO)
+	newt.Cc[syscall.VMIN] = 1
+	newt.Cc[syscall.VTIME] = 0
+
+	syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(fd),
+		uintptr(syscall.TCSETS),
+		uintptr(unsafe.Pointer(&newt)),
+	)
+}
+
+func disableRawMode() {
+	fd := int(os.Stdin.Fd())
+	syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(fd),
+		uintptr(syscall.TCSETS),
+		uintptr(unsafe.Pointer(&oldTermios)),
+	)
+}
+
+func StartInputLoop(lineCh chan<- string, scrollCh chan<- int, charCh chan<- rune) {
+	enableRawMode()
+	go func() {
+		defer disableRawMode()
+
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			r, _, err := reader.ReadRune()
+			if err != nil {
+				return
+			}
+			switch r {
+			case '\r', '\n':
+				lineCh <- ""
+			case 127:
+				charCh <- 0
+			case '\x1b':
+				_, _, err2 := reader.ReadRune()
+				if err2 != nil {
+					continue
+				}
+				third, _, err3 := reader.ReadRune()
+				if err3 != nil {
+					continue
+				}
+				if third == 'A' {
+					scrollCh <- -1
+				} else if third == 'B' {
+					scrollCh <- +1
+				}
+			default:
+				charCh <- r
+			}
 		}
 	}()
 }

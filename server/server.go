@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"strings"
 
 	"pqgch/cluster_protocol"
 	"pqgch/leader_protocol"
@@ -29,31 +27,30 @@ func main() {
 
 	_, port, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
-		fmt.Fprintln(os.Stdout, "[ERROR] Error parsing self address from config:", err)
+		fmt.Fprintf(os.Stdout, "[ERROR] Error parsing self address from config: %v\n", err)
 		os.Exit(1)
 	}
 	address := fmt.Sprintf(":%s", port)
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		fmt.Fprintln(os.Stdout, "[ERROR] Error starting TCP server:", err)
+		fmt.Fprintf(os.Stdout, "[ERROR] Error starting TCP server: %v\n", err)
 		os.Exit(1)
 	}
 	defer listener.Close()
-	fmt.Fprintln(os.Stdout, "[ROUTE]: server listening on", address)
+	fmt.Fprintf(os.Stdout, "[ROUTE]: server listening on %s\n", address)
 
-	// Create message tracker so we do not process the same message twice.
+	// Create message tracker and in-memory client registry.
 	tracker := shared.NewMessageTracker()
-
-	// Initialize in-memory client registry.
 	clients := newClients(&config.ClusterConfig)
 
-	// Initialize leader transport and session.
+	// Initialize leader transport/session.
 	leaderTransport := newLeaderTransport()
 	leaderSession := leader_protocol.NewSession(leaderTransport, &config)
 	msgsLeader := make(chan shared.Message)
 	go transportManager(leaderTransport, msgsLeader)
 
+	// Initialize cluster transport/session.
 	clusterTransport := newClusterTransport(clients)
 	clusterSession := cluster_protocol.NewLeaderSession(
 		clusterTransport,
@@ -66,60 +63,95 @@ func main() {
 	leaderSession.Init()
 	clusterSession.Init()
 
-	// Goroutine for reading internal logs and redrawing TUI.
 	var logs []string
+	scrollOffset := 0
+	var inputBuffer []rune
+
+	computeMaxOffset := func() int {
+		rows, _ := shared.GetTerminalSize()
+		limit := rows - 1
+		if limit < 0 {
+			limit = 0
+		}
+		n := len(logs)
+		if n <= limit {
+			return 0
+		}
+		return n - limit
+	}
+
 	go func() {
 		for line := range outputCh {
 			logs = append(logs, line)
-			shared.Redraw(logs)
+			scrollOffset = computeMaxOffset()
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
 		}
 	}()
 
-	// Goroutine for printing out received cluster messages in TUI.
+	// Goroutine: capture incoming cluster messages, append, redraw.
 	go func() {
 		for msg := range clusterSession.Received {
-			// Color received message green and append to logs.
 			colored := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
 			logs = append(logs, colored)
-			shared.Redraw(logs)
+			scrollOffset = computeMaxOffset()
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
 		}
 	}()
 
-	// Goroutine for handling operator input from stdin.
-	inputCh := make(chan string)
-	go func() {
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			text, _ := reader.ReadString('\n')
-			text = strings.TrimSpace(text)
-			if text != "" {
-				inputCh <- text
-			}
-		}
-	}()
+	lineCh := make(chan string)
+	scrollCh := make(chan int)
+	charCh := make(chan rune)
+	shared.StartInputLoop(lineCh, scrollCh, charCh)
 
-	// Initial TUI draw.
-	shared.Redraw(logs)
+	// Initial empty draw.
+	shared.Redraw(logs, scrollOffset, "")
 
-	// Goroutine for accepting incoming TCP connections.
+	// Accept connections in a goroutine.
 	go func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				fmt.Fprintln(os.Stdout, "[ERROR] Error accepting connection:", err)
+				fmt.Fprintf(os.Stdout, "[ERROR] Error accepting connection: %v\n", err)
 				continue
 			}
 			go handleConnection(clients, conn, tracker, msgsCluster, msgsLeader)
 		}
 	}()
 
-	// Main loop: wait for operator input to send messages via clusterSession.
-	for text := range inputCh {
-		// Color "You: …" green, append to logs, and send to cluster.
-		colored := fmt.Sprintf("\033[32mYou: %s\033[0m", text)
-		logs = append(logs, colored)
-		clusterSession.SendText(text)
-		shared.Redraw(logs)
+	// Main loop: handle ENTER, arrows, and character input.
+	for {
+		select {
+		case <-lineCh:
+			text := string(inputBuffer)
+			inputBuffer = inputBuffer[:0]
+			colored := fmt.Sprintf("\033[32mYou: %s\033[0m", text)
+			logs = append(logs, colored)
+			clusterSession.SendText(text)
+			scrollOffset = computeMaxOffset()
+			shared.Redraw(logs, scrollOffset, "")
+
+		case delta := <-scrollCh:
+			newOffset := scrollOffset + delta
+			maxOffset := computeMaxOffset()
+			if newOffset < 0 {
+				newOffset = 0
+			}
+			if newOffset > maxOffset {
+				newOffset = maxOffset
+			}
+			scrollOffset = newOffset
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
+
+		case r := <-charCh:
+			if r == 0 {
+				if len(inputBuffer) > 0 {
+					inputBuffer = inputBuffer[:len(inputBuffer)-1]
+				}
+			} else {
+				inputBuffer = append(inputBuffer, r)
+			}
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
+		}
 	}
 }
 
@@ -162,12 +194,13 @@ func handleConnection(
 
 	// Handle client login.
 	fmt.Fprintf(os.Stdout, "[INFO] New client (%s, %s) joined\n", msg.SenderName, conn.RemoteAddr())
+	clientID := msg.SenderID
 
-	clients.makeOnline(msg.SenderID, conn)
-	defer clients.makeOffline(msg.SenderID)
+	clients.makeOnline(clientID, conn)
+	defer clients.makeOffline(clientID)
 
 	// Send to the newly connected client every message from its queue.
-	clients.sendQueued(msg.SenderID)
+	clients.sendQueued(clientID)
 
 	// Handle messages from this client in an infinite loop.
 	for reader.HasMessage() {
