@@ -118,7 +118,7 @@ type termios struct {
 
 var oldTermios termios
 
-func enableRawMode() {
+func EnableRawMode() {
 	fd := int(os.Stdin.Fd())
 	var newt termios
 
@@ -149,39 +149,36 @@ func disableRawMode() {
 	)
 }
 
-func StartInputLoop(lineCh chan<- string, scrollCh chan<- int, charCh chan<- rune) {
-	enableRawMode()
-	go func() {
-		defer disableRawMode()
+func InputLoop(lineCh chan<- string, scrollCh chan<- int, charCh chan<- rune) {
+	defer disableRawMode()
 
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			r, _, err := reader.ReadRune()
-			if err != nil {
-				return
-			}
-			switch r {
-			case '\r', '\n':
-				lineCh <- ""
-			case 127:
-				charCh <- 0
-			case '\x1b':
-				_, _, err2 := reader.ReadRune()
-				if err2 != nil {
-					continue
-				}
-				third, _, err3 := reader.ReadRune()
-				if err3 != nil {
-					continue
-				}
-				if third == 'A' {
-					scrollCh <- -1
-				} else if third == 'B' {
-					scrollCh <- +1
-				}
-			default:
-				charCh <- r
-			}
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		r, _, err := reader.ReadRune()
+		if err != nil {
+			return
 		}
-	}()
+		switch r {
+		case '\r', '\n':
+			lineCh <- ""
+		case 127:
+			charCh <- 0
+		case '\x1b':
+			_, _, err2 := reader.ReadRune()
+			if err2 != nil {
+				continue
+			}
+			third, _, err3 := reader.ReadRune()
+			if err3 != nil {
+				continue
+			}
+			if third == 'A' {
+				scrollCh <- -1
+			} else if third == 'B' {
+				scrollCh <- +1
+			}
+		default:
+			charCh <- r
+		}
+	}
 }

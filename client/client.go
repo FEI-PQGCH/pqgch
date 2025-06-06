@@ -45,30 +45,13 @@ func main() {
 	scrollOffset := 0
 	var inputBuffer []rune
 
-	// Goroutine: capture internal stdout lines, append, redraw.
-	go func() {
-		for line := range outputCh {
-			logs = append(logs, line)
-			scrollOffset = shared.ComputeMaxOffset(logs)
-			shared.Redraw(logs, scrollOffset, string(inputBuffer))
-		}
-	}()
-
-	// Goroutine: capture incoming chat messages (green), append, redraw.
-	go func() {
-		for msg := range session.Received {
-			colored := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
-			logs = append(logs, colored)
-			scrollOffset = shared.ComputeMaxOffset(logs)
-			shared.Redraw(logs, scrollOffset, string(inputBuffer))
-		}
-	}()
-
 	// Start raw-mode input loop: ENTER→lineCh, arrows→scrollCh, chars/backspace→charCh.
 	lineCh := make(chan string)
 	scrollCh := make(chan int)
 	charCh := make(chan rune)
-	shared.StartInputLoop(lineCh, scrollCh, charCh)
+
+	shared.EnableRawMode()
+	go shared.InputLoop(lineCh, scrollCh, charCh)
 
 	// Initial empty draw.
 	shared.Redraw(logs, scrollOffset, "")
@@ -76,7 +59,7 @@ func main() {
 	// Main loop: handle ENTER, arrows, and character input.
 	for {
 		select {
-		case _ = <-lineCh:
+		case <-lineCh:
 			text := string(inputBuffer)
 			inputBuffer = inputBuffer[:0]
 			colored := fmt.Sprintf("\033[32mYou: %s\033[0m", text)
@@ -105,6 +88,17 @@ func main() {
 			} else {
 				inputBuffer = append(inputBuffer, r)
 			}
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
+
+		case line := <-outputCh:
+			logs = append(logs, line)
+			scrollOffset = shared.ComputeMaxOffset(logs)
+			shared.Redraw(logs, scrollOffset, string(inputBuffer))
+
+		case msg := <-session.Received:
+			colored := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
+			logs = append(logs, colored)
+			scrollOffset = shared.ComputeMaxOffset(logs)
 			shared.Redraw(logs, scrollOffset, string(inputBuffer))
 		}
 	}
