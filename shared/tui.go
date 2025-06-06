@@ -22,6 +22,16 @@ type winsize struct {
 	Ypixel uint16
 }
 
+func ComputeMaxOffset(logs []string) int {
+	rows, _ := GetTerminalSize()
+	limit := max(rows-1, 0)
+	n := len(logs)
+	if n <= limit {
+		return 0
+	}
+	return n - limit
+}
+
 // GetTerminalSize returns the terminal’s number of rows and columns.
 func GetTerminalSize() (int, int) {
 	ws := &winsize{}
@@ -48,10 +58,7 @@ func clearScreen() {
 // already contain ANSI color codes.
 func Redraw(logs []string, scrollOffset int, inputBuffer string) {
 	rows, _ := GetTerminalSize()
-	limit := rows - 1
-	if limit < 0 {
-		limit = 0
-	}
+	limit := max(rows-1, 0)
 
 	clearScreen()
 

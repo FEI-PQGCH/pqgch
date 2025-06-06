@@ -67,23 +67,10 @@ func main() {
 	scrollOffset := 0
 	var inputBuffer []rune
 
-	computeMaxOffset := func() int {
-		rows, _ := shared.GetTerminalSize()
-		limit := rows - 1
-		if limit < 0 {
-			limit = 0
-		}
-		n := len(logs)
-		if n <= limit {
-			return 0
-		}
-		return n - limit
-	}
-
 	go func() {
 		for line := range outputCh {
 			logs = append(logs, line)
-			scrollOffset = computeMaxOffset()
+			scrollOffset = shared.ComputeMaxOffset(logs)
 			shared.Redraw(logs, scrollOffset, string(inputBuffer))
 		}
 	}()
@@ -93,7 +80,7 @@ func main() {
 		for msg := range clusterSession.Received {
 			colored := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
 			logs = append(logs, colored)
-			scrollOffset = computeMaxOffset()
+			scrollOffset = shared.ComputeMaxOffset(logs)
 			shared.Redraw(logs, scrollOffset, string(inputBuffer))
 		}
 	}()
@@ -127,12 +114,12 @@ func main() {
 			colored := fmt.Sprintf("\033[32mYou: %s\033[0m", text)
 			logs = append(logs, colored)
 			clusterSession.SendText(text)
-			scrollOffset = computeMaxOffset()
+			scrollOffset = shared.ComputeMaxOffset(logs)
 			shared.Redraw(logs, scrollOffset, "")
 
 		case delta := <-scrollCh:
 			newOffset := scrollOffset + delta
-			maxOffset := computeMaxOffset()
+			maxOffset := shared.ComputeMaxOffset(logs)
 			if newOffset < 0 {
 				newOffset = 0
 			}
