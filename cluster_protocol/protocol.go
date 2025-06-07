@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"pqgch/gake"
-	"pqgch/shared"
+	"pqgch/util"
 )
 
 // CryptoSession contains the cryptographic data used for computing the main session key.
@@ -27,7 +27,7 @@ type CryptoSession struct {
 	// to encrypt and distribute the earlier-established main session key. The main session key is created by the leader_protocol.
 }
 
-func NewCryptoSession(config shared.ConfigAccessor) CryptoSession {
+func NewCryptoSession(config util.ConfigAccessor) CryptoSession {
 	return CryptoSession{
 		Xs:          make([][gake.SsLen]byte, len(config.GetNamesOrAddrs())),
 		OnSharedKey: func() {},
@@ -42,21 +42,21 @@ func NewCryptoSession(config shared.ConfigAccessor) CryptoSession {
 // mainSessionKey contains the key used for encrypted text communication.
 // Received is a channel for sending decrypted text messages to client code.
 type Session struct {
-	transport      shared.Transport
-	config         shared.ConfigAccessor
+	transport      util.Transport
+	config         util.ConfigAccessor
 	session        CryptoSession
 	keyCiphertext  []byte
 	mainSessionKey *[32]byte
-	Received       chan shared.Message
+	Received       chan util.Message
 }
 
 // Create a new Cluster Member session. The Transport defines how the messages produced by the protocol will be routed.
-func NewSession(transport shared.Transport, config shared.ConfigAccessor) *Session {
+func NewSession(transport util.Transport, config util.ConfigAccessor) *Session {
 	s := &Session{
 		transport:      transport,
 		session:        NewCryptoSession(config),
 		config:         config,
-		Received:       make(chan shared.Message, 10),
+		Received:       make(chan util.Message, 10),
 		mainSessionKey: &[32]byte{},
 	}
 
@@ -65,7 +65,7 @@ func NewSession(transport shared.Transport, config shared.ConfigAccessor) *Sessi
 			fmt.Println("[CRYPTO] No key ciphertext, skipping")
 			return
 		}
-		recoveredKey, err := shared.DecryptAndCheckHMAC(s.keyCiphertext, s.session.SharedSecret)
+		recoveredKey, err := util.DecryptAndCheckHMAC(s.keyCiphertext, s.session.SharedSecret)
 
 		if err != nil {
 			fmt.Println("[ERROR] Failed decrypting key message:", err)
@@ -85,17 +85,17 @@ func NewSession(transport shared.Transport, config shared.ConfigAccessor) *Sessi
 // The Transport defines how the messages produced by the protocol will be routed.
 // keyRef is a reference to the main session key. We encrypt this key in the OnSharedKey handler.
 // It is assumed to already be established by the time we establish the cluster session key.
-func NewLeaderSession(transport shared.Transport, config shared.ConfigAccessor, keyRef *[32]byte) *Session {
+func NewLeaderSession(transport util.Transport, config util.ConfigAccessor, keyRef *[32]byte) *Session {
 	s := &Session{
 		transport: transport,
 		session:   NewCryptoSession(config),
 		config:    config,
-		Received:  make(chan shared.Message, 10),
+		Received:  make(chan util.Message, 10),
 	}
 
 	s.session.OnSharedKey = func() {
 		fmt.Println("[CRYPTO] Broadcasting Main Session Key to cluster")
-		keyMsg := shared.EncryptAndHMAC(*keyRef, config, s.session.SharedSecret)
+		keyMsg := util.EncryptAndHMAC(*keyRef, config, s.session.SharedSecret)
 		s.transport.Send(keyMsg)
 	}
 
@@ -111,11 +111,11 @@ func (s *Session) Init() {
 	var akeSendARight []byte
 	akeSendARight, s.session.TkRight, s.session.EskaRight = gake.KexAkeInitA(s.config.GetDecodedPublicKey(rightIndex))
 
-	msg := shared.Message{
-		ID:         shared.UniqueID(),
+	msg := util.Message{
+		ID:         util.UniqueID(),
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.GetName(),
-		Type:       s.config.GetMessageType(shared.AkeAMsg),
+		Type:       s.config.GetMessageType(util.AkeAMsg),
 		ReceiverID: rightIndex,
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
@@ -125,7 +125,7 @@ func (s *Session) Init() {
 
 // Process the first message of 2-AKE, holding as a result keyLeft. The second message of 2-AKE is then sent.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
-func (s *Session) akeA(akeB shared.Message) {
+func (s *Session) akeA(akeB util.Message) {
 	akeSendA, _ := base64.StdEncoding.DecodeString(akeB.Content)
 
 	var akeSendB []byte
@@ -136,11 +136,11 @@ func (s *Session) akeA(akeB shared.Message) {
 
 	fmt.Println("[CRYPTO] Established 2-AKE shared key with left neighbor")
 
-	akeB = shared.Message{
-		ID:         shared.UniqueID(),
+	akeB = util.Message{
+		ID:         util.UniqueID(),
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.GetName(),
-		Type:       s.config.GetMessageType(shared.AkeBMsg),
+		Type:       s.config.GetMessageType(util.AkeBMsg),
 		ReceiverID: akeB.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
@@ -154,7 +154,7 @@ func (s *Session) akeA(akeB shared.Message) {
 
 // Process the second message of 2-AKE, holding as a result keyRight.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
-func (s *Session) akeB(msg shared.Message) {
+func (s *Session) akeB(msg util.Message) {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	s.session.KeyRight = gake.KexAkeSharedA(akeSendB, s.session.TkRight, s.session.EskaRight, s.config.GetDecodedSecretKey())
 
@@ -169,7 +169,7 @@ func (s *Session) akeB(msg shared.Message) {
 
 // Handle the message containing Xi, Ri and Commitment. This message is broadcasted by the other protocol participants to everyone else.
 // If we receive such a message, we need to try finalizing the protocol, as we could have received the last message of this kind we need.
-func (s *Session) xiRiCommitment(msg shared.Message) {
+func (s *Session) xiRiCommitment(msg util.Message) {
 	if msg.SenderID == s.config.GetIndex() {
 		return
 	}
@@ -207,7 +207,7 @@ func (s *Session) xiRiCommitment(msg shared.Message) {
 // Handle the key cipher text message, which should contain the main session key.
 // If we have the cluster session key available, we decrypt the ciphertext and store the main session key.
 // If it is not available yet, we store the key ciphertext and we will decrypt it in the OnSharedKey handler.
-func (s *Session) keyHandler(msg shared.Message) {
+func (s *Session) keyHandler(msg util.Message) {
 	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
 		fmt.Printf("[ERROR] Failed to decode key message: %v\n", err)
@@ -218,7 +218,7 @@ func (s *Session) keyHandler(msg shared.Message) {
 		s.keyCiphertext = decodedContent
 		return
 	}
-	mainSessionKey, err := shared.DecryptAndCheckHMAC(decodedContent, s.session.SharedSecret)
+	mainSessionKey, err := util.DecryptAndCheckHMAC(decodedContent, s.session.SharedSecret)
 	if err != nil {
 		fmt.Println("[ERROR] Failed decrypting key ciphertext message:", err)
 		return
@@ -228,12 +228,12 @@ func (s *Session) keyHandler(msg shared.Message) {
 }
 
 // Handle a text message - we decrypt it using the main session key and send it to the Received channel.
-func (s *Session) text(msg shared.Message) {
+func (s *Session) text(msg util.Message) {
 	if *s.mainSessionKey == [gake.SsLen]byte{} {
 		fmt.Println("[INFO] No Main Session Key yet. Skipping message.")
 		return
 	}
-	plainText, err := shared.DecryptAesGcm(msg.Content, s.mainSessionKey[:])
+	plainText, err := util.DecryptAesGcm(msg.Content, s.mainSessionKey[:])
 	if err != nil {
 		fmt.Println("[ERROR] Failed decrypting message:", err)
 		return
@@ -243,15 +243,15 @@ func (s *Session) text(msg shared.Message) {
 }
 
 // Handle the received message according to its type.
-func (s *Session) handleMessage(msg shared.Message) {
+func (s *Session) handleMessage(msg util.Message) {
 	switch msg.Type {
-	case shared.AkeAMsg:
+	case util.AkeAMsg:
 		s.akeA(msg)
-	case shared.AkeBMsg:
+	case util.AkeBMsg:
 		s.akeB(msg)
-	case shared.XiRiCommitmentMsg:
+	case util.XiRiCommitmentMsg:
 		s.xiRiCommitment(msg)
-	case shared.KeyMsg:
+	case util.KeyMsg:
 		s.keyHandler(msg)
 	default:
 		s.text(msg)
@@ -264,17 +264,17 @@ func (s *Session) SendText(text string) {
 		fmt.Println("[CRYPTO] No Main Session Key yet. Not sending message.")
 		return
 	}
-	cipherText, err := shared.EncryptAesGcm(text, s.mainSessionKey[:])
+	cipherText, err := util.EncryptAesGcm(text, s.mainSessionKey[:])
 	if err != nil {
 		fmt.Printf("[ERROR] Encryption failed: %v\n", err)
 		return
 	}
-	msg := shared.Message{
-		ID:         shared.UniqueID(),
+	msg := util.Message{
+		ID:         util.UniqueID(),
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.GetName(),
 		Content:    cipherText,
-		Type:       shared.TextMsg,
+		Type:       util.TextMsg,
 		ClusterID:  s.config.GetIndex(),
 	}
 	s.transport.Send(msg)
@@ -282,7 +282,7 @@ func (s *Session) SendText(text string) {
 
 // Check whether we have both keyLeft and keyRight available. If so, compute the Xi, Ri and Commitment message and return it.
 // Also, try finalizing the protocol now, since the Xi we computed could have been the last one we needed.
-func checkLeftRightKeys(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
+func checkLeftRightKeys(session *CryptoSession, config util.ConfigAccessor) util.Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
 		fmt.Println("[CRYPTO] Established 2-AKE shared keys with both neighbors")
 		xcmMsg := getXiCommitmentCoinMsg(session, config)
@@ -290,7 +290,7 @@ func checkLeftRightKeys(session *CryptoSession, config shared.ConfigAccessor) sh
 		return xcmMsg
 	}
 
-	return shared.Message{}
+	return util.Message{}
 }
 
 // Computation of the Xi, Ri and Commitment message.
@@ -298,7 +298,7 @@ func checkLeftRightKeys(session *CryptoSession, config shared.ConfigAccessor) sh
 // Generate a random Ri.
 // Compute the commitment as a public key encryption of Xi, Ri and i (index of current party).
 // Save the values for our use and also return a message containing them, so we can send it to other protocol participants.
-func getXiCommitmentCoinMsg(session *CryptoSession, config shared.ConfigAccessor) shared.Message {
+func getXiCommitmentCoinMsg(session *CryptoSession, config util.ConfigAccessor) util.Message {
 	xi := gake.XorKeys(session.KeyRight, session.KeyLeft)
 	ri := gake.GetRi()
 
@@ -320,11 +320,11 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config shared.ConfigAccessor
 	buffer.Write(commitment.Tag[:])
 	buffer.Write(ri[:])
 
-	msg := shared.Message{
-		ID:         shared.UniqueID(),
+	msg := util.Message{
+		ID:         util.UniqueID(),
 		SenderID:   config.GetIndex(),
 		SenderName: config.GetName(),
-		Type:       config.GetMessageType(shared.XiRiCommitmentMsg),
+		Type:       config.GetMessageType(util.XiRiCommitmentMsg),
 		Content:    base64.StdEncoding.EncodeToString(buffer.Bytes()),
 	}
 
@@ -359,7 +359,7 @@ func computeCommitment(
 // Then, we construct the party identifiers (PIDs) array.
 // Finally we compute the shared secret key and session ID. We save it for later use - distribution of the main session key.
 // The cluster leader uses this session key to encrypt the main session key, cluster members use it for decrypting said key.
-func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
+func tryFinalizeProtocol(session *CryptoSession, config util.ConfigAccessor) {
 	for i := range session.Xs {
 		if (session.Xs)[i] == [gake.SsLen]byte{} {
 			return
@@ -368,7 +368,7 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 
 	fmt.Println("[CRYPTO] Received all Xs")
 
-	ok := shared.CheckXs(session.Xs, len(config.GetNamesOrAddrs()))
+	ok := util.CheckXs(session.Xs, len(config.GetNamesOrAddrs()))
 	if ok {
 		fmt.Println("[CRYPTO] Xs check: success")
 	} else {
@@ -394,7 +394,7 @@ func tryFinalizeProtocol(session *CryptoSession, config shared.ConfigAccessor) {
 		PIDs[i] = byteArr
 	}
 
-	otherLeftKeys := shared.ComputeAllLeftKeys(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, PIDs)
+	otherLeftKeys := util.ComputeAllLeftKeys(len(config.GetNamesOrAddrs()), config.GetIndex(), session.KeyLeft, session.Xs, PIDs)
 	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(config.GetNamesOrAddrs()))
 
 	fmt.Printf("[CRYPTO] Cluster Shared Secret established: %02x...\n", sharedSecret[:4])

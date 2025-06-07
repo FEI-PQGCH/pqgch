@@ -16,4 +16,4 @@ mock:
 
 gen:
 	@echo "[Make]: Generating the KEM keypairs..."
-	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run gakeutil/gake.go -p gen -c $(or $(n),1)
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run util/cmd/main.go -c $(or $(n),1)

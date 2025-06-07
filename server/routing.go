@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
-	"pqgch/shared"
+	"pqgch/util"
 	"sync"
 	"time"
 )
@@ -17,10 +17,10 @@ type Client struct {
 	name  string
 	conn  net.Conn
 	index int
-	queue shared.MessageQueue
+	queue util.MessageQueue
 }
 
-func newClients(config shared.ConfigAccessor) *Clients {
+func newClients(config util.ConfigAccessor) *Clients {
 	var clients Clients
 
 	for i, addr := range config.GetNamesOrAddrs() {
@@ -66,7 +66,7 @@ func (clients *Clients) sendQueued(id int) {
 
 // Send a message to a specific client.
 // If the client is not available, store the message in his queue.
-func (clients *Clients) send(msg shared.Message) {
+func (clients *Clients) send(msg util.Message) {
 	clients.lock.Lock()
 	defer clients.lock.Unlock()
 
@@ -81,7 +81,7 @@ func (clients *Clients) send(msg shared.Message) {
 
 // Broadcast message to all clients
 // If some of the clients are not available, store their messages in their queues.
-func (clients *Clients) broadcast(msg shared.Message) {
+func (clients *Clients) broadcast(msg util.Message) {
 	clients.lock.Lock()
 	defer clients.lock.Unlock()
 
@@ -106,10 +106,10 @@ func (clients *Clients) broadcast(msg shared.Message) {
 }
 
 type ServerTransport interface {
-	receive(shared.Message)
+	receive(util.Message)
 }
 
-func transportManager(t ServerTransport, msgs <-chan shared.Message) {
+func transportManager(t ServerTransport, msgs <-chan util.Message) {
 	for msg := range msgs {
 		t.receive(msg)
 	}
@@ -118,7 +118,7 @@ func transportManager(t ServerTransport, msgs <-chan shared.Message) {
 // Cluster transport for communication between the leader and clients in its cluster.
 type ClusterTransport struct {
 	clients *Clients
-	shared.BaseTransport
+	util.BaseTransport
 }
 
 func newClusterTransport(clients *Clients) *ClusterTransport {
@@ -128,25 +128,25 @@ func newClusterTransport(clients *Clients) *ClusterTransport {
 }
 
 // 2-AKE messages are sent to specific clients, Xi and Key messages are broadcasted.
-func (t *ClusterTransport) Send(msg shared.Message) {
+func (t *ClusterTransport) Send(msg util.Message) {
 	switch msg.Type {
-	case shared.AkeAMsg, shared.AkeBMsg:
+	case util.AkeAMsg, util.AkeBMsg:
 		t.clients.send(msg)
-	case shared.KeyMsg, shared.XiRiCommitmentMsg:
+	case util.KeyMsg, util.XiRiCommitmentMsg:
 		t.clients.broadcast(msg)
-	case shared.TextMsg:
+	case util.TextMsg:
 		t.clients.broadcast(msg)
 		broadcastToLeaders(msg)
 	}
 }
 
-func (t *ClusterTransport) receive(msg shared.Message) {
+func (t *ClusterTransport) receive(msg util.Message) {
 	t.MessageHandler(msg)
 }
 
 // Leader Transport for communication between leaders.
 type LeaderTransport struct {
-	shared.BaseTransport
+	util.BaseTransport
 }
 
 func newLeaderTransport() *LeaderTransport {
@@ -154,23 +154,23 @@ func newLeaderTransport() *LeaderTransport {
 }
 
 // 2-AKE messages are sent only to specific leaders, the Xi message is broadcasted.
-func (t *LeaderTransport) Send(msg shared.Message) {
+func (t *LeaderTransport) Send(msg util.Message) {
 	switch msg.Type {
-	case shared.LeaderAkeAMsg:
+	case util.LeaderAkeAMsg:
 		sendToLeader(config.GetNamesOrAddrs()[msg.ReceiverID], msg)
-	case shared.LeaderAkeBMsg:
+	case util.LeaderAkeBMsg:
 		sendToLeader(config.GetNamesOrAddrs()[msg.ReceiverID], msg)
-	case shared.LeaderXiRiCommitmentMsg:
+	case util.LeaderXiRiCommitmentMsg:
 		broadcastToLeaders(msg)
 	}
 }
 
-func (t *LeaderTransport) receive(msg shared.Message) {
+func (t *LeaderTransport) receive(msg util.Message) {
 	t.MessageHandler(msg)
 }
 
 // Broadcast msg to all the other leaders.
-func broadcastToLeaders(msg shared.Message) {
+func broadcastToLeaders(msg util.Message) {
 	for i, addr := range config.GetNamesOrAddrs() {
 		if i == config.Index {
 			continue
@@ -180,7 +180,7 @@ func broadcastToLeaders(msg shared.Message) {
 }
 
 // Send msg to specific leader at address.
-func sendToLeader(address string, msg shared.Message) {
+func sendToLeader(address string, msg util.Message) {
 	var conn net.Conn
 	for {
 		var err error

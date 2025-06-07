@@ -6,10 +6,10 @@ import (
 	"log"
 	"os"
 	"pqgch/cluster_protocol"
-	"pqgch/shared"
+	"pqgch/util"
 )
 
-var config shared.UserConfig
+var config util.UserConfig
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
@@ -17,21 +17,21 @@ func main() {
 	if *configFlag == "" {
 		log.Fatalln("[ERROR] Configuration file missing. Please provide it using the -config flag")
 	}
-	config = shared.GetUserConfig(*configFlag)
+	config = util.GetUserConfig(*configFlag)
 
-	tui := shared.NewTUI()
+	tui := util.NewTUI()
 	tui.HijackStdout()
 
-	transport, err := shared.NewTCPTransport(config.LeadAddr)
+	transport, err := util.NewTCPTransport(config.LeadAddr)
 	if err != nil {
 		fmt.Fprintf(os.Stdout, "[ERROR] Unable to connect to server: %v\n", err)
 		os.Exit(1)
 	}
-	transport.Send(shared.Message{
-		ID:         shared.UniqueID(),
+	transport.Send(util.Message{
+		ID:         util.UniqueID(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		Type:       shared.LoginMsg,
+		Type:       util.LoginMsg,
 		ClusterID:  config.ClusterConfig.Index,
 	})
 

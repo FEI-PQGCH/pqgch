@@ -9,10 +9,10 @@ import (
 
 	"pqgch/cluster_protocol"
 	"pqgch/leader_protocol"
-	"pqgch/shared"
+	util "pqgch/util"
 )
 
-var config shared.ServConfig
+var config util.ServConfig
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
@@ -20,9 +20,9 @@ func main() {
 	if *configFlag == "" {
 		log.Fatalln("[ERROR] Configuration file missing. Please provide it using the -config flag.")
 	}
-	config = shared.GetServConfig(*configFlag)
+	config = util.GetServConfig(*configFlag)
 
-	tui := shared.NewTUI()
+	tui := util.NewTUI()
 	tui.HijackStdout()
 
 	_, port, err := net.SplitHostPort(config.GetCurrentServer())
@@ -41,13 +41,13 @@ func main() {
 	fmt.Fprintf(os.Stdout, "[ROUTE]: server listening on %s\n", address)
 
 	// Create message tracker and in-memory client registry.
-	tracker := shared.NewMessageTracker()
+	tracker := util.NewMessageTracker()
 	clients := newClients(&config.ClusterConfig)
 
 	// Initialize leader transport/session.
 	leaderTransport := newLeaderTransport()
 	leaderSession := leader_protocol.NewSession(leaderTransport, &config)
-	msgsLeader := make(chan shared.Message)
+	msgsLeader := make(chan util.Message)
 	go transportManager(leaderTransport, msgsLeader)
 
 	// Initialize cluster transport/session.
@@ -57,7 +57,7 @@ func main() {
 		&config.ClusterConfig,
 		leaderSession.GetKeyRef(),
 	)
-	msgsCluster := make(chan shared.Message)
+	msgsCluster := make(chan util.Message)
 	go transportManager(clusterTransport, msgsCluster)
 
 	leaderSession.Init()
@@ -87,11 +87,11 @@ func main() {
 func handleConnection(
 	clients *Clients,
 	conn net.Conn,
-	tracker *shared.MessageTracker,
-	clusterChan chan shared.Message,
-	leaderChan chan shared.Message,
+	tracker *util.MessageTracker,
+	clusterChan chan util.Message,
+	leaderChan chan util.Message,
 ) {
-	reader := shared.NewMessageReader(conn)
+	reader := util.NewMessageReader(conn)
 	// Verify that the client sent some message.
 	if !reader.HasMessage() {
 		fmt.Fprintln(os.Stdout, "[ERROR] Client did not send any message")
@@ -105,13 +105,13 @@ func handleConnection(
 	// We handle other messages through Leader Transport since they should
 	// be a part of the protocol between leaders.
 	msg := reader.GetMessage()
-	if msg.Type != shared.LoginMsg {
+	if msg.Type != util.LoginMsg {
 		if !tracker.AddMessage(msg.ID) {
 			return
 		}
 		// Log receipt of a leader protocol message.
 		fmt.Fprintf(os.Stdout, "[ROUTE] Received %s message from Leader\n", msg.TypeName())
-		if msg.Type == shared.TextMsg {
+		if msg.Type == util.TextMsg {
 			clusterChan <- msg
 			clients.broadcast(msg)
 			return
@@ -142,20 +142,20 @@ func handleConnection(
 
 		msg.ClusterID = config.Index
 		switch msg.Type {
-		case shared.AkeAMsg, shared.AkeBMsg:
+		case util.AkeAMsg, util.AkeBMsg:
 			if msg.ReceiverID == config.ClusterConfig.Index {
 				clusterChan <- msg
 			} else {
 				clients.send(msg)
 			}
-		case shared.XiRiCommitmentMsg:
+		case util.XiRiCommitmentMsg:
 			clusterChan <- msg
 			clients.broadcast(msg)
-		case shared.TextMsg:
+		case util.TextMsg:
 			clusterChan <- msg
 			clients.broadcast(msg)
 			broadcastToLeaders(msg)
-		case shared.LeaderAkeAMsg, shared.LeaderAkeBMsg, shared.LeaderXiRiCommitmentMsg:
+		case util.LeaderAkeAMsg, util.LeaderAkeBMsg, util.LeaderXiRiCommitmentMsg:
 			leaderChan <- msg
 		}
 	}

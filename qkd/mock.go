@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"pqgch/shared"
+	"pqgch/util"
 	"strconv"
 	"strings"
 )
@@ -90,7 +90,7 @@ func getKeys(n, size int) []Key {
 	var keys []Key
 	// Generate n keys (should be just 1).
 	for range n {
-		id := shared.UniqueID()
+		id := util.UniqueID()
 		key := make([]byte, size/8)
 		rand.Read(key)
 		encoded := base64.StdEncoding.EncodeToString(key)
