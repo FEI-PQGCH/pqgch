@@ -22,8 +22,8 @@ func main() {
 	}
 	config = shared.GetServConfig(*configFlag)
 
-	outputCh := make(chan string)
-	shared.HijackStdout(outputCh)
+	tui := shared.NewTUI()
+	tui.HijackStdout()
 
 	_, port, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
@@ -63,19 +63,8 @@ func main() {
 	leaderSession.Init()
 	clusterSession.Init()
 
-	var logs []string
-	scrollOffset := 0
-	var inputBuffer []rune
-
-	lineCh := make(chan string)
-	scrollCh := make(chan int)
-	charCh := make(chan rune)
-
-	shared.EnableRawMode()
-	go shared.InputLoop(lineCh, scrollCh, charCh)
-
-	// Initial empty draw.
-	shared.Redraw(logs, scrollOffset, "")
+	// Wire incoming cluster messages into the TUI.
+	tui.AttachMessages(clusterSession.Received)
 
 	// Accept connections in a goroutine.
 	go func() {
@@ -89,52 +78,10 @@ func main() {
 		}
 	}()
 
-	// Main loop: handle ENTER, arrows, and character input.
-	for {
-		select {
-		case <-lineCh:
-			text := string(inputBuffer)
-			inputBuffer = inputBuffer[:0]
-			colored := fmt.Sprintf("\033[32mYou: %s\033[0m", text)
-			logs = append(logs, colored)
-			clusterSession.SendText(text)
-			scrollOffset = shared.ComputeMaxOffset(logs)
-			shared.Redraw(logs, scrollOffset, "")
-
-		case delta := <-scrollCh:
-			newOffset := scrollOffset + delta
-			maxOffset := shared.ComputeMaxOffset(logs)
-			if newOffset < 0 {
-				newOffset = 0
-			}
-			if newOffset > maxOffset {
-				newOffset = maxOffset
-			}
-			scrollOffset = newOffset
-			shared.Redraw(logs, scrollOffset, string(inputBuffer))
-
-		case r := <-charCh:
-			if r == 0 {
-				if len(inputBuffer) > 0 {
-					inputBuffer = inputBuffer[:len(inputBuffer)-1]
-				}
-			} else {
-				inputBuffer = append(inputBuffer, r)
-			}
-			shared.Redraw(logs, scrollOffset, string(inputBuffer))
-
-		case msg := <-clusterSession.Received:
-			colored := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
-			logs = append(logs, colored)
-			scrollOffset = shared.ComputeMaxOffset(logs)
-			shared.Redraw(logs, scrollOffset, string(inputBuffer))
-
-		case line := <-outputCh:
-			logs = append(logs, line)
-			scrollOffset = shared.ComputeMaxOffset(logs)
-			shared.Redraw(logs, scrollOffset, string(inputBuffer))
-		}
-	}
+	// Run the TUI event loop; on ENTER send text via cluster session.
+	tui.Run(func(line string) {
+		clusterSession.SendText(line)
+	})
 }
 
 func handleConnection(

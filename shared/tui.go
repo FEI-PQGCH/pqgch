@@ -22,16 +22,6 @@ type winsize struct {
 	Ypixel uint16
 }
 
-func ComputeMaxOffset(logs []string) int {
-	rows, _ := GetTerminalSize()
-	limit := max(rows-1, 0)
-	n := len(logs)
-	if n <= limit {
-		return 0
-	}
-	return n - limit
-}
-
 // GetTerminalSize returns the terminal’s number of rows and columns.
 func GetTerminalSize() (int, int) {
 	ws := &winsize{}
@@ -58,7 +48,10 @@ func clearScreen() {
 // already contain ANSI color codes.
 func Redraw(logs []string, scrollOffset int, inputBuffer string) {
 	rows, _ := GetTerminalSize()
-	limit := max(rows-1, 0)
+	limit := rows - 1
+	if limit < 0 {
+		limit = 0
+	}
 
 	clearScreen()
 
@@ -118,7 +111,7 @@ type termios struct {
 
 var oldTermios termios
 
-func EnableRawMode() {
+func enableRawMode() {
 	fd := int(os.Stdin.Fd())
 	var newt termios
 
@@ -149,36 +142,155 @@ func disableRawMode() {
 	)
 }
 
-func InputLoop(lineCh chan<- string, scrollCh chan<- int, charCh chan<- rune) {
-	defer disableRawMode()
+// StartInputLoop reads raw keystrokes from os.Stdin and demultiplexes them:
+//   - ENTER → send "" on lineCh.
+//   - UP arrow → send -1 on scrollCh.
+//   - DOWN arrow → send +1 on scrollCh.
+//   - Backspace (127) → send rune(0) on charCh.
+//   - Other runes → send that rune on charCh.
+func StartInputLoop(lineCh chan<- string, scrollCh chan<- int, charCh chan<- rune) {
+	enableRawMode()
+	go func() {
+		defer disableRawMode()
 
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		r, _, err := reader.ReadRune()
-		if err != nil {
-			return
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			r, _, err := reader.ReadRune()
+			if err != nil {
+				return
+			}
+			switch r {
+			case '\r', '\n':
+				lineCh <- ""
+			case 127:
+				charCh <- 0
+			case '\x1b':
+				_, _, err2 := reader.ReadRune()
+				if err2 != nil {
+					continue
+				}
+				third, _, err3 := reader.ReadRune()
+				if err3 != nil {
+					continue
+				}
+				if third == 'A' {
+					scrollCh <- -1
+				} else if third == 'B' {
+					scrollCh <- +1
+				}
+			default:
+				charCh <- r
+			}
 		}
-		switch r {
-		case '\r', '\n':
-			lineCh <- ""
-		case 127:
-			charCh <- 0
-		case '\x1b':
-			_, _, err2 := reader.ReadRune()
-			if err2 != nil {
-				continue
+	}()
+}
+
+// TUI encapsulates a scrollable log pane and input prompt.
+type TUI struct {
+	logs         []string
+	inputBuf     []rune
+	scrollOffset int
+
+	outCh    chan string
+	msgCh    <-chan Message
+	lineCh   chan string
+	scrollCh chan int
+	charCh   chan rune
+}
+
+// NewTUI creates a fresh TUI instance.
+func NewTUI() *TUI {
+	return &TUI{
+		logs:         make([]string, 0, 100),
+		inputBuf:     make([]rune, 0, 256),
+		scrollOffset: 0,
+		outCh:        make(chan string),
+		lineCh:       make(chan string),
+		scrollCh:     make(chan int),
+		charCh:       make(chan rune),
+	}
+}
+
+// HijackStdout hooks fmt/log output into the TUI's outCh.
+func (t *TUI) HijackStdout() {
+	HijackStdout(t.outCh)
+}
+
+// AttachMessages connects an incoming chat channel to the TUI.
+func (t *TUI) AttachMessages(ch <-chan Message) {
+	t.msgCh = ch
+}
+
+// Run starts the event loop, redrawing on any update.
+func (t *TUI) Run(onLine func(string)) {
+	go func() {
+		for line := range t.outCh {
+			t.appendLine(line)
+		}
+	}()
+	go func() {
+		for msg := range t.msgCh {
+			col := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
+			t.appendLine(col)
+		}
+	}()
+
+	StartInputLoop(t.lineCh, t.scrollCh, t.charCh)
+	t.redraw()
+
+	for {
+		select {
+		case <-t.lineCh:
+			text := string(t.inputBuf)
+			t.inputBuf = t.inputBuf[:0]
+			onLine(text)
+			t.appendLine(fmt.Sprintf("\033[32mYou: %s\033[0m", text))
+
+		case delta := <-t.scrollCh:
+			t.scrollOffset += delta
+			if t.scrollOffset < 0 {
+				t.scrollOffset = 0
 			}
-			third, _, err3 := reader.ReadRune()
-			if err3 != nil {
-				continue
+			if mo := t.maxOffset(); t.scrollOffset > mo {
+				t.scrollOffset = mo
 			}
-			if third == 'A' {
-				scrollCh <- -1
-			} else if third == 'B' {
-				scrollCh <- +1
+			t.redraw()
+
+		case r := <-t.charCh:
+			if r == 0 {
+				if len(t.inputBuf) > 0 {
+					t.inputBuf = t.inputBuf[:len(t.inputBuf)-1]
+				}
+			} else {
+				t.inputBuf = append(t.inputBuf, r)
 			}
-		default:
-			charCh <- r
+			t.redraw()
 		}
 	}
+}
+
+// appendLine adds a new log line, pins view to bottom, and redraws.
+func (t *TUI) appendLine(line string) {
+	t.logs = append(t.logs, line)
+	t.scrollOffset = t.maxOffset()
+	t.redraw()
+}
+
+// maxOffset computes how far the log can scroll up.
+func (t *TUI) maxOffset() int {
+	rows, _ := GetTerminalSize()
+	limit := rows - 1
+	if limit < 0 {
+		limit = 0
+	}
+	n := len(t.logs)
+	if n <= limit {
+		return 0
+	}
+	return n - limit
+}
+
+// redraw calls the shared Redraw helper with current state.
+func (t *TUI) redraw() {
+	Redraw(t.logs, t.scrollOffset, string(t.inputBuf))
 }
