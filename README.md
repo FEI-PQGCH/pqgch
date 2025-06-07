@@ -3,16 +3,15 @@
 This repository contains the code for a post-quantum, authenticated group-chat application.
 It uses Kyber-GAKE for secure, quantum-resistant group key establishment among clients and cluster leaders.
 
-
 ## Directory Structure
 
 - `client/` - entrypoint for cluster member application.
   - `client.go`
     - Handles user input, connects to the server, and facilitates message broadcasting and receiving.
     - Implements cryptographic protocol initialization (AKE).
-- `cluster_protocol/`  - multi-party GAKE logic within each cluster.
+- `cluster_protocol/` - multi-party GAKE logic within each cluster.
   - `protocol.go`
-- `leader_protocol/`   - GAKE logic among cluster-leaders.
+- `leader_protocol/` - GAKE logic among cluster-leaders.
   - `protocol.go`
 - `server/` - entrypoint for cluster‐leader application.
   - `server.go`
@@ -98,20 +97,34 @@ Before running the application, you need to set up the clients and servers. Crea
   - `index` - identifies this server in the cluster (e.g., 3 for "Server").
   - `publicKeys` - corresponds to the names list, providing each participant's public key for secure communication.
   - `secretKey` - the private key of the server for signing and decrypting data.
-- `keyLeft`   – optional QKD‐derived left neighbor secret.
-- `keyRight`  – path or Base64 for right neighbor secret.
+- `keyLeft` – optional QKD‐derived left neighbor secret.
+- `keyRight` – path or Base64 for right neighbor secret.
 - `servers` - array of all leader addresses.
 - `index` - this server’s position in the `servers` list.
 - `secretKey` - Base64 Kyber secret key for this server.
 
 ##### Generating KEM keypairs
+
 ```
 make gen n=3 # writes JSON‐encoded Base64 keypairs to stdout
 ```
 
 This will generate three KEM keypairs in a JSON friendly format, ready to copy and paste into the configuration files.
 
+##### Mock QKD
+
+Use the following CURL commands to interact with the mock QKD server:
+
+```
+curl -X GET "http://localhost:8080/etsi/DUMMY_ID/enc_keys?number=1&size=256"
+```
+
+```
+curl -X GET "http://localhost:8080/etsi/DUMMY_ID/dec_keys?key_ID=d21fe47e2ecb684b95720d740de3b1d9"
+```
+
 ##### Starting servers
+
 ```
 make sX # start server X
 ```
@@ -119,6 +132,7 @@ make sX # start server X
 Where X is the number of the server you are starting.
 
 ##### Starting clients
+
 ```
 make cX # start client X
 ```
