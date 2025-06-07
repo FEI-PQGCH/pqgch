@@ -9,7 +9,7 @@ import (
 
 	"pqgch/cluster_protocol"
 	"pqgch/leader_protocol"
-	util "pqgch/util"
+	"pqgch/util"
 )
 
 var config util.ServConfig

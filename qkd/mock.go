@@ -11,15 +11,6 @@ import (
 	"strings"
 )
 
-type Key struct {
-	KeyID string `json:"key_ID"`
-	Key   string `json:"key"`
-}
-
-type KeyContainer struct {
-	Keys []Key `json:"keys"`
-}
-
 // Map of Key_ID -> Key
 var keyStore = map[string]string{}
 
@@ -80,14 +71,14 @@ func handleDecKeys(w http.ResponseWriter, r *http.Request, _ string) {
 	keyID := r.URL.Query().Get("key_ID")
 	// Look the key up in the key store.
 	if key, found := keyStore[keyID]; found {
-		respond(w, []Key{{KeyID: keyID, Key: key}})
+		respond(w, []util.Key{{KeyID: keyID, Key: key}})
 		return
 	}
 	http.Error(w, "key corresponding to this key_ID not found", http.StatusBadRequest)
 }
 
-func getKeys(n, size int) []Key {
-	var keys []Key
+func getKeys(n, size int) []util.Key {
+	var keys []util.Key
 	// Generate n keys (should be just 1).
 	for range n {
 		id := util.UniqueID()
@@ -95,7 +86,7 @@ func getKeys(n, size int) []Key {
 		rand.Read(key)
 		encoded := base64.StdEncoding.EncodeToString(key)
 		keyStore[id] = encoded
-		keys = append(keys, Key{
+		keys = append(keys, util.Key{
 			KeyID: id,
 			Key:   encoded,
 		})
@@ -104,7 +95,7 @@ func getKeys(n, size int) []Key {
 	return keys
 }
 
-func respond(w http.ResponseWriter, keys []Key) {
+func respond(w http.ResponseWriter, keys []util.Key) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(KeyContainer{Keys: keys})
+	json.NewEncoder(w).Encode(util.KeyContainer{Keys: keys})
 }

@@ -7,44 +7,90 @@ import (
 	"io"
 	"net/http"
 	"pqgch/gake"
+	"strconv"
 )
 
-// ETSIKeyResponse represents the JSON structure returned by the ETSI API.
-type ETSIKeyResponse struct {
-	Key string `json:"key"`
+type Key struct {
+	KeyID string `json:"key_ID"`
+	Key   string `json:"key"`
 }
 
-// GetKeyFromETSI calls the given ETSI API endpoint and returns a key of length gake.SsLen.
-func GetKeyFromETSI(apiEndpoint string) ([gake.SsLen]byte, error) {
-	var key [gake.SsLen]byte
+type KeyContainer struct {
+	Keys []Key `json:"keys"`
+}
 
-	resp, err := http.Get(apiEndpoint)
+// EXAMPLE USAGE
+//
+// TODO: use this instead of loading the keys from the file.
+// key_id should be sent to the neighbor, so he can get the same key.
+//
+// key, key_id, err := util.GetKey("http://localhost:8080/etsi/", "dummy_id")
+// if err != nil {
+// 	log.Fatalln(err.Error())
+// }
+// fmt.Println(key, key_id)
+
+// key, key_id, err = util.GetKeyWithID("http://localhost:8080/etsi/", "dummy_id", key_id)
+// if err != nil {
+// 	log.Fatalln(err.Error())
+// }
+// fmt.Println(key, key_id)
+
+// Make a request for a SINGLE key to the ETSI QKD API.
+// The length is calculated from gake.SsLen.
+func GetKey(endpoint, saeID string) ([gake.SsLen]byte, string, error) {
+	resp, err := http.Get(endpoint + saeID + "/enc_keys?number=1&size=" + strconv.Itoa(gake.SsLen*8))
 	if err != nil {
-		return key, fmt.Errorf("failed to call ETSI API: %v", err)
+		return [gake.SsLen]byte{}, "", fmt.Errorf("failed to call ETSI API: %v", err)
 	}
+
+	key, id, err := parseResponse(resp)
+
+	return key, id, err
+}
+
+// Make a request for the key with keyID to the ETSI QKD API.
+func GetKeyWithID(endpoint, saeID, keyID string) ([gake.SsLen]byte, string, error) {
+	resp, err := http.Get(endpoint + saeID + "/dec_keys?key_ID=" + keyID)
+	if err != nil {
+		return [gake.SsLen]byte{}, "", fmt.Errorf("failed to call ETSI API: %v", err)
+	}
+
+	key, id, err := parseResponse(resp)
+
+	return key, id, err
+}
+
+func parseResponse(resp *http.Response) ([gake.SsLen]byte, string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return key, fmt.Errorf("ETSI API returned non-OK status: %s", resp.Status)
+		return [gake.SsLen]byte{}, "", fmt.Errorf("ETSI API returned non-OK status: %s", resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return key, fmt.Errorf("failed to read ETSI API response: %v", err)
+		return [gake.SsLen]byte{}, "", fmt.Errorf("failed to read ETSI API response: %v", err)
 	}
 
-	var etsirep ETSIKeyResponse
-	if err := json.Unmarshal(body, &etsirep); err != nil {
-		return key, fmt.Errorf("failed to parse ETSI API response: %v", err)
+	var response KeyContainer
+	if err := json.Unmarshal(body, &response); err != nil {
+		return [gake.SsLen]byte{}, "", fmt.Errorf("failed to parse ETSI API response: %v", err)
 	}
 
-	decodedKey, err := base64.StdEncoding.DecodeString(etsirep.Key)
+	if len(response.Keys) != 1 {
+		return [gake.SsLen]byte{}, "", fmt.Errorf("invalid length of keys array")
+	}
+
+	decodedKey, err := base64.StdEncoding.DecodeString(response.Keys[0].Key)
 	if err != nil {
-		return key, fmt.Errorf("failed to decode ETSI API key: %v", err)
+		return [gake.SsLen]byte{}, "", fmt.Errorf("failed to decode ETSI QKD key: %v", err)
 	}
-	if len(decodedKey) < gake.SsLen {
-		return key, fmt.Errorf("received key is too short")
+	if len(decodedKey) != gake.SsLen {
+		return [gake.SsLen]byte{}, "", fmt.Errorf("received key length mismatch")
 	}
+
+	var key [gake.SsLen]byte
 	copy(key[:], decodedKey)
-	return key, nil
+	return key, response.Keys[0].KeyID, nil
 }
