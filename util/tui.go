@@ -223,18 +223,6 @@ func (t *TUI) AttachMessages(ch <-chan Message) {
 
 // Run starts the event loop, redrawing on any update.
 func (t *TUI) Run(onLine func(string)) {
-	go func() {
-		for line := range t.outCh {
-			t.appendLine(line)
-		}
-	}()
-	go func() {
-		for msg := range t.msgCh {
-			col := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
-			t.appendLine(col)
-		}
-	}()
-
 	StartInputLoop(t.lineCh, t.scrollCh, t.charCh)
 	t.redraw()
 
@@ -265,6 +253,13 @@ func (t *TUI) Run(onLine func(string)) {
 				t.inputBuf = append(t.inputBuf, r)
 			}
 			t.redraw()
+
+		case line := <-t.outCh:
+			t.appendLine(line)
+
+		case msg := <-t.msgCh:
+			col := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
+			t.appendLine(col)
 		}
 	}
 }
@@ -279,10 +274,7 @@ func (t *TUI) appendLine(line string) {
 // maxOffset computes how far the log can scroll up.
 func (t *TUI) maxOffset() int {
 	rows, _ := GetTerminalSize()
-	limit := rows - 1
-	if limit < 0 {
-		limit = 0
-	}
+	limit := max(rows-1, 0)
 	n := len(t.logs)
 	if n <= limit {
 		return 0
