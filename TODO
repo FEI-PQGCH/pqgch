@@ -2,3 +2,4 @@
 2. Moznost nastavit security parameters cez flagy (alebo nieco ine, ale jednoduche)
 3. QKD - opytat sa na SAE IDs
 4. Behom juna zazdielat repozitar a odskusat cez SAV ETSI API
+5. Fix log spravy
