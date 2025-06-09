@@ -55,7 +55,7 @@ func NewSession(transport util.Transport, config util.ConfigAccessor) *Session {
 
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
-	if s.config.(*util.ServConfig).IsRightQKD() {
+	if s.config.(*util.ServConfig).IsRightQKDPath() {
 		rightKeyQKD, err := s.config.(*util.ServConfig).GetDecodedRightKeyQKD()
 		if err != nil {
 			log.Fatalf("[ERROR] Loading external right key: %v\n", err)
@@ -63,7 +63,7 @@ func (s *Session) Init() {
 		s.session.KeyRight = rightKeyQKD
 	}
 
-	if s.config.(*util.ServConfig).IsLeftQKD() {
+	if s.config.(*util.ServConfig).IsLeftQKDPath() {
 		leftKeyQKD, err := s.config.(*util.ServConfig).GetDecodedLeftKeyQKD()
 		if err != nil {
 			log.Fatalf("[ERROR] Loading external left key: %v\n", err)
@@ -77,7 +77,7 @@ func (s *Session) Init() {
 		s.transport.Send(xi)
 	}
 
-	if !s.config.(*util.ServConfig).IsRightQKD() {
+	if !s.config.(*util.ServConfig).IsRightQKD() && !s.config.(*util.ServConfig).IsRightQKDPath() {
 		var rightIndex = (s.config.GetIndex() + 1) % len(s.config.GetNamesOrAddrs())
 		var akeSendARight []byte
 		akeSendARight, s.session.TkRight, s.session.EskaRight = gake.KexAkeInitA(s.config.(*util.ServConfig).GetDecodedRightKeyPublic())
@@ -169,6 +169,28 @@ func (s *Session) xiRiCommitment(msg util.Message) {
 	tryFinalizeProtocol(&s.session, s.config)
 }
 
+func (s *Session) handleLeftKey(msg util.Message) {
+	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
+	copy(s.session.KeyLeft[:], decoded)
+
+	xi := checkLeftRightKeys(&s.session, s.config)
+
+	if !xi.IsEmpty() {
+		s.transport.Send(xi)
+	}
+}
+
+func (s *Session) handleRightKey(msg util.Message) {
+	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
+	copy(s.session.KeyRight[:], decoded)
+
+	xi := checkLeftRightKeys(&s.session, s.config)
+
+	if !xi.IsEmpty() {
+		s.transport.Send(xi)
+	}
+}
+
 // Handle the received message according to its type.
 func (s *Session) handleMessage(msg util.Message) {
 	switch msg.Type {
@@ -178,6 +200,10 @@ func (s *Session) handleMessage(msg util.Message) {
 		s.akeB(msg)
 	case util.LeaderXiRiCommitmentMsg:
 		s.xiRiCommitment(msg)
+	case util.QKDLeftKeyMsg:
+		s.handleLeftKey(msg)
+	case util.QKDRightKeyMsg:
+		s.handleRightKey(msg)
 	default:
 		fmt.Printf("[ERROR] Unknown message type encountered\n")
 	}

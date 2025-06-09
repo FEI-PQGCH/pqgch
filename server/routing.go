@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"pqgch/util"
 	"sync"
@@ -195,4 +196,53 @@ func sendToLeader(address string, msg util.Message) {
 	fmt.Printf("[ROUTE] Sending message %s to Leader %s\n", msg.TypeName(), address)
 
 	msg.Send(conn)
+}
+
+// TODO: sort out the SAE IDs
+func requestKey(leaderChan chan<- util.Message, url string) {
+	key, keyID, err := util.GetKey(url, "dummy_id")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// Process the received key.
+	msg := util.Message{
+		ID:         util.UniqueID(),
+		SenderID:   -1,
+		SenderName: "ETSI API",
+		Type:       util.QKDRightKeyMsg,
+		ReceiverID: config.GetIndex(),
+		Content:    key,
+	}
+	leaderChan <- msg
+
+	// Send keyID to right neighbor.
+	receiverID := (config.GetIndex() + 1) % len(config.GetNamesOrAddrs())
+	msg = util.Message{
+		ID:         util.UniqueID(),
+		SenderID:   config.GetIndex(),
+		SenderName: config.GetName(),
+		Type:       util.QKDIDsMsg,
+		ReceiverID: receiverID,
+		Content:    keyID,
+	}
+	sendToLeader(config.ServAddrs[receiverID], msg)
+}
+
+func requestKeyWithID(leaderChan chan<- util.Message, url, id string) {
+	key, _, err := util.GetKeyWithID(url, "dummy_id", id)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// Process the received key.
+	msg := util.Message{
+		ID:         util.UniqueID(),
+		SenderID:   -1,
+		SenderName: "ETSI API",
+		Type:       util.QKDLeftKeyMsg,
+		ReceiverID: config.GetIndex(),
+		Content:    key,
+	}
+	leaderChan <- msg
 }

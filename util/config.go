@@ -133,27 +133,41 @@ type ServConfig struct {
 }
 
 func (c *ServConfig) IsLeftQKD() bool {
-	return strings.HasPrefix(strings.ToLower(c.KeyLeft), "path ") ||
-		strings.HasPrefix(strings.ToLower(c.KeyLeft), "url ")
+	return strings.HasPrefix(strings.ToLower(c.KeyLeft), "url ")
+}
+
+func (c *ServConfig) IsLeftQKDPath() bool {
+	return strings.HasPrefix(strings.ToLower(c.KeyLeft), "path ")
 }
 
 func (c *ServConfig) IsRightQKD() bool {
-	return strings.HasPrefix(strings.ToLower(c.KeyRight), "path ") ||
-		strings.HasPrefix(strings.ToLower(c.KeyRight), "url ")
+	return strings.HasPrefix(strings.ToLower(c.KeyRight), "url ")
+}
+
+func (c *ServConfig) IsRightQKDPath() bool {
+	return strings.HasPrefix(strings.ToLower(c.KeyRight), "path ")
 }
 
 func (c *ServConfig) GetLeftKey() string {
-	if c.IsLeftQKD() {
+	if c.IsLeftQKDPath() {
 		return strings.TrimSpace(c.KeyLeft[5:])
 	}
 	return c.KeyLeft
 }
 
 func (c *ServConfig) GetRightKey() string {
-	if c.IsRightQKD() {
+	if c.IsRightQKDPath() {
 		return strings.TrimSpace(c.KeyRight[5:])
 	}
 	return c.KeyRight
+}
+
+func (c *ServConfig) GetLeftQKDURL() string {
+	return strings.TrimSpace(c.KeyLeft[4:])
+}
+
+func (c *ServConfig) GetRightQKDURL() string {
+	return strings.TrimSpace(c.KeyRight[4:])
 }
 
 func (c *ServConfig) GetDecodedLeftKeyPublic() [gake.PkLen]byte {

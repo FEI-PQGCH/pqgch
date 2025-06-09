@@ -63,6 +63,10 @@ func main() {
 	leaderSession.Init()
 	clusterSession.Init()
 
+	if config.IsRightQKD() {
+		go requestKey(msgsLeader, config.GetRightQKDURL())
+	}
+
 	// Wire incoming cluster messages into the TUI.
 	tui.AttachMessages(clusterSession.Received)
 
@@ -91,11 +95,12 @@ func handleConnection(
 	clusterChan chan util.Message,
 	leaderChan chan util.Message,
 ) {
+	defer conn.Close()
+
 	reader := util.NewMessageReader(conn)
 	// Verify that the client sent some message.
 	if !reader.HasMessage() {
 		fmt.Println("[ERROR] Client did not send any message")
-		conn.Close()
 		return
 	}
 
@@ -116,8 +121,11 @@ func handleConnection(
 			clients.broadcast(msg)
 			return
 		}
+		if msg.Type == util.QKDIDsMsg {
+			go requestKeyWithID(leaderChan, config.GetLeftQKDURL(), msg.Content)
+			return
+		}
 		leaderChan <- msg
-		conn.Close()
 		return
 	}
 

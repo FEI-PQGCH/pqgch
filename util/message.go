@@ -32,6 +32,9 @@ var MessageTypeNames = map[int]string{
 	LeaderAkeAMsg:           "LeaderAkeAMsg",
 	LeaderAkeBMsg:           "LeaderAkeBMsg",
 	LeaderXiRiCommitmentMsg: "LeaderXiRiCommitmentMsg",
+	QKDLeftKeyMsg:           "QKDLeftKeyMsg",
+	QKDRightKeyMsg:          "QKDRightKeyMsg",
+	QKDIDsMsg:               "QKDIDsMsg",
 }
 
 func (m Message) TypeName() string {
@@ -48,6 +51,9 @@ const (
 	LeaderAkeAMsg
 	LeaderAkeBMsg
 	LeaderXiRiCommitmentMsg
+	QKDLeftKeyMsg
+	QKDRightKeyMsg
+	QKDIDsMsg
 )
 
 func (m Message) Send(conn net.Conn) error {
