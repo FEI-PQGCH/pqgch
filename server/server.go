@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 
@@ -18,7 +17,8 @@ func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *configFlag == "" {
-		log.Fatalln("[ERROR] Configuration file missing. Please provide it using the -config flag.")
+		fmt.Fprintf(os.Stderr, "[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
+		os.Exit(1)
 	}
 	config = util.GetServConfig(*configFlag)
 

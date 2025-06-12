@@ -59,7 +59,8 @@ func (s *Session) Init() {
 	if s.config.(*util.ServConfig).IsRightQKDPath() {
 		rightKeyQKD, err := s.config.(*util.ServConfig).GetDecodedRightKeyQKD()
 		if err != nil {
-			log.Fatalf("[ERROR] Loading external right key: %v\n", err)
+			fmt.Fprintf(os.Stderr, "[ERROR] Loading external right key: %v\n", err)
+			os.Exit(1)
 		}
 		s.session.KeyRight = rightKeyQKD
 	}
@@ -67,7 +68,8 @@ func (s *Session) Init() {
 	if s.config.(*util.ServConfig).IsLeftQKDPath() {
 		leftKeyQKD, err := s.config.(*util.ServConfig).GetDecodedLeftKeyQKD()
 		if err != nil {
-			log.Fatalf("[ERROR] Loading external left key: %v\n", err)
+			fmt.Fprintf(os.Stderr, "[ERROR] Loading external left key: %v\n", err)
+			os.Exit(1)
 		}
 		s.session.KeyLeft = leftKeyQKD
 	}
