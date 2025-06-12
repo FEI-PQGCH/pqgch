@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"pqgch/cluster_protocol"
 	"pqgch/util"
@@ -14,7 +15,7 @@ func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *configFlag == "" {
-		fmt.Fprintf(os.Stderr, "[ERROR] Configuration file missing. Please provide it using the -config flag")
+		log.Fatalln("[ERROR] Configuration file missing. Please provide it using the -config flag")
 	}
 	config = util.GetUserConfig(*configFlag)
 

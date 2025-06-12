@@ -218,12 +218,12 @@ func GetUserConfig(path string) UserConfig {
 
 	configFile, err := os.Open(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error opening config file at %s: %v\n", path, err)
+		log.Fatalf("[ERROR] Error opening config file at %s: %v\n", path, err)
 	}
 	defer configFile.Close()
 
 	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing config file: %v\n", err)
+		log.Fatalf("[ERROR] Error parsing config file: %v\n", err)
 	}
 
 	return config
@@ -234,12 +234,12 @@ func GetServConfig(path string) ServConfig {
 
 	configFile, err := os.Open(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error opening config file at %s: %v\n", path, err)
+		log.Fatalf("[ERROR] Error opening config file at %s: %v\n", path, err)
 	}
 	defer configFile.Close()
 
 	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing config file: %v\n", err)
+		log.Fatalf("[ERROR] Error parsing config file: %v\n", err)
 	}
 	return config
 }
