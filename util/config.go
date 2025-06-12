@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"pqgch/gake"
@@ -205,6 +206,7 @@ func openAndDecodeQKDKey(filePath string) ([gake.SsLen]byte, error) {
 		return key, err
 	}
 	if len(decoded) < gake.SsLen {
+		fmt.Fprintf(os.Stderr, "[ERROR] Cluster key file is too short\n")
 		return key, errors.New("[ERROR] Cluster key file is too short")
 	}
 	copy(key[:], decoded)
@@ -216,12 +218,12 @@ func GetUserConfig(path string) UserConfig {
 
 	configFile, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("[ERROR] Error opening config file at %s: %v", path, err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error opening config file at %s: %v\n", path, err)
 	}
 	defer configFile.Close()
 
 	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
-		log.Fatalf("[ERROR] Error parsing config file: %v", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing config file: %v\n", err)
 	}
 
 	return config
@@ -232,12 +234,12 @@ func GetServConfig(path string) ServConfig {
 
 	configFile, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("[ERROR] Error opening config file at %s: %v", path, err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error opening config file at %s: %v\n", path, err)
 	}
 	defer configFile.Close()
 
 	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
-		log.Fatalf("[ERROR] Error parsing config file: %v", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing config file: %v\n", err)
 	}
 	return config
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 
@@ -18,7 +17,7 @@ func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *configFlag == "" {
-		log.Fatalln("[ERROR] Configuration file missing. Please provide it using the -config flag.")
+		fmt.Fprintf(os.Stderr, "[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
 	}
 	config = util.GetServConfig(*configFlag)
 
@@ -27,14 +26,14 @@ func main() {
 
 	_, port, err := net.SplitHostPort(config.GetCurrentServer())
 	if err != nil {
-		fmt.Printf("[ERROR] Error parsing self address from config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing self address from config: %v\n", err)
 		os.Exit(1)
 	}
 	address := fmt.Sprintf(":%s", port)
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		fmt.Printf("[ERROR] Error starting TCP server: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error starting TCP server: %v\n", err)
 		os.Exit(1)
 	}
 	defer listener.Close()
@@ -75,7 +74,7 @@ func main() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				fmt.Printf("[ERROR] Error accepting connection: %v\n", err)
+				fmt.Fprintf(os.Stderr, "[ERROR] Error accepting connection: %v\n", err)
 				continue
 			}
 			go handleConnection(clients, conn, tracker, msgsCluster, msgsLeader)
@@ -100,7 +99,7 @@ func handleConnection(
 	reader := util.NewMessageReader(conn)
 	// Verify that the client sent some message.
 	if !reader.HasMessage() {
-		fmt.Println("[ERROR] Client did not send any message")
+		fmt.Fprintf(os.Stderr, "[ERROR] Client did not send any message")
 		return
 	}
 

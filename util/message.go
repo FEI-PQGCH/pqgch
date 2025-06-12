@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 )
 
@@ -108,7 +109,7 @@ func (reader *MessageReader) advance() {
 		}
 	} else {
 		if err := reader.scanner.Err(); err != nil {
-			fmt.Println("[ERROR] error reading from connection:", err)
+			fmt.Fprintf(os.Stderr, "[ERROR] error reading from connection: %v\n", err)
 		} else {
 			fmt.Printf("[INFO] Connection closed\n")
 		}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 )
 
@@ -57,7 +58,7 @@ func (t *TCPTransport) Send(msg Message) {
 
 	msgData, err := json.Marshal(msg)
 	if err != nil {
-		fmt.Println("[ERROR] Error marshaling message:", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error marshaling message: %v", err)
 		return
 	}
 
@@ -65,7 +66,7 @@ func (t *TCPTransport) Send(msg Message) {
 
 	_, err = t.conn.Write(msgData)
 	if err != nil {
-		fmt.Println("[ERROR] Error sending message:", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error sending message: %v\n", err)
 	}
 }
 

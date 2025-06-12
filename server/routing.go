@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"pqgch/util"
 	"sync"
 	"time"
@@ -98,7 +99,7 @@ func (clients *Clients) broadcast(msg util.Message) {
 
 		err := msg.Send(c.conn)
 		if err != nil {
-			fmt.Println("[ERROR] sending message to client:", err)
+			fmt.Fprintf(os.Stderr, "[ERROR] sending message to client: %v\n", err)
 			c.conn.Close()
 			return
 		}
@@ -187,7 +188,7 @@ func sendToLeader(address string, msg util.Message) {
 		var err error
 		conn, err = net.Dial("tcp", address)
 		if err != nil {
-			fmt.Printf("[ERROR] Leader (%s) connection error: %v. Retrying...\n", address, err)
+			fmt.Fprintf(os.Stderr, "[ERROR] Leader (%s) connection error: %v. Retrying...\n", address, err)
 			time.Sleep(2 * time.Second)
 			continue
 		}

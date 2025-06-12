@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"pqgch/gake"
 	"strconv"
 )
@@ -40,7 +41,8 @@ type KeyContainer struct {
 func GetKey(endpoint, saeID string) (string, string, error) {
 	resp, err := http.Get(endpoint + saeID + "/enc_keys?number=1&size=" + strconv.Itoa(gake.SsLen*8))
 	if err != nil {
-		return "", "", fmt.Errorf("failed to call ETSI API: %v", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] failed to call ETSI API: %v\n", err)
+		return "", "", fmt.Errorf("failed to call ETSI API: %w", err)
 	}
 
 	key, id, err := parseResponse(resp)
@@ -52,7 +54,8 @@ func GetKey(endpoint, saeID string) (string, string, error) {
 func GetKeyWithID(endpoint, saeID, keyID string) (string, string, error) {
 	resp, err := http.Get(endpoint + saeID + "/dec_keys?key_ID=" + keyID)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to call ETSI API: %v", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] failed to call ETSI API: %v\n", err)
+		return "", "", fmt.Errorf("failed to call ETSI API: %w", err)
 	}
 
 	key, id, err := parseResponse(resp)

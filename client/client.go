@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"pqgch/cluster_protocol"
 	"pqgch/util"
@@ -15,7 +14,7 @@ func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *configFlag == "" {
-		log.Fatalln("[ERROR] Configuration file missing. Please provide it using the -config flag")
+		fmt.Fprintf(os.Stderr, "[ERROR] Configuration file missing. Please provide it using the -config flag")
 	}
 	config = util.GetUserConfig(*configFlag)
 
@@ -24,7 +23,7 @@ func main() {
 
 	transport, err := util.NewTCPTransport(config.LeadAddr)
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "[ERROR] Unable to connect to server: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Unable to connect to server: %v\n", err)
 		os.Exit(1)
 	}
 	transport.Send(util.Message{

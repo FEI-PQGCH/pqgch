@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"os"
 	"pqgch/gake"
 	"pqgch/util"
 )
@@ -68,7 +69,7 @@ func NewSession(transport util.Transport, config util.ConfigAccessor) *Session {
 		recoveredKey, err := util.DecryptAndCheckHMAC(s.keyCiphertext, s.session.SharedSecret)
 
 		if err != nil {
-			fmt.Println("[ERROR] Failed decrypting key message:", err)
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed decrypting key message: %v\n", err)
 			return
 		}
 
@@ -210,7 +211,7 @@ func (s *Session) xiRiCommitment(msg util.Message) {
 func (s *Session) keyHandler(msg util.Message) {
 	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
-		fmt.Printf("[ERROR] Failed to decode key message: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to decode key message: %v\n", err)
 		return
 	}
 	if s.session.SharedSecret == [gake.SsLen * 2]byte{} {
@@ -220,7 +221,7 @@ func (s *Session) keyHandler(msg util.Message) {
 	}
 	mainSessionKey, err := util.DecryptAndCheckHMAC(decodedContent, s.session.SharedSecret)
 	if err != nil {
-		fmt.Println("[ERROR] Failed decrypting key ciphertext message:", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed decrypting key ciphertext message:", err)
 		return
 	}
 	copy(s.mainSessionKey[:], mainSessionKey)
@@ -235,7 +236,7 @@ func (s *Session) text(msg util.Message) {
 	}
 	plainText, err := util.DecryptAesGcm(msg.Content, s.mainSessionKey[:])
 	if err != nil {
-		fmt.Println("[ERROR] Failed decrypting message:", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed decrypting message:", err)
 		return
 	}
 	msg.Content = plainText
@@ -266,7 +267,7 @@ func (s *Session) SendText(text string) {
 	}
 	cipherText, err := util.EncryptAesGcm(text, s.mainSessionKey[:])
 	if err != nil {
-		fmt.Printf("[ERROR] Encryption failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Encryption failed: %v\n", err)
 		return
 	}
 	msg := util.Message{
