@@ -17,7 +17,6 @@ It uses Kyber-GAKE for secure, quantum-resistant group key establishment among c
    1. [Client](#client-configuration-cxconfjson)
    2. [Server](#server-configuration-sxconfjson)
 3. [Mock ETSI QKD API server](#mock-etsi-qkd-api-server)
-4. [Runtime dependencies](#run-time-dependencies)
 
 ## Running the application
 
