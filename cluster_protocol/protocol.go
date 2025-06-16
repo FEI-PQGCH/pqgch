@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"os"
 	"pqgch/gake"
 	"pqgch/util"
@@ -221,7 +220,7 @@ func (s *Session) keyHandler(msg util.Message) {
 	}
 	mainSessionKey, err := util.DecryptAndCheckHMAC(decodedContent, s.session.SharedSecret)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed decrypting key ciphertext message:", err)
+		fmt.Fprintln(os.Stderr, "[ERROR] Failed decrypting key ciphertext message:", err)
 		return
 	}
 	copy(s.mainSessionKey[:], mainSessionKey)
@@ -236,7 +235,7 @@ func (s *Session) text(msg util.Message) {
 	}
 	plainText, err := util.DecryptAesGcm(msg.Content, s.mainSessionKey[:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed decrypting message:", err)
+		fmt.Fprintln(os.Stderr, "[ERROR] Failed decrypting message:", err)
 		return
 	}
 	msg.Content = plainText
@@ -373,14 +372,16 @@ func tryFinalizeProtocol(session *CryptoSession, config util.ConfigAccessor) {
 	if ok {
 		fmt.Println("[CRYPTO] Xs check: success")
 	} else {
-		log.Fatalln("[CRYPTO] Xs check: fail")
+		fmt.Fprintln(os.Stderr, "[CRYPTO] Xs check: fail")
+		os.Exit(1)
 	}
 
 	ok = checkCommitments(len(config.GetNamesOrAddrs()), session.Xs, config.GetDecodedPublicKeys(), session.Rs, session.Commitments)
 	if ok {
 		fmt.Println("[CRYPTO] Commitments check: success")
 	} else {
-		log.Fatalln("[CRYPTO] Commitments check: fail")
+		fmt.Fprintln(os.Stderr, "[CRYPTO] Commitments check: fail")
+		os.Exit(1)
 	}
 
 	for i := range session.Xs {

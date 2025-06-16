@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"pqgch/gake"
 	"strings"
@@ -39,13 +38,15 @@ func (c *ClusterConfig) GetNamesOrAddrs() []string {
 func (c *ClusterConfig) loadClusterKeys() []string {
 	data, err := os.ReadFile(c.PublicKeys)
 	if err != nil {
-		log.Fatalf("couldn't load cluster public-keys from %s: %v", c.PublicKeys, err)
+		fmt.Fprintf(os.Stderr, "couldn't load cluster public-keys from %s: %v", c.PublicKeys, err)
+		os.Exit(1)
 	}
 	var blob struct {
 		PublicKeys []string `json:"publicKeys"`
 	}
 	if err := json.Unmarshal(data, &blob); err != nil {
-		log.Fatalf("bad JSON in %s: %v", c.PublicKeys, err)
+		fmt.Fprintf(os.Stderr, "bad JSON in %s: %v", c.PublicKeys, err)
+		os.Exit(1)
 	}
 	return blob.PublicKeys
 }

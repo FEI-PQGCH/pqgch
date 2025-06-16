@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"pqgch/util"
@@ -203,7 +202,8 @@ func sendToLeader(address string, msg util.Message) {
 func requestKey(leaderChan chan<- util.Message, url string) {
 	key, keyID, err := util.GetKey(url, "dummy_id")
 	if err != nil {
-		log.Fatalln(err.Error())
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
 	}
 
 	// Process the received key.
@@ -233,7 +233,8 @@ func requestKey(leaderChan chan<- util.Message, url string) {
 func requestKeyWithID(leaderChan chan<- util.Message, url, id string) {
 	key, _, err := util.GetKeyWithID(url, "dummy_id", id)
 	if err != nil {
-		log.Fatalln(err.Error())
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
 	}
 
 	// Process the received key.

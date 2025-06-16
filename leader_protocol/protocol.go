@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"os"
 	"pqgch/gake"
 	"pqgch/util"
@@ -277,14 +276,16 @@ func tryFinalizeProtocol(session *CryptoSession, config util.ConfigAccessor) {
 	if ok {
 		fmt.Println("[CRYPTO] Xs check: success")
 	} else {
-		log.Fatalln("[CRYPTO] Xs check: fail")
+		fmt.Fprintln(os.Stderr, "[CRYPTO] Xs check: fail")
+		os.Exit(1)
 	}
 
 	ok = checkCommitments(len(config.GetNamesOrAddrs()), session.Xs, session.Rs, session.Commitments)
 	if ok {
 		fmt.Println("[CRYPTO] Commitments check: success")
 	} else {
-		log.Fatalln("[CRYPTO] Commitments check: fail")
+		fmt.Fprintln(os.Stderr, "[CRYPTO] Commitments check: fail")
+		os.Exit(1)
 	}
 
 	pids := make([][gake.PidLen]byte, len(config.GetNamesOrAddrs()))
