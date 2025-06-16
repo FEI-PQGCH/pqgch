@@ -1,8 +1,18 @@
 package gake
 
 /*
-#cgo CFLAGS: -I./kyber-gake/ref -Wall  -Wextra -Wpedantic -Werror  -Wshadow -Wpointer-arith -O3 -fwrapv
+#cgo CFLAGS: -I./kyber-gake/ref -Wall  -Wextra -Wpedantic -Werror  -Wshadow -Wpointer-arith -O3
 #cgo LDFLAGS: -L./kyber-gake/ref -lssl -lcrypto
+
+#include "params.h"
+
+enum {
+    GoKyberK    = KYBER_K,
+    GoPkLen     = KYBER_PUBLICKEYBYTES,
+    GoSkLen     = KYBER_SECRETKEYBYTES,
+    GoCtKemLen  = KYBER_CIPHERTEXTBYTES,
+    GoSsBytes   = KYBER_SSBYTES
+};
 
 #include "gake.c"
 #include "utils.c"
@@ -33,12 +43,13 @@ import (
 )
 
 const (
-	PkLen    = 1568
-	SkLen    = 3168
-	CtKemLen = 1568
+	KyberK   = int(C.GoKyberK)
+	PkLen    = int(C.GoPkLen)
+	SkLen    = int(C.GoSkLen)
+	CtKemLen = int(C.GoCtKemLen)
+	SsLen    = int(C.GoSsBytes)
 	CtDemLen = 36
 	TagLen   = 16
-	SsLen    = 32
 	CoinLen  = 44
 	PidLen   = 20
 	AkeSendB = 2 * CtKemLen
