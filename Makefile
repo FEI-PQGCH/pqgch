@@ -1,5 +1,5 @@
-CC := $(shell command -v $(PREFERRED_CC) 2>/dev/null || echo gcc)
 PREFERRED_CC := gcc-9
+CC := $(shell command -v $(PREFERRED_CC) 2>/dev/null || echo gcc)
 
 KYBER_K ?= 4
 
