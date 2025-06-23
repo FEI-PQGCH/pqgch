@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"pqgch/gake"
 )
@@ -56,7 +57,20 @@ func ComputeAllLeftKeys(numParties int, partyIndex int, keyLeft [32]byte, xs [][
 }
 
 func EncryptAesGcm(plaintext string, key []byte) (string, error) {
-	block, err := aes.NewCipher(key)
+	var aesKey []byte
+	switch gake.KyberK {
+	case 2:
+		aesKey = key[:16]
+	case 3:
+		aesKey = key[:24]
+	case 4:
+
+		aesKey = key[:32]
+	default:
+		return "", fmt.Errorf("unsupported kyber ID: %d", gake.KyberK)
+	}
+
+	block, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return "", err
 	}
@@ -82,7 +96,19 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(key)
+	var aesKey []byte
+	switch gake.KyberK {
+	case 2:
+		aesKey = key[:16]
+	case 3:
+		aesKey = key[:24]
+	case 4:
+		aesKey = key[:32]
+	default:
+		return "", fmt.Errorf("unsupported kyber ID: %d", gake.KyberK)
+	}
+
+	block, err := aes.NewCipher(aesKey)
 	if err != nil {
 		return "", err
 	}
