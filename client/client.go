@@ -8,8 +8,6 @@ import (
 	"pqgch/util"
 )
 
-var config util.UserConfig
-
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
@@ -19,7 +17,7 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	config = util.GetUserConfig(*configFlag)
+	config, _ := util.GetConfig[util.UserConfig](*configFlag)
 
 	tui := util.NewTUI()
 	tui.HijackStdout()
@@ -37,7 +35,7 @@ func main() {
 		ClusterID:  config.ClusterConfig.Index,
 	})
 
-	session := cluster_protocol.NewSession(transport, &config.ClusterConfig)
+	session := cluster_protocol.NewSession(transport, config.ClusterConfig)
 	session.Init()
 
 	tui.AttachMessages(session.Received)

@@ -11,7 +11,7 @@ import (
 	"pqgch/util"
 )
 
-var config util.ServConfig
+var config util.LeaderConfig
 
 func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
@@ -20,12 +20,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
 		os.Exit(1)
 	}
-	config = util.GetServConfig(*configFlag)
+	config, _ = util.GetConfig[util.LeaderConfig](*configFlag)
 
 	tui := util.NewTUI()
 	tui.HijackStdout()
 
-	_, port, err := net.SplitHostPort(config.GetCurrentServer())
+	_, port, err := net.SplitHostPort(config.Addrs[config.Index])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing self address from config: %v\n", err)
 		os.Exit(1)
@@ -42,11 +42,11 @@ func main() {
 
 	// Create message tracker and in-memory client registry.
 	tracker := util.NewMessageTracker()
-	clients := newClients(&config.ClusterConfig)
+	clients := newClients(config.ClusterConfig)
 
 	// Initialize leader transport/session.
 	leaderTransport := newLeaderTransport()
-	leaderSession := leader_protocol.NewSession(leaderTransport, &config)
+	leaderSession := leader_protocol.NewSession(leaderTransport, config)
 	msgsLeader := make(chan util.Message)
 	go transportManager(leaderTransport, msgsLeader)
 
@@ -54,7 +54,7 @@ func main() {
 	clusterTransport := newClusterTransport(clients)
 	clusterSession := cluster_protocol.NewLeaderSession(
 		clusterTransport,
-		&config.ClusterConfig,
+		config.ClusterConfig,
 		leaderSession.GetKeyRef(),
 	)
 	msgsCluster := make(chan util.Message)
@@ -63,7 +63,7 @@ func main() {
 	leaderSession.Init()
 	clusterSession.Init()
 
-	if config.IsRightQKD() {
+	if config.IsRightQKDUrl() {
 		go requestKey(msgsLeader, config.GetRightQKDURL())
 	}
 

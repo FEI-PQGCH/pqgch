@@ -21,11 +21,11 @@ type Client struct {
 	queue util.MessageQueue
 }
 
-func newClients(config util.ConfigAccessor) *Clients {
+func newClients(config util.ClusterConfig) *Clients {
 	var clients Clients
 
-	for i, addr := range config.GetNamesOrAddrs() {
-		if i == config.GetIndex() {
+	for i, addr := range config.Names {
+		if i == config.Index {
 			continue
 		}
 		client := Client{
@@ -158,9 +158,9 @@ func newLeaderTransport() *LeaderTransport {
 func (t *LeaderTransport) Send(msg util.Message) {
 	switch msg.Type {
 	case util.LeaderAkeAMsg:
-		sendToLeader(config.GetNamesOrAddrs()[msg.ReceiverID], msg)
+		sendToLeader(config.Addrs[msg.ReceiverID], msg)
 	case util.LeaderAkeBMsg:
-		sendToLeader(config.GetNamesOrAddrs()[msg.ReceiverID], msg)
+		sendToLeader(config.Addrs[msg.ReceiverID], msg)
 	case util.LeaderXiRiCommitmentMsg:
 		broadcastToLeaders(msg)
 	}
@@ -172,7 +172,7 @@ func (t *LeaderTransport) receive(msg util.Message) {
 
 // Broadcast msg to all the other leaders.
 func broadcastToLeaders(msg util.Message) {
-	for i, addr := range config.GetNamesOrAddrs() {
+	for i, addr := range config.Addrs {
 		if i == config.Index {
 			continue
 		}
@@ -212,22 +212,22 @@ func requestKey(leaderChan chan<- util.Message, url string) {
 		SenderID:   -1,
 		SenderName: "ETSI API",
 		Type:       util.QKDRightKeyMsg,
-		ReceiverID: config.GetIndex(),
+		ReceiverID: config.Index,
 		Content:    key,
 	}
 	leaderChan <- msg
 
 	// Send keyID to right neighbor.
-	receiverID := (config.GetIndex() + 1) % len(config.GetNamesOrAddrs())
+	receiverID := (config.Index + 1) % len(config.Addrs)
 	msg = util.Message{
 		ID:         util.UniqueID(),
-		SenderID:   config.GetIndex(),
+		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		Type:       util.QKDIDsMsg,
 		ReceiverID: receiverID,
 		Content:    keyID,
 	}
-	sendToLeader(config.ServAddrs[receiverID], msg)
+	sendToLeader(config.Addrs[receiverID], msg)
 }
 
 func requestKeyWithID(leaderChan chan<- util.Message, url, id string) {
@@ -243,7 +243,7 @@ func requestKeyWithID(leaderChan chan<- util.Message, url, id string) {
 		SenderID:   -1,
 		SenderName: "ETSI API",
 		Type:       util.QKDLeftKeyMsg,
-		ReceiverID: config.GetIndex(),
+		ReceiverID: config.Index,
 		Content:    key,
 	}
 	leaderChan <- msg
