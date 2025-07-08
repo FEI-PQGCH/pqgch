@@ -50,7 +50,7 @@ func (clients *Clients) makeOnline(id int, conn net.Conn) {
 func (clients *Clients) makeOffline(id int) {
 	clients.lock.Lock()
 	defer clients.lock.Unlock()
-	fmt.Println("[INFO] Client disconnected:", clients.data[id].conn.RemoteAddr())
+	util.PrintLine(fmt.Sprint("[INFO] Client disconnected:", clients.data[id].conn.RemoteAddr()))
 	clients.data[id].conn.Close()
 }
 
@@ -74,7 +74,7 @@ func (clients *Clients) send(msg util.Message) {
 	client := &clients.data[msg.ReceiverID]
 	if client.conn == nil {
 		client.queue.Add(msg)
-		fmt.Printf("[ROUTE] Stored message\n")
+		util.PrintLine("[ROUTE] Stored message\n")
 		return
 	}
 	msg.Send(client.conn)
@@ -98,12 +98,12 @@ func (clients *Clients) broadcast(msg util.Message) {
 
 		err := msg.Send(c.conn)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] sending message to client: %v\n", err)
+			util.PrintLine(fmt.Sprintf("[ERROR] sending message to client: %v\n", err))
 			c.conn.Close()
 			return
 		}
 	}
-	fmt.Printf("[ROUTE] Broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName)
+	util.PrintLine(fmt.Sprintf("[ROUTE] Broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName))
 }
 
 type ServerTransport interface {
@@ -187,13 +187,13 @@ func sendToLeader(address string, msg util.Message) {
 		var err error
 		conn, err = net.Dial("tcp", address)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Leader (%s) connection error: %v. Retrying...\n", address, err)
+			util.PrintLine(fmt.Sprintf("[ERROR] Leader (%s) connection error: %v. Retrying...\n", address, err))
 			time.Sleep(2 * time.Second)
 			continue
 		}
 		break
 	}
-	fmt.Printf("[ROUTE] Sending message %s to Leader %s\n", msg.TypeName(), address)
+	util.PrintLine(fmt.Sprintf("[ROUTE] Sending message %s to Leader %s\n", msg.TypeName(), address))
 
 	msg.Send(conn)
 }
@@ -202,7 +202,7 @@ func sendToLeader(address string, msg util.Message) {
 func requestKey(leaderChan chan<- util.Message, url string) {
 	key, keyID, err := util.GetKey(url, "dummy_id")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
+		util.PrintLine(err.Error())
 		os.Exit(1)
 	}
 

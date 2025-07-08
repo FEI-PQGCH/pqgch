@@ -21,10 +21,6 @@ func main() {
 		os.Exit(1)
 	}
 	config, _ = util.GetConfig[util.LeaderConfig](*configFlag)
-
-	tui := util.NewTUI()
-	tui.HijackStdout()
-
 	_, port, err := net.SplitHostPort(config.Addrs[config.Index])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing self address from config: %v\n", err)
@@ -38,7 +34,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer listener.Close()
-	fmt.Printf("[ROUTE]: server listening on %s\n", address)
+	util.PrintLine(fmt.Sprintf("[ROUTE]: server listening on %s\n", address))
 
 	// Create message tracker and in-memory client registry.
 	tracker := util.NewMessageTracker()
@@ -67,15 +63,12 @@ func main() {
 		go requestKey(msgsLeader, config.GetRightQKDURL())
 	}
 
-	// Wire incoming cluster messages into the TUI.
-	tui.AttachMessages(clusterSession.Received)
-
 	// Accept connections in a goroutine.
 	go func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[ERROR] Error accepting connection: %v\n", err)
+				util.PrintLine(fmt.Sprintf("[ERROR] Error accepting connection: %v\n", err))
 				continue
 			}
 			go handleConnection(clients, conn, tracker, msgsCluster, msgsLeader)
@@ -83,7 +76,7 @@ func main() {
 	}()
 
 	// Run the TUI event loop; on ENTER send text via cluster session.
-	tui.Run(func(line string) {
+	util.StartTUI(func(line string) {
 		clusterSession.SendText(line)
 	})
 }
@@ -100,7 +93,7 @@ func handleConnection(
 	reader := util.NewMessageReader(conn)
 	// Verify that the client sent some message.
 	if !reader.HasMessage() {
-		fmt.Fprintf(os.Stderr, "[ERROR] Client did not send any message")
+		util.PrintLine("[ERROR] Client did not send any message")
 		return
 	}
 
@@ -115,7 +108,7 @@ func handleConnection(
 			return
 		}
 		// Log receipt of a leader protocol message.
-		fmt.Printf("[ROUTE] Received %s message from Leader\n", msg.TypeName())
+		util.PrintLine(fmt.Sprintf("[ROUTE] Received %s message from Leader\n", msg.TypeName()))
 		if msg.Type == util.TextMsg {
 			clusterChan <- msg
 			clients.broadcast(msg)
@@ -130,7 +123,7 @@ func handleConnection(
 	}
 
 	// Handle client login.
-	fmt.Printf("[INFO] New client (%s, %s) joined\n", msg.SenderName, conn.RemoteAddr())
+	util.PrintLine(fmt.Sprintf("[INFO] New client (%s, %s) joined\n", msg.SenderName, conn.RemoteAddr()))
 	clientID := msg.SenderID
 
 	clients.makeOnline(clientID, conn)
@@ -142,7 +135,7 @@ func handleConnection(
 	// Handle messages from this client in an infinite loop.
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		fmt.Printf("[ROUTE] Received %s from %s\n", msg.TypeName(), msg.SenderName)
+		util.PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s\n", msg.TypeName(), msg.SenderName))
 
 		if !tracker.AddMessage(msg.ID) {
 			continue

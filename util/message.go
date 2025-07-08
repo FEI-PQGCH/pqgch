@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 )
 
@@ -102,16 +101,16 @@ func (reader *MessageReader) advance() {
 		var msg Message
 		err := json.Unmarshal(reader.scanner.Bytes(), &msg)
 		if err != nil {
-			fmt.Println("[ERROR] Error unmarshaling message:", err)
+			PrintLine(fmt.Sprint("[ERROR] Error unmarshaling message:", err))
 		} else {
 			reader.nextMsg = &msg
 			reader.hasNext = true
 		}
 	} else {
 		if err := reader.scanner.Err(); err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] error reading from connection: %v\n", err)
+			PrintLine(fmt.Sprintf("[ERROR] error reading from connection: %v", err))
 		} else {
-			fmt.Printf("[INFO] Connection closed\n")
+			PrintLine("[INFO] Connection closed")
 		}
 	}
 }

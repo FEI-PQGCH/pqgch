@@ -62,18 +62,18 @@ func NewSession(transport util.Transport, config util.ClusterConfig) *Session {
 
 	s.session.OnSharedKey = func() {
 		if s.keyCiphertext == nil {
-			fmt.Println("[CRYPTO] No key ciphertext, skipping")
+			util.PrintLine("[CRYPTO] No key ciphertext, skipping")
 			return
 		}
 		recoveredKey, err := util.DecryptAndCheckHMAC(s.keyCiphertext, s.session.SharedSecret)
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed decrypting key message: %v\n", err)
+			util.PrintLine(fmt.Sprintf("[ERROR] Failed decrypting key message: %v\n", err))
 			return
 		}
 
 		copy(s.mainSessionKey[:], recoveredKey)
-		fmt.Printf("[CRYPTO] Main Session Key established: %02x\n", s.mainSessionKey[:4])
+		util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x\n", s.mainSessionKey[:4]))
 	}
 
 	transport.SetMessageHandler(s.handleMessage)
@@ -94,7 +94,7 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 	}
 
 	s.session.OnSharedKey = func() {
-		fmt.Println("[CRYPTO] Broadcasting Main Session Key to cluster")
+		util.PrintLine("[CRYPTO] Broadcasting Main Session Key to cluster")
 		keyMsg := util.EncryptAndHMAC(*keyRef, config.GetName(), s.session.SharedSecret)
 		s.transport.Send(keyMsg)
 	}
@@ -134,7 +134,7 @@ func (s *Session) akeA(akeB util.Message) {
 		s.config.GetSecretKey(),
 		s.config.GetPublicKeys()[akeB.SenderID])
 
-	fmt.Println("[CRYPTO] Established 2-AKE shared key with left neighbor")
+	util.PrintLine("[CRYPTO] Established 2-AKE shared key with left neighbor")
 
 	akeB = util.Message{
 		ID:         util.UniqueID(),
@@ -158,7 +158,7 @@ func (s *Session) akeB(msg util.Message) {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	s.session.KeyRight = gake.KexAkeSharedA(akeSendB, s.session.TkRight, s.session.EskaRight, s.config.GetSecretKey())
 
-	fmt.Println("[CRYPTO] Established 2-AKE shared key with right neighbor")
+	util.PrintLine("[CRYPTO] Established 2-AKE shared key with right neighbor")
 
 	xi := checkLeftRightKeys(&s.session, s.config)
 
@@ -210,36 +210,36 @@ func (s *Session) xiRiCommitment(msg util.Message) {
 func (s *Session) keyHandler(msg util.Message) {
 	decodedContent, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to decode key message: %v\n", err)
+		util.PrintLine(fmt.Sprintf("[ERROR] Failed to decode key message: %v\n", err))
 		return
 	}
 	if s.session.SharedSecret == [gake.SsLen * 2]byte{} {
-		fmt.Println("[CRYPTO] No cluster sesssion key yet. Storing key ciphertext message.")
+		util.PrintLine(fmt.Sprintln("[CRYPTO] No cluster sesssion key yet. Storing key ciphertext message."))
 		s.keyCiphertext = decodedContent
 		return
 	}
 	mainSessionKey, err := util.DecryptAndCheckHMAC(decodedContent, s.session.SharedSecret)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "[ERROR] Failed decrypting key ciphertext message:", err)
+		util.PrintLine(fmt.Sprintln("[ERROR] Failed decrypting key ciphertext message:", err))
 		return
 	}
 	copy(s.mainSessionKey[:], mainSessionKey)
-	fmt.Printf("[CRYPTO] Main Session Key established: %02x\n", s.mainSessionKey[:4])
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x\n", s.mainSessionKey[:4]))
 }
 
 // Handle a text message - we decrypt it using the main session key and send it to the Received channel.
 func (s *Session) text(msg util.Message) {
 	if *s.mainSessionKey == [gake.SsLen]byte{} {
-		fmt.Println("[INFO] No Main Session Key yet. Skipping message.")
+		util.PrintLine("[INFO] No Main Session Key yet. Skipping message.")
 		return
 	}
 	plainText, err := util.DecryptAesGcm(msg.Content, s.mainSessionKey[:])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "[ERROR] Failed decrypting message:", err)
+		util.PrintLine(fmt.Sprint("[ERROR] Failed decrypting message:", err))
 		return
 	}
-	msg.Content = plainText
-	s.Received <- msg
+	text := fmt.Sprintf("%s: %s", msg.SenderName, plainText)
+	util.PrintLineColored(text, util.ColorGreen)
 }
 
 // Handle the received message according to its type.
@@ -261,12 +261,12 @@ func (s *Session) handleMessage(msg util.Message) {
 // Encrypt and send the text message. To be used by client code.
 func (s *Session) SendText(text string) {
 	if [32]byte(*s.mainSessionKey) == [32]byte{} {
-		fmt.Println("[CRYPTO] No Main Session Key yet. Not sending message.")
+		util.PrintLine("[CRYPTO] No Main Session Key yet. Not sending message.")
 		return
 	}
 	cipherText, err := util.EncryptAesGcm(text, s.mainSessionKey[:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Encryption failed: %v\n", err)
+		util.PrintLine(fmt.Sprintf("[ERROR] Encryption failed: %v\n", err))
 		return
 	}
 	msg := util.Message{
@@ -284,7 +284,7 @@ func (s *Session) SendText(text string) {
 // Also, try finalizing the protocol now, since the Xi we computed could have been the last one we needed.
 func checkLeftRightKeys(session *CryptoSession, config util.ClusterConfig) util.Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
-		fmt.Println("[CRYPTO] Established 2-AKE shared keys with both neighbors")
+		util.PrintLine("[CRYPTO] Established 2-AKE shared keys with both neighbors")
 		xcmMsg := getXiCommitmentCoinMsg(session, config)
 		tryFinalizeProtocol(session, config)
 		return xcmMsg
@@ -366,26 +366,28 @@ func tryFinalizeProtocol(session *CryptoSession, config util.ClusterConfig) {
 		}
 	}
 
-	fmt.Println("[CRYPTO] Received all Xs")
+	util.PrintLine("[CRYPTO] Received all Xs")
 
 	ok := util.CheckXs(session.Xs, len(config.Names))
 	if ok {
-		fmt.Println("[CRYPTO] Xs check: success")
+		util.PrintLine("[CRYPTO] Xs check: success")
 	} else {
+		// TODO: refactor
 		fmt.Fprintln(os.Stderr, "[CRYPTO] Xs check: fail")
 		os.Exit(1)
 	}
 
 	ok = checkCommitments(len(config.Names), session.Xs, config.GetPublicKeys(), session.Rs, session.Commitments)
 	if ok {
-		fmt.Println("[CRYPTO] Commitments check: success")
+		util.PrintLine("[CRYPTO] Commitments check: success")
 	} else {
+		// TODO: refactor
 		fmt.Fprintln(os.Stderr, "[CRYPTO] Commitments check: fail")
 		os.Exit(1)
 	}
 
 	for i := range session.Xs {
-		fmt.Printf("[CRYPTO] X%d: %02x\n", i, (session.Xs)[i][:4])
+		util.PrintLine(fmt.Sprintf("[CRYPTO] X%d: %02x\n", i, (session.Xs)[i][:4]))
 	}
 
 	PIDs := make([][gake.PidLen]byte, len(config.Names))
@@ -399,7 +401,7 @@ func tryFinalizeProtocol(session *CryptoSession, config util.ClusterConfig) {
 	otherLeftKeys := util.ComputeAllLeftKeys(len(config.Names), config.Index, session.KeyLeft, session.Xs, PIDs)
 	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(config.Names))
 
-	fmt.Printf("[CRYPTO] Cluster Shared Secret established: %02x...\n", sharedSecret[:4])
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Cluster Shared Secret established: %02x...\n", sharedSecret[:4]))
 
 	session.SharedSecret = sharedSecret
 	session.OnSharedKey()

@@ -58,6 +58,7 @@ func (s *Session) Init() {
 	if s.config.IsRightQKDPath() {
 		rightKeyQKD, err := s.config.GetRightQKDKey()
 		if err != nil {
+			// TODO: refactor
 			fmt.Fprintf(os.Stderr, "[ERROR] Loading external right key: %v\n", err)
 			os.Exit(1)
 		}
@@ -67,6 +68,7 @@ func (s *Session) Init() {
 	if s.config.IsLeftQKDPath() {
 		leftKeyQKD, err := s.config.GetLeftQKDKey()
 		if err != nil {
+			// TODO: refactor
 			fmt.Fprintf(os.Stderr, "[ERROR] Loading external left key: %v\n", err)
 			os.Exit(1)
 		}
@@ -111,7 +113,7 @@ func (s *Session) akeA(akeBMsg util.Message) {
 		akeSendA,
 		s.config.GetSecretKey(),
 		s.config.GetLeftPublicKey())
-	fmt.Println("[CRYPTO] Established 2-AKE shared key with left neighbor")
+	util.PrintLine("[CRYPTO] Established 2-AKE shared key with left neighbor")
 
 	akeBMsg = util.Message{
 		ID:         util.UniqueID(),
@@ -136,7 +138,7 @@ func (s *Session) akeB(msg util.Message) {
 	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
 	s.session.KeyRight = gake.KexAkeSharedA(akeSendB, s.session.TkRight, s.session.EskaRight, s.config.GetSecretKey())
 
-	fmt.Println("[CRYPTO] Established 2-AKE shared key with right neighbor")
+	util.PrintLine("[CRYPTO] Established 2-AKE shared key with right neighbor")
 
 	xi := checkLeftRightKeys(&s.session, s.config)
 
@@ -207,7 +209,7 @@ func (s *Session) handleMessage(msg util.Message) {
 	case util.QKDRightKeyMsg:
 		s.handleRightKey(msg)
 	default:
-		fmt.Fprintf(os.Stderr, "[ERROR] Unknown message type encountered\n")
+		util.PrintLine("[ERROR] Unknown message type encountered")
 	}
 }
 
@@ -215,7 +217,7 @@ func (s *Session) handleMessage(msg util.Message) {
 // Also, try finalizing the protocol now, since the Xi we computed could have been the last one we needed.
 func checkLeftRightKeys(session *CryptoSession, config util.LeaderConfig) util.Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
-		fmt.Println("[CRYPTO] Established 2-AKE shared keys with both neighbors")
+		util.PrintLine("[CRYPTO] Established 2-AKE shared keys with both neighbors")
 		xcmMsg := getXiRiCommitmentMsg(session, config)
 		tryFinalizeProtocol(session, config)
 		return xcmMsg
@@ -266,24 +268,26 @@ func tryFinalizeProtocol(session *CryptoSession, config util.LeaderConfig) {
 		return
 	}
 
-	fmt.Println("[CRYPTO] Received all Xs")
+	util.PrintLine("[CRYPTO] Received all Xs")
 
 	for i := range session.Xs {
-		fmt.Printf("[CRYPTO] X%d: %02x\n", i, (session.Xs)[i][:4])
+		util.PrintLine(fmt.Sprintf("[CRYPTO] X%d: %02x\n", i, (session.Xs)[i][:4]))
 	}
 
 	ok := util.CheckXs(session.Xs, len(config.Addrs))
 	if ok {
-		fmt.Println("[CRYPTO] Xs check: success")
+		util.PrintLine("[CRYPTO] Xs check: success")
 	} else {
+		// TODO: refactor
 		fmt.Fprintln(os.Stderr, "[CRYPTO] Xs check: fail")
 		os.Exit(1)
 	}
 
 	ok = checkCommitments(len(config.Addrs), session.Xs, session.Rs, session.Commitments)
 	if ok {
-		fmt.Println("[CRYPTO] Commitments check: success")
+		util.PrintLine("[CRYPTO] Commitments check: success")
 	} else {
+		// TODO: refactor
 		fmt.Fprintln(os.Stderr, "[CRYPTO] Commitments check: fail")
 		os.Exit(1)
 	}
@@ -299,7 +303,7 @@ func tryFinalizeProtocol(session *CryptoSession, config util.LeaderConfig) {
 	otherLeftKeys := util.ComputeAllLeftKeys(len(config.Addrs), config.Index, session.KeyLeft, session.Xs, pids)
 	sharedSecret := computeSharedSecret(otherLeftKeys, pids, len(config.Addrs))
 
-	fmt.Printf("[CRYPTO] Main Session Key established: %02x...\n", sharedSecret[:4])
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x...\n", sharedSecret[:4]))
 
 	session.SharedSecret = sharedSecret
 }

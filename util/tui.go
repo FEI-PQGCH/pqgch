@@ -3,117 +3,69 @@ package util
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
+	"os/signal"
 	"strings"
 	"syscall"
 	"unsafe"
 )
 
-// oldStdout holds the original os.Stdout so that we can draw directly
-// to the terminal even after hijacking os.Stdout into a pipe.
-var oldStdout *os.File
-
-// winsize is used for retrieving terminal dimensions via ioctl.
 type winsize struct {
-	Row    uint16
-	Col    uint16
-	Xpixel uint16
-	Ypixel uint16
+	rows    uint16
+	cols    uint16
+	xpixels uint16
+	ypixels uint16
 }
 
-// GetTerminalSize returns the terminal’s number of rows and columns.
-func GetTerminalSize() (int, int) {
+func getTerminalSize() (rows, cols int) {
 	ws := &winsize{}
-	r1, _, _ := syscall.Syscall(
+	_, _, errno := syscall.Syscall(
 		syscall.SYS_IOCTL,
-		uintptr(oldStdout.Fd()),
+		uintptr(syscall.Stdin),
 		uintptr(syscall.TIOCGWINSZ),
 		uintptr(unsafe.Pointer(ws)),
 	)
-	if int(r1) == -1 {
-		return 24, 80
+	if errno != 0 {
+		panic(errno)
 	}
-	return int(ws.Row), int(ws.Col)
+	return int(ws.rows), int(ws.cols)
 }
 
-// clearScreen sends the ANSI sequence to clear the entire terminal
-// and move the cursor to row 1, column 1.
-func clearScreen() {
-	fmt.Fprint(oldStdout, "\033[2J\033[H")
+const (
+	esc                = "\033["
+	alternateScreenOn  = esc + "?1049h"
+	alternateScreenOff = esc + "?1049l"
+	clearLineCode      = esc + "2K"
+	clearScreen        = esc + "2J\033[H"
+	cursorShow         = esc + "?25h"
+	cursorHide         = esc + "?25l"
+)
+
+func enterAlternateScreen() {
+	fmt.Print(alternateScreenOn)
 }
 
-// Redraw repaints the entire "buffer" of logs: first it displays the last (rows – 1) lines
-// from logs, then draws a bold ">" prompt on the last row. Each entry in logs may
-// already contain ANSI color codes.
-func Redraw(logs []string, scrollOffset int, inputBuffer string) {
-	rows, _ := GetTerminalSize()
-	limit := rows - 1
-	if limit < 0 {
-		limit = 0
-	}
-
-	clearScreen()
-
-	n := len(logs)
-	if n <= limit {
-		for _, line := range logs {
-			fmt.Fprintln(oldStdout, line)
-		}
-	} else {
-		// Clamp scrollOffset in [0, n-limit].
-		if scrollOffset < 0 {
-			scrollOffset = 0
-		}
-		maxOffset := n - limit
-		if scrollOffset > maxOffset {
-			scrollOffset = maxOffset
-		}
-		start := scrollOffset
-		end := scrollOffset + limit
-		for i := start; i < end; i++ {
-			fmt.Fprintln(oldStdout, logs[i])
-		}
-	}
-
-	// Bold prompt + inputBuffer on last line.
-	fmt.Fprintf(oldStdout, "\033[%d;1H\033[1m> %s\033[0m", rows, inputBuffer)
+func exitAlternateScreen() {
+	fmt.Print(alternateScreenOff)
 }
 
-// HijackStdout redirects os.Stdout (and the default log output) into a pipe
-// so that we can capture all fmt.Println or log.Println calls into outputCh.
-// It also preserves the original stdout in oldStdout, so that Redraw/clearScreen
-// can still write directly to the real terminal.
-func HijackStdout(outputCh chan<- string) {
-	r, w, _ := os.Pipe()
-	oldStdout = os.Stdout
-	os.Stdout = w
-	log.SetOutput(w)
-
-	go func() {
-		reader := bufio.NewReader(r)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				close(outputCh)
-				return
-			}
-			outputCh <- strings.TrimSuffix(line, "\n")
-		}
-	}()
+func moveToLine(sb *strings.Builder, i int) {
+	fmt.Fprintf(sb, "%s%d;%dH", esc, i, 1)
 }
 
-type termios struct {
-	Iflag, Oflag, Cflag, Lflag uint32
-	Cc                         [20]byte
-	Ispeed, Ospeed             uint32
+func clearLine(sb *strings.Builder) {
+	fmt.Fprint(sb, clearLineCode)
 }
 
-var oldTermios termios
+func print(sb *strings.Builder, m string) {
+	fmt.Fprint(sb, m)
+}
+
+var oldTermios syscall.Termios
 
 func enableRawMode() {
 	fd := int(os.Stdin.Fd())
-	var newt termios
+	var newt syscall.Termios
 
 	syscall.Syscall(syscall.SYS_IOCTL,
 		uintptr(fd),
@@ -142,147 +94,228 @@ func disableRawMode() {
 	)
 }
 
-// StartInputLoop reads raw keystrokes from os.Stdin and demultiplexes them:
-//   - ENTER → send "" on lineCh.
-//   - UP arrow → send -1 on scrollCh.
-//   - DOWN arrow → send +1 on scrollCh.
-//   - Backspace (127) → send rune(0) on charCh.
-//   - Other runes → send that rune on charCh.
-func StartInputLoop(lineCh chan<- string, scrollCh chan<- int, charCh chan<- rune) {
-	enableRawMode()
-	go func() {
-		defer disableRawMode()
+func wrapLines(lines []Line, width int) []Line {
+	var wrapped []Line
+	for _, line := range lines {
+		current := ""
+		for _, r := range line.Text {
+			if len(current) >= width {
+				wrapped = append(wrapped, Line{Text: current, Color: line.Color})
+				current = ""
+			}
+			current += string(r)
+		}
+		if current != "" {
+			wrapped = append(wrapped, Line{Text: current, Color: line.Color})
+		}
+	}
+	return wrapped
+}
 
-		reader := bufio.NewReader(os.Stdin)
+func wrapInput(input string, width int) []Line {
+	wrapped := []Line{}
+	line := "> "
+	for _, r := range input {
+		if len(line) >= width {
+			wrapped = append(wrapped, Line{Text: line, Color: ColorWhite})
+			line = "> "
+		}
+		line += string(r)
+	}
+	wrapped = append(wrapped, Line{Text: line, Color: ColorWhite})
+	return wrapped
+}
+
+type Color string
+
+const (
+	ColorReset Color = "\033[0m"
+	ColorRed   Color = "\033[31m"
+	ColorGreen Color = "\033[32m"
+	ColorBlue  Color = "\033[34m"
+	ColorCyan  Color = "\033[36m"
+	ColorWhite Color = "\033[37m"
+)
+
+func colorize(msg string, color Color) string {
+	return string(color) + msg + string(ColorReset)
+}
+
+type Line struct {
+	Text  string
+	Color Color
+}
+
+var lineChan = make(chan Line, 100)
+
+func PrintLine(msg string) {
+	PrintLineColored(msg, ColorWhite)
+}
+
+func PrintLineColored(msg string, color Color) {
+	lineChan <- Line{Text: msg, Color: color}
+}
+
+func exit() {
+	exitAlternateScreen()
+	disableRawMode()
+	os.Exit(0)
+}
+
+func StartTUI(onLine func(string)) {
+	// Initialization
+	enterAlternateScreen()
+	defer exitAlternateScreen()
+	fmt.Print(clearScreen)
+
+	enableRawMode()
+	defer disableRawMode()
+
+	// CTRL-C handler
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sig
+		exit()
+	}()
+
+	// Input loop
+	inputReader := bufio.NewReader(os.Stdin)
+	keyboardCh := make(chan rune, 256)
+	go func() {
 		for {
-			r, _, err := reader.ReadRune()
+			r, _, err := inputReader.ReadRune()
 			if err != nil {
+				close(keyboardCh)
 				return
 			}
-			switch r {
-			case '\r', '\n':
-				lineCh <- ""
-			case 127:
-				charCh <- 0
-			case '\x1b':
-				_, _, err2 := reader.ReadRune()
-				if err2 != nil {
-					continue
+			// ESC
+			if r == '\x1b' {
+				if inputReader.Buffered() >= 2 {
+					r1, _, _ := inputReader.ReadRune()
+					r2, _, _ := inputReader.ReadRune()
+					if r1 == '[' {
+						switch r2 {
+						case 'A':
+							keyboardCh <- '↑'
+							continue
+						case 'B':
+							keyboardCh <- '↓'
+							continue
+						}
+					}
+				} else {
+					exit()
 				}
-				third, _, err3 := reader.ReadRune()
-				if err3 != nil {
-					continue
-				}
-				if third == 'A' {
-					scrollCh <- -1
-				} else if third == 'B' {
-					scrollCh <- +1
-				}
-			default:
-				charCh <- r
+				continue
 			}
+			keyboardCh <- r
 		}
 	}()
-}
 
-// TUI encapsulates a scrollable log pane and input prompt.
-type TUI struct {
-	logs         []string
-	inputBuf     []rune
-	scrollOffset int
-
-	outCh    chan string
-	msgCh    <-chan Message
-	lineCh   chan string
-	scrollCh chan int
-	charCh   chan rune
-}
-
-// NewTUI creates a fresh TUI instance.
-func NewTUI() *TUI {
-	return &TUI{
-		logs:         make([]string, 0, 100),
-		inputBuf:     make([]rune, 0, 256),
-		scrollOffset: 0,
-		outCh:        make(chan string),
-		lineCh:       make(chan string),
-		scrollCh:     make(chan int),
-		charCh:       make(chan rune),
-	}
-}
-
-// HijackStdout hooks fmt/log output into the TUI's outCh.
-func (t *TUI) HijackStdout() {
-	HijackStdout(t.outCh)
-}
-
-// AttachMessages connects an incoming chat channel to the TUI.
-func (t *TUI) AttachMessages(ch <-chan Message) {
-	t.msgCh = ch
-}
-
-// Run starts the event loop, redrawing on any update.
-func (t *TUI) Run(onLine func(string)) {
-	StartInputLoop(t.lineCh, t.scrollCh, t.charCh)
-	t.redraw()
+	// Render loop
+	inBuf := []rune{}
+	inputHeight := 0
+	lastInputHeight := 0
+	lines := []Line{}
+	scrollOffset := 0
+	lastFrame := []string{}
 
 	for {
-		select {
-		case <-t.lineCh:
-			text := string(t.inputBuf)
-			t.inputBuf = t.inputBuf[:0]
-			onLine(text)
-			t.appendLine(fmt.Sprintf("\033[32mYou: %s\033[0m", text))
+		rows, cols := getTerminalSize()
 
-		case delta := <-t.scrollCh:
-			t.scrollOffset += delta
-			if t.scrollOffset < 0 {
-				t.scrollOffset = 0
-			}
-			if mo := t.maxOffset(); t.scrollOffset > mo {
-				t.scrollOffset = mo
-			}
-			t.redraw()
-
-		case r := <-t.charCh:
-			if r == 0 {
-				if len(t.inputBuf) > 0 {
-					t.inputBuf = t.inputBuf[:len(t.inputBuf)-1]
-				}
-			} else {
-				t.inputBuf = append(t.inputBuf, r)
-			}
-			t.redraw()
-
-		case line := <-t.outCh:
-			t.appendLine(line)
-
-		case msg := <-t.msgCh:
-			col := fmt.Sprintf("\033[32m%s: %s\033[0m", msg.SenderName, msg.Content)
-			t.appendLine(col)
+		if len(lastFrame) != max(rows-inputHeight, 0) {
+			lastFrame = make([]string, max(rows-inputHeight, 0))
 		}
+
+		wrappedInput := wrapInput(string(inBuf), cols)
+		wrappedMessages := wrapLines(lines, cols)
+
+		lastInputHeight = inputHeight
+		inputHeight = len(wrappedInput)
+
+		viewSpace := max(rows-inputHeight, 0)
+
+		start := max(len(wrappedMessages)-viewSpace, 0)
+		end := len(wrappedMessages)
+
+		start = max(start-scrollOffset, 0)
+		end -= scrollOffset
+
+		if len(wrappedMessages) >= viewSpace && end < viewSpace {
+			end = viewSpace
+		}
+
+		view := wrappedMessages[start:end]
+
+		var sb strings.Builder
+		// Clear old input space
+		if inputHeight < lastInputHeight {
+			from := rows - lastInputHeight + 1
+			for i := range lastInputHeight - inputHeight {
+				moveToLine(&sb, from+i)
+				clearLine(&sb)
+			}
+		}
+		if len(lastFrame) != len(view) {
+			lastFrame = make([]string, len(view))
+		}
+
+		// Draw messages
+		for i, line := range view {
+			if i >= len(lastFrame) || lastFrame[i] != line.Text {
+				moveToLine(&sb, i+1)
+				clearLine(&sb)
+				print(&sb, colorize(line.Text, line.Color))
+				lastFrame[i] = view[i].Text
+			}
+		}
+
+		// Draw input
+		from := rows - inputHeight + 1
+		for i, line := range wrappedInput {
+			moveToLine(&sb, from+i)
+			clearLine(&sb)
+			print(&sb, colorize(line.Text, line.Color))
+		}
+
+		// Render
+		os.Stdout.Write([]byte(sb.String()))
+
+		// Get next input
+		fmt.Print(cursorShow)
+		select {
+		case key := <-keyboardCh:
+			switch key {
+			case '\r', '\n':
+				if len(inBuf) == 0 {
+					continue
+				}
+				lines = append(lines, Line{Text: "You: " + string(inBuf), Color: ColorGreen})
+				onLine(string(inBuf))
+				inBuf = []rune{}
+				continue
+			case 127:
+				if len(inBuf) > 0 {
+					inBuf = inBuf[:len(inBuf)-1]
+				}
+				continue
+			case '↑':
+				scrollOffset++
+				maxScroll := max(len(wrappedMessages)-viewSpace, 0)
+				scrollOffset = min(scrollOffset, maxScroll)
+				continue
+			case '↓':
+				scrollOffset--
+				scrollOffset = max(scrollOffset, 0)
+				continue
+			default:
+				inBuf = append(inBuf, key)
+				continue
+			}
+		case line := <-lineChan:
+			lines = append(lines, line)
+		}
+		fmt.Print(cursorHide)
 	}
-}
-
-// appendLine adds a new log line, pins view to bottom, and redraws.
-func (t *TUI) appendLine(line string) {
-	t.logs = append(t.logs, line)
-	t.scrollOffset = t.maxOffset()
-	t.redraw()
-}
-
-// maxOffset computes how far the log can scroll up.
-func (t *TUI) maxOffset() int {
-	rows, _ := GetTerminalSize()
-	limit := max(rows-1, 0)
-	n := len(t.logs)
-	if n <= limit {
-		return 0
-	}
-	return n - limit
-}
-
-// redraw calls the shared Redraw helper with current state.
-func (t *TUI) redraw() {
-	Redraw(t.logs, t.scrollOffset, string(t.inputBuf))
 }

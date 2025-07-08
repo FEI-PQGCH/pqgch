@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 )
 
@@ -58,7 +57,7 @@ func (t *TCPTransport) Send(msg Message) {
 
 	msgData, err := json.Marshal(msg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error marshaling message: %v", err)
+		PrintLine(fmt.Sprintf("[ERROR] Error marshaling message: %v", err))
 		return
 	}
 
@@ -66,7 +65,7 @@ func (t *TCPTransport) Send(msg Message) {
 
 	_, err = t.conn.Write(msgData)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error sending message: %v\n", err)
+		PrintLine(fmt.Sprintf("[ERROR] Error sending message: %v\n", err))
 	}
 }
 
@@ -83,7 +82,7 @@ func (t *TCPTransport) listen() {
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
 		if msg.Type != TextMsg {
-			fmt.Printf("[ROUTE] Received %s from %s \n", msg.TypeName(), msg.SenderName)
+			PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s \n", msg.TypeName(), msg.SenderName))
 		}
 		handler(msg)
 	}
