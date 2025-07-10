@@ -12,16 +12,14 @@ func main() {
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *configFlag == "" {
-		util.PrintLine(fmt.Sprintln(
-			"[ERROR] Configuration file missing. Please provide it using the -config flag",
-		))
+		fmt.Println("Configuration file missing. Please provide it using the -config flag")
 		os.Exit(1)
 	}
 	config, _ := util.GetConfig[util.UserConfig](*configFlag)
 
 	transport, err := util.NewTCPTransport(config.LeadAddr)
 	if err != nil {
-		util.PrintLine(fmt.Sprintf("[ERROR] Unable to connect to server: %v\n", err))
+		fmt.Printf("Unable to connect to server: %v\n", err)
 		os.Exit(1)
 	}
 	transport.Send(util.Message{

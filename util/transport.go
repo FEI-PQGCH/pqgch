@@ -30,7 +30,7 @@ type TCPTransport struct {
 func NewTCPTransport(address string) (*TCPTransport, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
-		return nil, fmt.Errorf("[ERROR] Failed to connect to server: %w", err)
+		return nil, fmt.Errorf("failed to connect to server: %w", err)
 	}
 
 	t := &TCPTransport{
