@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"os"
 	"pqgch/gake"
 	"pqgch/util"
 	"slices"
@@ -58,9 +57,7 @@ func (s *Session) Init() {
 	if s.config.IsRightQKDPath() {
 		rightKeyQKD, err := s.config.GetRightQKDKey()
 		if err != nil {
-			// TODO: refactor
-			fmt.Fprintf(os.Stderr, "[ERROR] Loading external right key: %v\n", err)
-			os.Exit(1)
+			util.FatalError(fmt.Sprintf("Failed to load external right key. Error: %v", err))
 		}
 		s.session.KeyRight = rightKeyQKD
 	}
@@ -68,9 +65,7 @@ func (s *Session) Init() {
 	if s.config.IsLeftQKDPath() {
 		leftKeyQKD, err := s.config.GetLeftQKDKey()
 		if err != nil {
-			// TODO: refactor
-			fmt.Fprintf(os.Stderr, "[ERROR] Loading external left key: %v\n", err)
-			os.Exit(1)
+			util.FatalError(fmt.Sprintf("Failed to load external left key. Error: %v", err))
 		}
 		s.session.KeyLeft = leftKeyQKD
 	}
@@ -278,18 +273,14 @@ func tryFinalizeProtocol(session *CryptoSession, config util.LeaderConfig) {
 	if ok {
 		util.PrintLine("[CRYPTO] Xs check: success")
 	} else {
-		// TODO: refactor
-		fmt.Fprintln(os.Stderr, "[CRYPTO] Xs check: fail")
-		os.Exit(1)
+		util.FatalError("Failed XS check")
 	}
 
 	ok = checkCommitments(len(config.Addrs), session.Xs, session.Rs, session.Commitments)
 	if ok {
 		util.PrintLine("[CRYPTO] Commitments check: success")
 	} else {
-		// TODO: refactor
-		fmt.Fprintln(os.Stderr, "[CRYPTO] Commitments check: fail")
-		os.Exit(1)
+		util.FatalError("Failed Commitments check")
 	}
 
 	pids := make([][gake.PidLen]byte, len(config.Addrs))

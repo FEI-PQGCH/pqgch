@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"os"
 	"pqgch/gake"
 	"pqgch/util"
 )
@@ -372,18 +371,14 @@ func tryFinalizeProtocol(session *CryptoSession, config util.ClusterConfig) {
 	if ok {
 		util.PrintLine("[CRYPTO] Xs check: success")
 	} else {
-		// TODO: refactor
-		fmt.Fprintln(os.Stderr, "[CRYPTO] Xs check: fail")
-		os.Exit(1)
+		util.FatalError("Failed XS check")
 	}
 
 	ok = checkCommitments(len(config.Names), session.Xs, config.GetPublicKeys(), session.Rs, session.Commitments)
 	if ok {
 		util.PrintLine("[CRYPTO] Commitments check: success")
 	} else {
-		// TODO: refactor
-		fmt.Fprintln(os.Stderr, "[CRYPTO] Commitments check: fail")
-		os.Exit(1)
+		util.FatalError("Failed Commitments check")
 	}
 
 	for i := range session.Xs {

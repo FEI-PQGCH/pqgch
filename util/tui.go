@@ -61,6 +61,12 @@ func print(sb *strings.Builder, m string) {
 	fmt.Fprint(sb, m)
 }
 
+func printLineAt(sb *strings.Builder, m string, i int) {
+	moveToLine(sb, i)
+	clearLine(sb)
+	print(sb, m)
+}
+
 var oldTermios syscall.Termios
 
 func enableRawMode() {
@@ -94,35 +100,35 @@ func disableRawMode() {
 	)
 }
 
-func wrapLines(lines []Line, width int) []Line {
-	var wrapped []Line
+func wrapLines(lines []Log, width int) []Log {
+	var wrapped []Log
 	for _, line := range lines {
 		current := ""
 		for _, r := range line.Text {
 			if len(current) >= width {
-				wrapped = append(wrapped, Line{Text: current, Color: line.Color})
+				wrapped = append(wrapped, Log{Text: current, Color: line.Color})
 				current = ""
 			}
 			current += string(r)
 		}
 		if current != "" {
-			wrapped = append(wrapped, Line{Text: current, Color: line.Color})
+			wrapped = append(wrapped, Log{Text: current, Color: line.Color})
 		}
 	}
 	return wrapped
 }
 
-func wrapInput(input string, width int) []Line {
-	wrapped := []Line{}
+func wrapInput(input string, width int) []Log {
+	wrapped := []Log{}
 	line := "> "
 	for _, r := range input {
 		if len(line) >= width {
-			wrapped = append(wrapped, Line{Text: line, Color: ColorWhite})
+			wrapped = append(wrapped, Log{Text: line, Color: ColorWhite})
 			line = "> "
 		}
 		line += string(r)
 	}
-	wrapped = append(wrapped, Line{Text: line, Color: ColorWhite})
+	wrapped = append(wrapped, Log{Text: line, Color: ColorWhite})
 	return wrapped
 }
 
@@ -141,19 +147,25 @@ func colorize(msg string, color Color) string {
 	return string(color) + msg + string(ColorReset)
 }
 
-type Line struct {
+type Log struct {
 	Text  string
 	Color Color
 }
 
-var lineChan = make(chan Line, 100)
+var lineChan = make(chan Log, 100)
 
 func PrintLine(msg string) {
 	PrintLineColored(msg, ColorWhite)
 }
 
 func PrintLineColored(msg string, color Color) {
-	lineChan <- Line{Text: msg, Color: color}
+	lineChan <- Log{Text: msg, Color: color}
+}
+
+var errChan = make(chan Log, 1)
+
+func FatalError(msg string) {
+	errChan <- Log{Text: msg, Color: ColorRed}
 }
 
 func exit() {
@@ -214,12 +226,13 @@ func StartTUI(onLine func(string)) {
 	}()
 
 	// Render loop
-	inBuf := []rune{}
+	input := []rune{}
 	inputHeight := 0
 	lastInputHeight := 0
-	lines := []Line{}
+	logs := []Log{}
 	scrollOffset := 0
 	lastFrame := []string{}
+	failed := false
 
 	for {
 		rows, cols := getTerminalSize()
@@ -228,8 +241,8 @@ func StartTUI(onLine func(string)) {
 			lastFrame = make([]string, max(rows-inputHeight, 0))
 		}
 
-		wrappedInput := wrapInput(string(inBuf), cols)
-		wrappedMessages := wrapLines(lines, cols)
+		wrappedInput := wrapInput(string(input), cols)
+		wrappedMessages := wrapLines(logs, cols)
 
 		lastInputHeight = inputHeight
 		inputHeight = len(wrappedInput)
@@ -264,9 +277,7 @@ func StartTUI(onLine func(string)) {
 		// Draw messages
 		for i, line := range view {
 			if i >= len(lastFrame) || lastFrame[i] != line.Text {
-				moveToLine(&sb, i+1)
-				clearLine(&sb)
-				print(&sb, colorize(line.Text, line.Color))
+				printLineAt(&sb, colorize(line.Text, line.Color), i+1)
 				lastFrame[i] = view[i].Text
 			}
 		}
@@ -274,30 +285,32 @@ func StartTUI(onLine func(string)) {
 		// Draw input
 		from := rows - inputHeight + 1
 		for i, line := range wrappedInput {
-			moveToLine(&sb, from+i)
-			clearLine(&sb)
-			print(&sb, colorize(line.Text, line.Color))
+			printLineAt(&sb, colorize(line.Text, line.Color), from+i)
 		}
 
 		// Render
 		os.Stdout.Write([]byte(sb.String()))
 
-		// Get next input
+		// Get next input and update state accordingly
 		fmt.Print(cursorShow)
 		select {
 		case key := <-keyboardCh:
+			if failed {
+				exit()
+			}
+
 			switch key {
 			case '\r', '\n':
-				if len(inBuf) == 0 {
+				if len(input) == 0 {
 					continue
 				}
-				lines = append(lines, Line{Text: "You: " + string(inBuf), Color: ColorGreen})
-				onLine(string(inBuf))
-				inBuf = []rune{}
+				logs = append(logs, Log{Text: "You: " + string(input), Color: ColorGreen})
+				onLine(string(input))
+				input = []rune{}
 				continue
 			case 127:
-				if len(inBuf) > 0 {
-					inBuf = inBuf[:len(inBuf)-1]
+				if len(input) > 0 {
+					input = input[:len(input)-1]
 				}
 				continue
 			case '↑':
@@ -310,11 +323,17 @@ func StartTUI(onLine func(string)) {
 				scrollOffset = max(scrollOffset, 0)
 				continue
 			default:
-				inBuf = append(inBuf, key)
+				input = append(input, key)
 				continue
 			}
 		case line := <-lineChan:
-			lines = append(lines, line)
+			if !failed {
+				logs = append(logs, line)
+			}
+		case err := <-errChan:
+			logs = append(logs, err)
+			logs = append(logs, Log{Text: "Press any key to exit", Color: ColorRed})
+			failed = true
 		}
 		fmt.Print(cursorHide)
 	}
