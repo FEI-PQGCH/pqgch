@@ -1,7 +1,6 @@
 package leader_protocol
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
@@ -52,6 +51,10 @@ func NewSession(transport util.Transport, config util.LeaderConfig) *Session {
 	return s
 }
 
+func (s *Session) GetKeyRef() *[32]byte {
+	return &s.session.SharedSecret
+}
+
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
 	if s.config.IsRightQKDPath() {
@@ -70,14 +73,12 @@ func (s *Session) Init() {
 		s.session.KeyLeft = leftKeyQKD
 	}
 
-	xi := checkLeftRightKeys(&s.session, s.config)
-
-	if !xi.IsEmpty() {
-		s.transport.Send(xi)
+	msg := checkLeftRightKeys(&s.session, s.config)
+	if !msg.IsEmpty() {
+		s.transport.Send(msg)
 	}
 
 	if !s.config.IsRightQKDUrl() && !s.config.IsRightQKDPath() {
-		var rightIndex = (s.config.Index + 1) % len(s.config.Addrs)
 		var akeSendARight []byte
 		akeSendARight, s.session.TkRight, s.session.EskaRight = gake.KexAkeInitA(s.config.GetRightPublicKey())
 
@@ -85,8 +86,8 @@ func (s *Session) Init() {
 			ID:         util.UniqueID(),
 			SenderID:   s.config.Index,
 			SenderName: s.config.GetName(),
-			Type:       s.config.GetMessageType(util.AkeAMsg),
-			ReceiverID: rightIndex,
+			Type:       s.config.GetMessageType(util.AkeOneMsg),
+			ReceiverID: (s.config.Index + 1) % len(s.config.Addrs),
 			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 		}
 
@@ -94,14 +95,14 @@ func (s *Session) Init() {
 	}
 }
 
-func (s *Session) GetKeyRef() *[32]byte {
-	return &s.session.SharedSecret
-}
-
 // Process the first message of 2-AKE, holding as a result keyLeft. The second message of 2-AKE is then sent.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
-func (s *Session) akeA(akeBMsg util.Message) {
-	akeSendA, _ := base64.StdEncoding.DecodeString(akeBMsg.Content)
+func (s *Session) onAkeOne(recv util.Message) {
+	akeSendA, err := base64.StdEncoding.DecodeString(recv.Content)
+	if err != nil {
+		util.PrintLine("[ERROR] Invalid base64 content received")
+		return
+	}
 
 	var akeSendB []byte
 	akeSendB, s.session.KeyLeft = gake.KexAkeSharedB(
@@ -110,99 +111,99 @@ func (s *Session) akeA(akeBMsg util.Message) {
 		s.config.GetLeftPublicKey())
 	util.PrintLine("[CRYPTO] Established 2-AKE shared key with left neighbor")
 
-	akeBMsg = util.Message{
+	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
 		SenderName: s.config.GetName(),
-		Type:       s.config.GetMessageType(util.AkeBMsg),
-		ReceiverID: akeBMsg.SenderID,
+		Type:       s.config.GetMessageType(util.AkeTwoMsg),
+		ReceiverID: recv.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
+	s.transport.Send(msg)
 
-	xi := checkLeftRightKeys(&s.session, s.config)
-
-	s.transport.Send(akeBMsg)
-	if !xi.IsEmpty() {
-		s.transport.Send(xi)
+	msg = checkLeftRightKeys(&s.session, s.config)
+	if !msg.IsEmpty() {
+		s.transport.Send(msg)
 	}
 }
 
 // Process the second message of 2-AKE, holding as a result keyRight.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
-func (s *Session) akeB(msg util.Message) {
-	akeSendB, _ := base64.StdEncoding.DecodeString(msg.Content)
+func (s *Session) onAkeTwo(recv util.Message) {
+	akeSendB, err := base64.StdEncoding.DecodeString(recv.Content)
+	if err != nil {
+		util.PrintLine("[ERROR] Invalid base64 content received")
+		return
+	}
+
 	s.session.KeyRight = gake.KexAkeSharedA(akeSendB, s.session.TkRight, s.session.EskaRight, s.config.GetSecretKey())
 
 	util.PrintLine("[CRYPTO] Established 2-AKE shared key with right neighbor")
 
-	xi := checkLeftRightKeys(&s.session, s.config)
-
-	if !xi.IsEmpty() {
-		s.transport.Send(xi)
+	msg := checkLeftRightKeys(&s.session, s.config)
+	if !msg.IsEmpty() {
+		s.transport.Send(msg)
 	}
 }
 
 // Handle the message containing Xi, Ri and Commitment. This message is broadcasted by the other protocol participants to everyone else.
 // If we receive such a message, we need to try finalizing the protocol, as we could have received the last message of this kind we need.
-func (s *Session) xiRiCommitment(msg util.Message) {
-	if msg.SenderID == s.config.Index {
+func (s *Session) onXiRiCommitment(recv util.Message) {
+	decoded, err := base64.StdEncoding.DecodeString(recv.Content)
+	if err != nil {
+		util.PrintLine("[ERROR] Invalid base64 content received")
 		return
 	}
 
-	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
+	s.session.Xs[recv.SenderID] = [gake.SsLen]byte(decoded[:gake.SsLen])
+	s.session.Commitments[recv.SenderID] = [32]byte(decoded[gake.SsLen : 2*gake.SsLen])
+	s.session.Rs[recv.SenderID] = [gake.CoinLen]byte(decoded[2*gake.SsLen:])
 
-	xi := decoded[:gake.SsLen]
-	commitment := decoded[gake.SsLen : gake.SsLen+gake.SsLen]
-	ri := decoded[gake.SsLen+gake.SsLen:]
-
-	var xiArr [gake.SsLen]byte
-	copy(xiArr[:], xi)
-	var commitmentArr [32]byte
-	copy(commitmentArr[:], commitment)
-	var coinArr [gake.CoinLen]byte
-	copy(coinArr[:], ri)
-
-	s.session.Commitments[msg.SenderID] = commitmentArr
-	s.session.Rs[msg.SenderID] = coinArr
-	s.session.Xs[msg.SenderID] = xiArr
 	tryFinalizeProtocol(&s.session, s.config)
 }
 
-func (s *Session) handleLeftKey(msg util.Message) {
-	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
+func (s *Session) onLeftKey(recv util.Message) {
+	decoded, err := base64.StdEncoding.DecodeString(recv.Content)
+	if err != nil || len(decoded) < gake.SsLen {
+		util.PrintLine("[ERROR] Invalid base64 content received")
+		return
+	}
 	copy(s.session.KeyLeft[:], decoded)
 
-	xi := checkLeftRightKeys(&s.session, s.config)
-
-	if !xi.IsEmpty() {
-		s.transport.Send(xi)
+	msg := checkLeftRightKeys(&s.session, s.config)
+	if !msg.IsEmpty() {
+		s.transport.Send(msg)
 	}
 }
 
-func (s *Session) handleRightKey(msg util.Message) {
-	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
+func (s *Session) onRightKey(recv util.Message) {
+	decoded, err := base64.StdEncoding.DecodeString(recv.Content)
+	if err != nil || len(decoded) < gake.SsLen {
+		util.PrintLine("[ERROR] Invalid base64 content received")
+		return
+	}
+
 	copy(s.session.KeyRight[:], decoded)
 
-	xi := checkLeftRightKeys(&s.session, s.config)
-
-	if !xi.IsEmpty() {
-		s.transport.Send(xi)
+	msg := checkLeftRightKeys(&s.session, s.config)
+	if !msg.IsEmpty() {
+		s.transport.Send(msg)
 	}
 }
 
 // Handle the received message according to its type.
-func (s *Session) handleMessage(msg util.Message) {
-	switch msg.Type {
-	case util.LeaderAkeAMsg:
-		s.akeA(msg)
-	case util.LeaderAkeBMsg:
-		s.akeB(msg)
+func (s *Session) handleMessage(recv util.Message) {
+	switch recv.Type {
+	case util.LeadAkeOneMsg:
+		s.onAkeOne(recv)
+	case util.LeadAkeTwoMsg:
+		s.onAkeTwo(recv)
 	case util.LeaderXiRiCommitmentMsg:
-		s.xiRiCommitment(msg)
+		s.onXiRiCommitment(recv)
 	case util.QKDLeftKeyMsg:
-		s.handleLeftKey(msg)
+		s.onLeftKey(recv)
 	case util.QKDRightKeyMsg:
-		s.handleRightKey(msg)
+		s.onRightKey(recv)
 	default:
 		util.PrintLine("[ERROR] Unknown message type encountered")
 	}
@@ -213,9 +214,9 @@ func (s *Session) handleMessage(msg util.Message) {
 func checkLeftRightKeys(session *CryptoSession, config util.LeaderConfig) util.Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
 		util.PrintLine("[CRYPTO] Established 2-AKE shared keys with both neighbors")
-		xcmMsg := getXiRiCommitmentMsg(session, config)
+		msg := getXiRiCommitmentMsg(session, config)
 		tryFinalizeProtocol(session, config)
-		return xcmMsg
+		return msg
 	}
 
 	return util.Message{}
@@ -236,18 +237,13 @@ func getXiRiCommitmentMsg(session *CryptoSession, config util.LeaderConfig) util
 	session.Commitments[config.Index] = commitment
 	session.Rs[config.Index] = ri
 
-	var buffer bytes.Buffer
-	buffer.Grow(gake.SsLen + gake.SsLen + gake.CoinLen)
-	buffer.Write(xi[:])
-	buffer.Write(commitment[:])
-	buffer.Write(ri[:])
-
+	content := append(append(xi[:], commitment[:]...), ri[:]...)
 	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
 		Type:       config.GetMessageType(util.XiRiCommitmentMsg),
-		Content:    base64.StdEncoding.EncodeToString(buffer.Bytes()),
+		Content:    base64.StdEncoding.EncodeToString(content),
 	}
 
 	return msg
@@ -262,37 +258,33 @@ func tryFinalizeProtocol(session *CryptoSession, config util.LeaderConfig) {
 	if slices.Contains(session.Xs, [gake.SsLen]byte{}) {
 		return
 	}
-
 	util.PrintLine("[CRYPTO] Received all Xs")
 
-	for i := range session.Xs {
-		util.PrintLine(fmt.Sprintf("[CRYPTO] X%d: %02x\n", i, (session.Xs)[i][:4]))
+	for i, x := range session.Xs {
+		util.PrintLine(fmt.Sprintf("[CRYPTO] X%d: %02x\n", i, x[:4]))
 	}
 
 	ok := util.CheckXs(session.Xs, len(config.Addrs))
-	if ok {
-		util.PrintLine("[CRYPTO] Xs check: success")
-	} else {
+	if !ok {
 		util.FatalError("Failed XS check")
 	}
+	util.PrintLine("[CRYPTO] Xs check: success")
 
 	ok = checkCommitments(len(config.Addrs), session.Xs, session.Rs, session.Commitments)
-	if ok {
-		util.PrintLine("[CRYPTO] Commitments check: success")
-	} else {
+	if !ok {
 		util.FatalError("Failed Commitments check")
 	}
+	util.PrintLine("[CRYPTO] Commitments check: success")
 
-	pids := make([][gake.PidLen]byte, len(config.Addrs))
-	stringPids := config.Addrs
-	for i := range config.Addrs {
+	PIDs := make([][gake.PidLen]byte, len(config.Addrs))
+	for i, n := range config.Addrs {
 		var byteArr [gake.PidLen]byte
-		copy(byteArr[:], []byte(stringPids[i]))
-		pids[i] = byteArr
+		copy(byteArr[:], []byte(n))
+		PIDs[i] = byteArr
 	}
 
-	otherLeftKeys := util.ComputeAllLeftKeys(len(config.Addrs), config.Index, session.KeyLeft, session.Xs, pids)
-	sharedSecret := computeSharedSecret(otherLeftKeys, pids, len(config.Addrs))
+	otherLeftKeys := util.ComputeAllLeftKeys(len(config.Addrs), config.Index, session.KeyLeft, session.Xs, PIDs)
+	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(config.Addrs))
 
 	util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x...\n", sharedSecret[:4]))
 

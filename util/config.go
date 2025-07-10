@@ -93,10 +93,10 @@ func (c *LeaderConfig) GetMessageType(msgType int) int {
 	switch msgType {
 	case XiRiCommitmentMsg:
 		return LeaderXiRiCommitmentMsg
-	case AkeAMsg:
-		return LeaderAkeAMsg
-	case AkeBMsg:
-		return LeaderAkeBMsg
+	case AkeOneMsg:
+		return LeadAkeOneMsg
+	case AkeTwoMsg:
+		return LeadAkeTwoMsg
 	default:
 		return msgType
 	}

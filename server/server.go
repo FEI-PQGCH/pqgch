@@ -143,7 +143,7 @@ func handleConnection(
 
 		msg.ClusterID = config.Index
 		switch msg.Type {
-		case util.AkeAMsg, util.AkeBMsg:
+		case util.AkeOneMsg, util.AkeTwoMsg:
 			if msg.ReceiverID == config.ClusterConfig.Index {
 				clusterChan <- msg
 			} else {
@@ -156,7 +156,7 @@ func handleConnection(
 			clusterChan <- msg
 			clients.broadcast(msg)
 			broadcastToLeaders(msg)
-		case util.LeaderAkeAMsg, util.LeaderAkeBMsg, util.LeaderXiRiCommitmentMsg:
+		case util.LeadAkeOneMsg, util.LeadAkeTwoMsg, util.LeaderXiRiCommitmentMsg:
 			leaderChan <- msg
 		}
 	}

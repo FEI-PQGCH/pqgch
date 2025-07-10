@@ -25,12 +25,12 @@ type Message struct {
 var MessageTypeNames = map[int]string{
 	LoginMsg:                "LoginMsg",
 	TextMsg:                 "TextMsg",
-	AkeAMsg:                 "AkeAMsg",
-	AkeBMsg:                 "AkeBMsg",
+	AkeOneMsg:               "AkeOneMsg",
+	AkeTwoMsg:               "AkeTwoMsg",
 	XiRiCommitmentMsg:       "XiRiCommitmentMsg",
 	KeyMsg:                  "KeyMsg",
-	LeaderAkeAMsg:           "LeaderAkeAMsg",
-	LeaderAkeBMsg:           "LeaderAkeBMsg",
+	LeadAkeOneMsg:           "LeadAkeOneMsg",
+	LeadAkeTwoMsg:           "LeadAkeTwoMsg",
 	LeaderXiRiCommitmentMsg: "LeaderXiRiCommitmentMsg",
 	QKDLeftKeyMsg:           "QKDLeftKeyMsg",
 	QKDRightKeyMsg:          "QKDRightKeyMsg",
@@ -44,12 +44,12 @@ func (m Message) TypeName() string {
 const (
 	LoginMsg = iota
 	TextMsg
-	AkeAMsg
-	AkeBMsg
+	AkeOneMsg
+	AkeTwoMsg
 	XiRiCommitmentMsg
 	KeyMsg
-	LeaderAkeAMsg
-	LeaderAkeBMsg
+	LeadAkeOneMsg
+	LeadAkeTwoMsg
 	LeaderXiRiCommitmentMsg
 	QKDLeftKeyMsg
 	QKDRightKeyMsg

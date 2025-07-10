@@ -131,7 +131,7 @@ func newClusterTransport(clients *Clients) *ClusterTransport {
 // 2-AKE messages are sent to specific clients, Xi and Key messages are broadcasted.
 func (t *ClusterTransport) Send(msg util.Message) {
 	switch msg.Type {
-	case util.AkeAMsg, util.AkeBMsg:
+	case util.AkeOneMsg, util.AkeTwoMsg:
 		t.clients.send(msg)
 	case util.KeyMsg, util.XiRiCommitmentMsg:
 		t.clients.broadcast(msg)
@@ -157,9 +157,9 @@ func newLeaderTransport() *LeaderTransport {
 // 2-AKE messages are sent only to specific leaders, the Xi message is broadcasted.
 func (t *LeaderTransport) Send(msg util.Message) {
 	switch msg.Type {
-	case util.LeaderAkeAMsg:
+	case util.LeadAkeOneMsg:
 		sendToLeader(config.Addrs[msg.ReceiverID], msg)
-	case util.LeaderAkeBMsg:
+	case util.LeadAkeTwoMsg:
 		sendToLeader(config.Addrs[msg.ReceiverID], msg)
 	case util.LeaderXiRiCommitmentMsg:
 		broadcastToLeaders(msg)
