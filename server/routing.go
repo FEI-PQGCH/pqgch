@@ -138,6 +138,8 @@ func (t *ClusterTransport) Send(msg util.Message) {
 	case util.TextMsg:
 		t.clients.broadcast(msg)
 		broadcastToLeaders(msg)
+	case util.QKDIDsMsg:
+		t.clients.broadcast(msg)
 	}
 }
 

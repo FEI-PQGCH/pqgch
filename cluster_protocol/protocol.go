@@ -88,9 +88,31 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 		s.transport.Send(keyMsg)
 	}
 
-	transport.SetMessageHandler(s.handleMessage)
-	s.mainSessionKey = keyRef
+	if config.IsClusterQKDUrl() {
+		rawB64, keyID, err := util.GetKey(config.GetClusterQKDUrl(), config.GetName())
+		if err != nil {
+			util.FatalError(fmt.Sprintf("ETSI QKD error: %v", err))
+		}
+		raw, err := base64.StdEncoding.DecodeString(rawB64)
+		if err != nil || len(raw) != gake.SsLen {
+			util.FatalError("invalid QKD key length from ETSI API")
+		}
+		full := gake.Sha3_512(raw)
+		s.crypto.SharedSecret = full
+		util.PrintLine(fmt.Sprintf("[QKD] Leader fetched key ID=%s, secret=%02x…", keyID, full[:4]))
 
+		idMsg := util.Message{
+			ID:         util.UniqueID(),
+			SenderID:   config.Index,
+			SenderName: config.GetName(),
+			Type:       util.QKDIDsMsg,
+			ClusterID:  config.Index,
+			Content:    keyID,
+		}
+		s.transport.Send(idMsg)
+	}
+
+	transport.SetMessageHandler(s.handleMessage)
 	return s
 }
 
@@ -135,7 +157,7 @@ func (s *Session) Init() {
 // Process the first message of 2-AKE, holding as a result keyLeft. The second message of 2-AKE is then sent.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
 func (s *Session) onAkeOne(msg util.Message) {
-	if s.config.IsClusterQKDPath() {
+	if s.config.IsClusterQKDPath() || s.config.IsClusterQKDUrl() {
 		s.OnSharedKey()
 		return
 	}
@@ -238,9 +260,30 @@ func (s *Session) onText(recv util.Message) {
 	util.PrintLineColored(text, util.ColorGreen)
 }
 
+func (s *Session) onQKDIDs(msg util.Message) {
+	rawB64, _, err := util.GetKeyWithID(
+		s.config.GetClusterQKDUrl(),
+		s.config.GetName(),
+		msg.Content,
+	)
+
+	if err != nil {
+		util.PrintLine(fmt.Sprintf("[ERROR] fetch-by-ID failed: %v", err))
+		return
+	}
+	raw, _ := base64.StdEncoding.DecodeString(rawB64)
+	full := gake.Sha3_512(raw)
+	util.PrintLine(fmt.Sprint("[onQKDIDs] full", full))
+	s.crypto.SharedSecret = full
+	util.PrintLine(fmt.Sprintf("[QKD] Member established secret: %02x...", full[:4]))
+	s.OnSharedKey()
+}
+
 // Handle the received message according to its type.
 func (s *Session) handleMessage(recv util.Message) {
 	switch recv.Type {
+	case util.QKDIDsMsg:
+		s.onQKDIDs(recv)
 	case util.AkeOneMsg:
 		s.onAkeOne(recv)
 	case util.AkeTwoMsg:
