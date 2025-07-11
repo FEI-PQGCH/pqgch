@@ -16,6 +16,7 @@ type ClusterConfig struct {
 	Index      int      `json:"index"`
 	PublicKeys string   `json:"publicKeys"`
 	SecretKey  string   `json:"secretKey"`
+	ClusterKey string   `json:"clusterKey"`
 }
 
 type UserConfig struct {
@@ -76,12 +77,47 @@ func (c *ClusterConfig) GetSecretKey() []byte {
 	return key
 }
 
+func (c *ClusterConfig) IsClusterQKDPath() bool {
+	return strings.HasPrefix(strings.ToLower(c.ClusterKey), "path ")
+}
+
+func (c *ClusterConfig) GetClusterQKDPath() string {
+	return strings.TrimSpace(c.ClusterKey[5:])
+}
+
+func (c *ClusterConfig) GetClusterKey() ([gake.SsLen]byte, error) {
+	var key [gake.SsLen]byte
+
+	data, err := os.ReadFile(c.GetClusterQKDPath())
+	if err != nil {
+		return key, err
+	}
+	trimmed := strings.TrimSpace(string(data))
+	dec, err := hex.DecodeString(trimmed)
+	if err != nil {
+		return key, err
+	}
+	if len(dec) != len(key) {
+		return key, errors.New("cluster QKD key length mismatch")
+	}
+	copy(key[:], dec)
+	return key, nil
+}
+
 func (c *ClusterConfig) GetName() string {
 	return c.Names[c.Index]
 }
 
 func (c *ClusterConfig) GetMessageType(msgType int) int {
 	return msgType
+}
+
+func (c *ClusterConfig) IsClusterQKDUrl() bool {
+	return strings.HasPrefix(strings.ToLower(c.ClusterKey), "url ")
+}
+
+func (c *ClusterConfig) GetClusterQKDUrl() string {
+	return strings.TrimSpace(c.ClusterKey[4:])
 }
 
 func (c *LeaderConfig) GetSecretKey() []byte {

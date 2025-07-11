@@ -96,9 +96,30 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
-	var rightIndex = (s.config.Index + 1) % len(s.config.Names)
-	var akeSendARight []byte
-	akeSendARight, s.crypto.TkRight, s.crypto.EskaRight = gake.KexAkeInitA(s.config.GetPublicKeys()[rightIndex])
+	if s.config.IsClusterQKDPath() {
+		halfKey, err := s.config.GetClusterKey()
+		if err != nil {
+			util.FatalError(fmt.Sprintf("failed loading cluster QKD key: %v", err))
+		}
+		var fullKey [gake.SsLen * 2]byte
+		copy(fullKey[0:gake.SsLen], halfKey[:])
+		copy(fullKey[gake.SsLen:], halfKey[:])
+		s.crypto.SharedSecret = fullKey
+
+		util.PrintLine(fmt.Sprintf("[QKD] Cluster Shared Secret established: %02x...\n", fullKey[:4]))
+
+		zeroKey := [32]byte{}
+		if s.mainSessionKey != nil && *s.mainSessionKey != zeroKey {
+			util.PrintLine("[QKD] main session key already set, broadcasting/decrypting now")
+			s.OnSharedKey()
+		} else {
+			util.PrintLine("[QKD] main session key not set yet, will wait to broadcast/decrypt")
+		}
+	}
+
+	rightIndex := (s.config.Index + 1) % len(s.config.Names)
+	akeSendARight, tk, eska := gake.KexAkeInitA(s.config.GetPublicKeys()[rightIndex])
+	s.crypto.TkRight, s.crypto.EskaRight = tk, eska
 
 	msg := util.Message{
 		ID:         util.UniqueID(),
@@ -108,13 +129,16 @@ func (s *Session) Init() {
 		ReceiverID: rightIndex,
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
-
 	s.transport.Send(msg)
 }
 
 // Process the first message of 2-AKE, holding as a result keyLeft. The second message of 2-AKE is then sent.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
 func (s *Session) onAkeOne(msg util.Message) {
+	if s.config.IsClusterQKDPath() {
+		s.OnSharedKey()
+		return
+	}
 	akeSendA, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
 		util.PrintLine("[ERROR] Invalid base64 content received")
