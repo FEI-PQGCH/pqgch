@@ -134,7 +134,7 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 
 // mainSessionKey is 32 bytes. We encrypt the mainSessionKey by XOR-ing it with the first 32 bytes of the clusterSessionKey.
 // Then, we create the MAC using the other 32 bytes of the clusterSessionKey.
-func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessionKey [gake.SsLen * 2]byte) Message {
+func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessionKey [gake.SsLen]byte) Message {
 	ciphertext := make([]byte, gake.SsLen)
 	for i := range gake.SsLen {
 		ciphertext[i] = mainSessionKey[i] ^ clusterSessionKey[i]
@@ -154,7 +154,7 @@ func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessi
 	return msg
 }
 
-func DecryptAndCheckHMAC(encryptedText []byte, key [64]byte) ([]byte, error) {
+func DecryptAndCheckHMAC(encryptedText []byte, key [gake.SsLen]byte) ([]byte, error) {
 	ciphertext := encryptedText[:gake.SsLen]
 	tag := encryptedText[gake.SsLen:]
 	hmacKey := key[gake.SsLen:]
