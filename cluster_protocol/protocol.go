@@ -127,18 +127,15 @@ func (s *Session) Init() {
 		if err != nil {
 			util.FatalError(fmt.Sprintf("failed loading cluster QKD key: %v", err))
 		}
-		var fullKey [gake.SsLen * 2]byte
 		s.crypto.SharedSecret = halfKey
 
-		util.PrintLine(fmt.Sprintf("[QKD] Cluster Shared Secret established: %02x...\n", fullKey[:4]))
+		util.PrintLine(fmt.Sprintf("[QKD] Cluster Shared Secret established: %02x...\n", s.crypto.SharedSecret[:4]))
+		s.OnSharedKey()
+		return
+	}
 
-		zeroKey := [32]byte{}
-		if s.mainSessionKey != nil && *s.mainSessionKey != zeroKey {
-			util.PrintLine("[QKD] main session key already set, broadcasting/decrypting now")
-			s.OnSharedKey()
-		} else {
-			util.PrintLine("[QKD] main session key not set yet, will wait to broadcast/decrypt")
-		}
+	if s.config.IsClusterQKDUrl() {
+		return
 	}
 
 	rightIndex := (s.config.Index + 1) % len(s.config.Names)
@@ -159,10 +156,6 @@ func (s *Session) Init() {
 // Process the first message of 2-AKE, holding as a result keyLeft. The second message of 2-AKE is then sent.
 // If we have both keyLeft and keyRight available at this point, the Xi value is calculated and broadcasted.
 func (s *Session) onAkeOne(msg util.Message) {
-	if s.config.IsClusterQKDPath() || s.config.IsClusterQKDUrl() {
-		s.OnSharedKey()
-		return
-	}
 	akeSendA, err := base64.StdEncoding.DecodeString(msg.Content)
 	if err != nil {
 		util.PrintLine("[ERROR] Invalid base64 content received")

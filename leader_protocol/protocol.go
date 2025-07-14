@@ -31,19 +31,21 @@ func NewCryptoSession(config util.LeaderConfig) CryptoSession {
 
 // Session contains selected transport, config and cryptographic session state.
 type Session struct {
-	transport util.Transport
-	config    util.LeaderConfig
-	session   CryptoSession
+	transport    util.Transport
+	config       util.LeaderConfig
+	session      CryptoSession
+	onSessionKey func() // Callback to be called when the session key is established.
 }
 
 // Create a new Cluster Leader session. This is the session that is used for interacting between cluster leaders.
 // It does not take the cluster members into account.
 // The Transport defines how the messages produced by the protocol will be routed.
-func NewSession(transport util.Transport, config util.LeaderConfig) *Session {
+func NewSession(transport util.Transport, config util.LeaderConfig, onSessionKey func()) *Session {
 	s := &Session{
-		transport: transport,
-		session:   NewCryptoSession(config),
-		config:    config,
+		transport:    transport,
+		session:      NewCryptoSession(config),
+		config:       config,
+		onSessionKey: onSessionKey,
 	}
 
 	transport.SetMessageHandler(s.handleMessage)
@@ -73,7 +75,7 @@ func (s *Session) Init() {
 		s.session.KeyLeft = leftKeyQKD
 	}
 
-	msg := checkLeftRightKeys(&s.session, s.config)
+	msg := checkLeftRightKeys(&s.session, s.config, s.onSessionKey)
 	if !msg.IsEmpty() {
 		s.transport.Send(msg)
 	}
@@ -121,7 +123,7 @@ func (s *Session) onAkeOne(recv util.Message) {
 	}
 	s.transport.Send(msg)
 
-	msg = checkLeftRightKeys(&s.session, s.config)
+	msg = checkLeftRightKeys(&s.session, s.config, s.onSessionKey)
 	if !msg.IsEmpty() {
 		s.transport.Send(msg)
 	}
@@ -140,7 +142,7 @@ func (s *Session) onAkeTwo(recv util.Message) {
 
 	util.PrintLine("[CRYPTO] Established 2-AKE shared key with right neighbor")
 
-	msg := checkLeftRightKeys(&s.session, s.config)
+	msg := checkLeftRightKeys(&s.session, s.config, s.onSessionKey)
 	if !msg.IsEmpty() {
 		s.transport.Send(msg)
 	}
@@ -159,7 +161,7 @@ func (s *Session) onXiRiCommitment(recv util.Message) {
 	s.session.Commitments[recv.SenderID] = [32]byte(decoded[gake.SsLen : 2*gake.SsLen])
 	s.session.Rs[recv.SenderID] = [gake.CoinLen]byte(decoded[2*gake.SsLen:])
 
-	tryFinalizeProtocol(&s.session, s.config)
+	tryFinalizeProtocol(&s.session, s.config, s.onSessionKey)
 }
 
 func (s *Session) onLeftKey(recv util.Message) {
@@ -170,7 +172,7 @@ func (s *Session) onLeftKey(recv util.Message) {
 	}
 	copy(s.session.KeyLeft[:], decoded)
 
-	msg := checkLeftRightKeys(&s.session, s.config)
+	msg := checkLeftRightKeys(&s.session, s.config, s.onSessionKey)
 	if !msg.IsEmpty() {
 		s.transport.Send(msg)
 	}
@@ -185,7 +187,7 @@ func (s *Session) onRightKey(recv util.Message) {
 
 	copy(s.session.KeyRight[:], decoded)
 
-	msg := checkLeftRightKeys(&s.session, s.config)
+	msg := checkLeftRightKeys(&s.session, s.config, s.onSessionKey)
 	if !msg.IsEmpty() {
 		s.transport.Send(msg)
 	}
@@ -211,11 +213,11 @@ func (s *Session) handleMessage(recv util.Message) {
 
 // Check whether we have both keyLeft and keyRight available. If so, compute the Xi, Ri and Commitment message and return it.
 // Also, try finalizing the protocol now, since the Xi we computed could have been the last one we needed.
-func checkLeftRightKeys(session *CryptoSession, config util.LeaderConfig) util.Message {
+func checkLeftRightKeys(session *CryptoSession, config util.LeaderConfig, onSessionKey func()) util.Message {
 	if session.KeyRight != [gake.SsLen]byte{} && session.KeyLeft != [gake.SsLen]byte{} {
 		util.PrintLine("[CRYPTO] Established 2-AKE shared keys with both neighbors")
 		msg := getXiRiCommitmentMsg(session, config)
-		tryFinalizeProtocol(session, config)
+		tryFinalizeProtocol(session, config, onSessionKey)
 		return msg
 	}
 
@@ -254,7 +256,7 @@ func getXiRiCommitmentMsg(session *CryptoSession, config util.LeaderConfig) util
 // Then, we check the commitments by recalculating them.
 // Then, we construct the party identifiers array.
 // Finally we compute the shared secret key and session ID. We save it for later use - broadcasting it to the cluster members.
-func tryFinalizeProtocol(session *CryptoSession, config util.LeaderConfig) {
+func tryFinalizeProtocol(session *CryptoSession, config util.LeaderConfig, onSessionKey func()) {
 	if slices.Contains(session.Xs, [gake.SsLen]byte{}) {
 		return
 	}
@@ -289,6 +291,7 @@ func tryFinalizeProtocol(session *CryptoSession, config util.LeaderConfig) {
 	util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x...\n", sharedSecret[:4]))
 
 	session.SharedSecret = sharedSecret
+	onSessionKey()
 }
 
 // Compute the shared secret from the left keys of the protocol participants.

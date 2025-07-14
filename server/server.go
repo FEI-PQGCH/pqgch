@@ -40,15 +40,18 @@ func main() {
 	tracker := util.NewMessageTracker()
 	clients := newClients(config.ClusterConfig)
 
+	var clusterSession *cluster_protocol.Session
 	// Initialize leader transport/session.
 	leaderTransport := newLeaderTransport()
-	leaderSession := leader_protocol.NewSession(leaderTransport, config)
+	leaderSession := leader_protocol.NewSession(leaderTransport, config, func() {
+		clusterSession.OnSharedKey()
+	})
 	msgsLeader := make(chan util.Message)
 	go transportManager(leaderTransport, msgsLeader)
 
 	// Initialize cluster transport/session.
 	clusterTransport := newClusterTransport(clients)
-	clusterSession := cluster_protocol.NewLeaderSession(
+	clusterSession = cluster_protocol.NewLeaderSession(
 		clusterTransport,
 		config.ClusterConfig,
 		leaderSession.GetKeyRef(),
