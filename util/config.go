@@ -14,9 +14,9 @@ import (
 type ClusterConfig struct {
 	Names      []string `json:"names"`
 	Index      int      `json:"index"`
-	PublicKeys string   `json:"publicKeys"`
-	SecretKey  string   `json:"secretKey"`
-	ClusterKey string   `json:"clusterKey"`
+	PublicKeys string   `json:"publicKeys,omitempty"`
+	SecretKey  string   `json:"secretKey,omitempty"`
+	Crypto     string   `json:"crypto,omitempty"`
 }
 
 type UserConfig struct {
@@ -78,11 +78,11 @@ func (c *ClusterConfig) GetSecretKey() []byte {
 }
 
 func (c *ClusterConfig) IsClusterQKDPath() bool {
-	return strings.HasPrefix(strings.ToLower(c.ClusterKey), "path ")
+	return strings.HasPrefix(strings.ToLower(c.Crypto), "path ")
 }
 
 func (c *ClusterConfig) GetClusterQKDPath() string {
-	return strings.TrimSpace(c.ClusterKey[5:])
+	return strings.TrimSpace(c.Crypto[5:])
 }
 
 func (c *ClusterConfig) GetClusterKey() ([gake.SsLen]byte, error) {
@@ -113,11 +113,11 @@ func (c *ClusterConfig) GetMessageType(msgType int) int {
 }
 
 func (c *ClusterConfig) IsClusterQKDUrl() bool {
-	return strings.HasPrefix(strings.ToLower(c.ClusterKey), "url ")
+	return strings.HasPrefix(strings.ToLower(c.Crypto), "url ")
 }
 
 func (c *ClusterConfig) GetClusterQKDUrl() string {
-	return strings.TrimSpace(c.ClusterKey[4:])
+	return strings.TrimSpace(c.Crypto[4:])
 }
 
 func (c *LeaderConfig) GetSecretKey() []byte {
