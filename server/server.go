@@ -44,7 +44,7 @@ func main() {
 	// Initialize leader transport/session.
 	leaderTransport := newLeaderTransport()
 	leaderSession := leader_protocol.NewSession(leaderTransport, config, func() {
-		clusterSession.OnSharedKey()
+		clusterSession.OnClusterKey()
 	})
 	msgsLeader := make(chan util.Message)
 	go transportManager(leaderTransport, msgsLeader)

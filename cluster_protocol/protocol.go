@@ -40,7 +40,7 @@ type Session struct {
 	keyCiphertext  []byte
 	mainSessionKey *[32]byte
 	Received       chan util.Message
-	OnSharedKey    func() // Callback function to be called on main session key establishment.
+	OnClusterKey   func() // Callback function to be called on cluster session key establishment.
 	// If the session user is a cluster member, the callback tries to decrypt the main session key ciphertext.
 	// This ciphertext is to be received from the cluster leader.
 	// If the session user is a cluster leader, the cluster leader uses the freshly established cluster session key
@@ -57,7 +57,7 @@ func NewSession(transport util.Transport, config util.ClusterConfig) *Session {
 		mainSessionKey: &[32]byte{},
 	}
 
-	s.OnSharedKey = func() {
+	s.OnClusterKey = func() {
 		if s.keyCiphertext == nil {
 			util.PrintLine("[CRYPTO] No key ciphertext, skipping")
 			return
@@ -82,7 +82,7 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 		Received:  make(chan util.Message, 10),
 	}
 
-	s.OnSharedKey = func() {
+	s.OnClusterKey = func() {
 		util.PrintLine("[CRYPTO] Broadcasting Main Session Key to cluster")
 		keyMsg := util.EncryptAndHMAC(*keyRef, config.GetName(), s.crypto.SharedSecret)
 		s.transport.Send(keyMsg)
@@ -130,7 +130,7 @@ func (s *Session) Init() {
 		s.crypto.SharedSecret = halfKey
 
 		util.PrintLine(fmt.Sprintf("[QKD] Cluster Shared Secret established: %02x...\n", s.crypto.SharedSecret[:4]))
-		s.OnSharedKey()
+		s.OnClusterKey()
 		return
 	}
 
@@ -273,7 +273,7 @@ func (s *Session) onQKDIDs(msg util.Message) {
 	util.PrintLine(fmt.Sprintf("[QKD] Member established 32-byte secret: %02x…", secret[:4]))
 
 	s.crypto.SharedSecret = secret
-	s.OnSharedKey()
+	s.OnClusterKey()
 }
 
 // Handle the received message according to its type.
@@ -422,7 +422,7 @@ func (s *Session) tryFinalizeProtocol() {
 	s.crypto.SharedSecret = computeSharedSecret(otherLeftKeys, PIDs, len(s.config.Names))
 	util.PrintLine(fmt.Sprintf("[CRYPTO] Cluster Shared Secret established: %02x...\n", s.crypto.SharedSecret[:4]))
 
-	s.OnSharedKey()
+	s.OnClusterKey()
 }
 
 func (s *Session) decryptAndStoreKey(content []byte) {
