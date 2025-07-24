@@ -29,8 +29,8 @@ type LeaderConfig struct {
 	Index         int      `json:"index"`
 	Addrs         []string `json:"servers"`
 	SecretKey     string   `json:"secretKey"`
-	Left          string   `json:"keyLeft"`
-	Right         string   `json:"keyRight"`
+	Left          string   `json:"leftCrypto"`
+	Right         string   `json:"rightCrypto"`
 }
 
 func GetConfig[T any](path string) (T, error) {
