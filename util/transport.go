@@ -7,34 +7,26 @@ import (
 	"sync"
 )
 
-type Transport interface {
+type MessageSender interface {
 	Send(msg Message)
-	SetMessageHandler(handler func(Message))
-}
-
-type BaseTransport struct {
-	MessageHandler func(Message)
-}
-
-func (t *BaseTransport) SetMessageHandler(handler func(Message)) {
-	t.MessageHandler = handler
 }
 
 type TCPTransport struct {
-	conn net.Conn
-	BaseTransport
-	cond *sync.Cond
-	mu   sync.Mutex
+	conn        net.Conn
+	cond        *sync.Cond
+	mu          sync.Mutex
+	receiveChan chan Message
 }
 
-func NewTCPTransport(address string) (*TCPTransport, error) {
+func NewTCPTransport(address string, receiveChan chan Message) (*TCPTransport, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %w", err)
 	}
 
 	t := &TCPTransport{
-		conn: conn,
+		conn:        conn,
+		receiveChan: receiveChan,
 	}
 	t.cond = sync.NewCond(&t.mu)
 
@@ -46,28 +38,13 @@ func NewTCPTransport(address string) (*TCPTransport, error) {
 func (t *TCPTransport) listen() {
 	reader := NewMessageReader(t.conn)
 
-	t.mu.Lock()
-	for t.MessageHandler == nil {
-		t.cond.Wait()
-	}
-	handler := t.MessageHandler
-	t.mu.Unlock()
-
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
 		if msg.Type != TextMsg {
 			PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s \n", msg.TypeName(), msg.SenderName))
 		}
-		handler(msg)
+		t.receiveChan <- msg
 	}
-}
-
-func (t *TCPTransport) SetMessageHandler(handler func(Message)) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	t.MessageHandler = handler
-	t.cond.Broadcast()
 }
 
 func (t *TCPTransport) Send(msg Message) {

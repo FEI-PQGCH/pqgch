@@ -53,25 +53,30 @@ func main() {
 
 	// Initialize leader transport and session.
 	var clusterSession *cluster_protocol.Session
-	leaderTransport := newLeaderTransport()
-	leaderSession := leader_protocol.NewSession(leaderTransport, config, func() {
-		clusterSession.OnClusterKey()
-	})
 	msgsLeader := make(chan util.Message)
-	go transportManager(leaderTransport, msgsLeader)
+
+	leaderSession := leader_protocol.NewSession(
+		newLeaderMessageSender(),
+		config,
+		func() { clusterSession.OnClusterKey() },
+		msgsLeader,
+	)
 
 	// Initialize cluster transport and session.
-	clusterTransport := newClusterTransport(clients)
+	msgsCluster := make(chan util.Message)
+
 	clusterSession = cluster_protocol.NewLeaderSession(
-		clusterTransport,
+		newClusterMessageSender(clients),
 		config.ClusterConfig,
 		leaderSession.GetKeyRef(),
+		msgsCluster,
 	)
-	msgsCluster := make(chan util.Message)
-	go transportManager(clusterTransport, msgsCluster)
 
 	leaderSession.Init()
 	clusterSession.Init()
+
+	go leaderSession.MessageHandler()
+	go clusterSession.MessageHandler()
 
 	if config.IsClusterQKDUrl() {
 		go func() {

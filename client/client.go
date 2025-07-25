@@ -9,15 +9,24 @@ import (
 )
 
 func main() {
-	configFlag := flag.String("config", "", "path to configuration file")
+	// Parse command line flag.
+	path := flag.String("config", "", "path to configuration file")
 	flag.Parse()
-	if *configFlag == "" {
+	if *path == "" {
 		fmt.Println("Configuration file missing. Please provide it using the -config flag")
 		os.Exit(1)
 	}
-	config, _ := util.GetConfig[util.UserConfig](*configFlag)
 
-	transport, err := util.NewTCPTransport(config.LeadAddr)
+	// Load config.
+	config, err := util.GetConfig[util.UserConfig](*path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Error loading config from : %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize TCP transport.
+	msgChan := make(chan util.Message)
+	transport, err := util.NewTCPTransport(config.LeadAddr, msgChan)
 	if err != nil {
 		fmt.Printf("Unable to connect to server: %v\n", err)
 		os.Exit(1)
@@ -30,9 +39,12 @@ func main() {
 		ClusterID:  config.ClusterConfig.Index,
 	})
 
-	session := cluster_protocol.NewSession(transport, config.ClusterConfig)
+	// Initialize cluster protocol session.
+	session := cluster_protocol.NewSession(transport, config.ClusterConfig, msgChan)
 	session.Init()
+	go session.MessageHandler()
 
+	// Start Terminal User Interface.
 	util.StartTUI(func(line string) {
 		session.SendText(line)
 	})

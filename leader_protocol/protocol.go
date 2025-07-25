@@ -31,7 +31,8 @@ func NewCryptoSession(config util.LeaderConfig) CryptoSession {
 
 // Session contains selected transport, config and cryptographic session state.
 type Session struct {
-	transport        util.Transport
+	receiveChan      chan util.Message
+	sender           util.MessageSender
 	config           util.LeaderConfig
 	crypto           CryptoSession
 	onMainSessionKey func() // Callback to be called when the main session key is established.
@@ -40,15 +41,14 @@ type Session struct {
 // Create a new Cluster Leader session. This is the session that is used for interacting between cluster leaders.
 // It does not take the cluster members into account.
 // The Transport defines how the messages produced by the protocol will be routed.
-func NewSession(transport util.Transport, config util.LeaderConfig, onMainSessionKey func()) *Session {
+func NewSession(sender util.MessageSender, config util.LeaderConfig, onMainSessionKey func(), receiveChan chan util.Message) *Session {
 	s := &Session{
-		transport:        transport,
+		receiveChan:      receiveChan,
+		sender:           sender,
 		crypto:           NewCryptoSession(config),
 		config:           config,
 		onMainSessionKey: onMainSessionKey,
 	}
-
-	transport.SetMessageHandler(s.handleMessage)
 
 	return s
 }
@@ -77,7 +77,7 @@ func (s *Session) Init() {
 
 	msg := s.checkLeftRightKeys()
 	if !msg.IsEmpty() {
-		s.transport.Send(msg)
+		s.sender.Send(msg)
 	}
 
 	if !s.config.IsRightQKDUrl() && !s.config.IsRightQKDPath() {
@@ -93,7 +93,13 @@ func (s *Session) Init() {
 			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 		}
 
-		s.transport.Send(msg)
+		s.sender.Send(msg)
+	}
+}
+
+func (s *Session) MessageHandler() {
+	for msg := range s.receiveChan {
+		s.handleMessage(msg)
 	}
 }
 
@@ -121,11 +127,11 @@ func (s *Session) onAkeOne(recv util.Message) {
 		ReceiverID: recv.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
-	s.transport.Send(msg)
+	s.sender.Send(msg)
 
 	msg = s.checkLeftRightKeys()
 	if !msg.IsEmpty() {
-		s.transport.Send(msg)
+		s.sender.Send(msg)
 	}
 }
 
@@ -144,7 +150,7 @@ func (s *Session) onAkeTwo(recv util.Message) {
 
 	msg := s.checkLeftRightKeys()
 	if !msg.IsEmpty() {
-		s.transport.Send(msg)
+		s.sender.Send(msg)
 	}
 }
 
@@ -174,7 +180,7 @@ func (s *Session) onLeftKey(recv util.Message) {
 
 	msg := s.checkLeftRightKeys()
 	if !msg.IsEmpty() {
-		s.transport.Send(msg)
+		s.sender.Send(msg)
 	}
 }
 
@@ -189,7 +195,7 @@ func (s *Session) onRightKey(recv util.Message) {
 
 	msg := s.checkLeftRightKeys()
 	if !msg.IsEmpty() {
-		s.transport.Send(msg)
+		s.sender.Send(msg)
 	}
 }
 

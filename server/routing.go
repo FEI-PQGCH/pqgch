@@ -105,30 +105,19 @@ func (clients *Clients) broadcast(msg util.Message) {
 	util.PrintLine(fmt.Sprintf("[ROUTE] Broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName))
 }
 
-type ServerTransport interface {
-	receive(util.Message)
-}
-
-func transportManager(t ServerTransport, msgs <-chan util.Message) {
-	for msg := range msgs {
-		t.receive(msg)
-	}
-}
-
 // Cluster transport for communication between the leader and clients in its cluster.
-type ClusterTransport struct {
+type ClusterMessageSender struct {
 	clients *Clients
-	util.BaseTransport
 }
 
-func newClusterTransport(clients *Clients) *ClusterTransport {
-	return &ClusterTransport{
+func newClusterMessageSender(clients *Clients) *ClusterMessageSender {
+	return &ClusterMessageSender{
 		clients: clients,
 	}
 }
 
 // 2-AKE messages are sent to specific clients, Xi and Key messages are broadcasted.
-func (t *ClusterTransport) Send(msg util.Message) {
+func (t *ClusterMessageSender) Send(msg util.Message) {
 	switch msg.Type {
 	case util.AkeOneMsg, util.AkeTwoMsg:
 		t.clients.send(msg)
@@ -142,21 +131,15 @@ func (t *ClusterTransport) Send(msg util.Message) {
 	}
 }
 
-func (t *ClusterTransport) receive(msg util.Message) {
-	t.MessageHandler(msg)
-}
-
 // Leader Transport for communication between leaders.
-type LeaderTransport struct {
-	util.BaseTransport
-}
+type LeaderMessageSender struct{}
 
-func newLeaderTransport() *LeaderTransport {
-	return &LeaderTransport{}
+func newLeaderMessageSender() *LeaderMessageSender {
+	return &LeaderMessageSender{}
 }
 
 // 2-AKE messages are sent only to specific leaders, the Xi message is broadcasted.
-func (t *LeaderTransport) Send(msg util.Message) {
+func (t *LeaderMessageSender) Send(msg util.Message) {
 	switch msg.Type {
 	case util.LeadAkeOneMsg:
 		sendToLeader(config.Addrs[msg.ReceiverID], msg)
@@ -165,10 +148,6 @@ func (t *LeaderTransport) Send(msg util.Message) {
 	case util.LeaderXiRiCommitmentMsg:
 		broadcastToLeaders(msg)
 	}
-}
-
-func (t *LeaderTransport) receive(msg util.Message) {
-	t.MessageHandler(msg)
 }
 
 // Broadcast msg to all the other leaders.

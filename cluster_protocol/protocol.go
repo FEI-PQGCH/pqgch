@@ -34,7 +34,8 @@ func NewCryptoSession(config util.ClusterConfig) CryptoSession {
 // mainSessionKey contains the key used for encrypted text communication.
 // Received is a channel for sending decrypted text messages to client code.
 type Session struct {
-	transport      util.Transport
+	receiveChan    chan util.Message
+	sender         util.MessageSender
 	config         util.ClusterConfig
 	crypto         CryptoSession
 	keyCiphertext  []byte
@@ -48,9 +49,10 @@ type Session struct {
 }
 
 // Create a new Cluster Member session. The Transport defines how the messages produced by the protocol will be routed.
-func NewSession(transport util.Transport, config util.ClusterConfig) *Session {
+func NewSession(sender util.MessageSender, config util.ClusterConfig, receiveChan chan util.Message) *Session {
 	s := &Session{
-		transport:      transport,
+		receiveChan:    receiveChan,
+		sender:         sender,
 		crypto:         NewCryptoSession(config),
 		config:         config,
 		Received:       make(chan util.Message, 10),
@@ -65,8 +67,6 @@ func NewSession(transport util.Transport, config util.ClusterConfig) *Session {
 		s.decryptAndStoreKey(s.keyCiphertext)
 	}
 
-	transport.SetMessageHandler(s.handleMessage)
-
 	return s
 }
 
@@ -74,22 +74,22 @@ func NewSession(transport util.Transport, config util.ClusterConfig) *Session {
 // The Transport defines how the messages produced by the protocol will be routed.
 // keyRef is a reference to the main session key. We encrypt this key in the OnSharedKey handler.
 // It is assumed to already be established by the time we establish the cluster session key.
-func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRef *[32]byte) *Session {
+func NewLeaderSession(sender util.MessageSender, config util.ClusterConfig, keyRef *[32]byte, receiveChan chan util.Message) *Session {
 	s := &Session{
-		transport: transport,
-		crypto:    NewCryptoSession(config),
-		config:    config,
-		Received:  make(chan util.Message, 10),
+		receiveChan: receiveChan,
+		sender:      sender,
+		crypto:      NewCryptoSession(config),
+		config:      config,
+		Received:    make(chan util.Message, 10),
 	}
 
 	s.OnClusterKey = func() {
 		util.PrintLine("[CRYPTO] Broadcasting Main Session Key to cluster")
 		keyMsg := util.EncryptAndHMAC(*keyRef, config.Name(), s.crypto.SharedSecret)
-		s.transport.Send(keyMsg)
+		s.sender.Send(keyMsg)
 	}
 
 	s.mainSessionKey = keyRef
-	transport.SetMessageHandler(s.handleMessage)
 	return s
 }
 
@@ -122,7 +122,13 @@ func (s *Session) Init() {
 		ReceiverID: s.config.RightIndex(),
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
-	s.transport.Send(msg)
+	s.sender.Send(msg)
+}
+
+func (s *Session) MessageHandler() {
+	for msg := range s.receiveChan {
+		s.handleMessage(msg)
+	}
 }
 
 // Process the first message of 2-AKE, holding as a result keyLeft. The second message of 2-AKE is then sent.
@@ -150,11 +156,11 @@ func (s *Session) onAkeOne(msg util.Message) {
 		ReceiverID: msg.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
-	s.transport.Send(msg)
+	s.sender.Send(msg)
 
 	msg = s.checkLeftRightKeys()
 	if !msg.IsEmpty() {
-		s.transport.Send(msg)
+		s.sender.Send(msg)
 	}
 }
 
@@ -172,7 +178,7 @@ func (s *Session) onAkeTwo(recv util.Message) {
 
 	msg := s.checkLeftRightKeys()
 	if !msg.IsEmpty() {
-		s.transport.Send(msg)
+		s.sender.Send(msg)
 	}
 }
 
@@ -283,7 +289,7 @@ func (s *Session) SendText(text string) {
 		Type:       util.TextMsg,
 		ClusterID:  s.config.Index,
 	}
-	s.transport.Send(msg)
+	s.sender.Send(msg)
 }
 
 // Check whether we have both keyLeft and keyRight available. If so, compute the Xi, Ri and Commitment message and return it.
