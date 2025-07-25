@@ -143,7 +143,7 @@ func (s *Session) Init() {
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
 		SenderName: s.config.GetName(),
-		Type:       s.config.GetMessageType(util.AkeOneMsg),
+		Type:       util.AkeOneMsg,
 		ReceiverID: rightIndex,
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
@@ -171,7 +171,7 @@ func (s *Session) onAkeOne(msg util.Message) {
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
 		SenderName: s.config.GetName(),
-		Type:       s.config.GetMessageType(util.AkeTwoMsg),
+		Type:       util.AkeTwoMsg,
 		ReceiverID: msg.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
@@ -352,7 +352,7 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config util.ClusterConfig) u
 		ID:         util.UniqueID(),
 		SenderID:   config.Index,
 		SenderName: config.GetName(),
-		Type:       config.GetMessageType(util.XiRiCommitmentMsg),
+		Type:       util.XiRiCommitmentMsg,
 		Content:    base64.StdEncoding.EncodeToString(content),
 	}
 

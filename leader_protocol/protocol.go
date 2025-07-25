@@ -88,7 +88,7 @@ func (s *Session) Init() {
 			ID:         util.UniqueID(),
 			SenderID:   s.config.Index,
 			SenderName: s.config.GetName(),
-			Type:       s.config.GetMessageType(util.AkeOneMsg),
+			Type:       util.LeadAkeOneMsg,
 			ReceiverID: (s.config.Index + 1) % len(s.config.Addrs),
 			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 		}
@@ -117,7 +117,7 @@ func (s *Session) onAkeOne(recv util.Message) {
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
 		SenderName: s.config.GetName(),
-		Type:       s.config.GetMessageType(util.AkeTwoMsg),
+		Type:       util.LeadAkeTwoMsg,
 		ReceiverID: recv.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
@@ -244,7 +244,7 @@ func (s *Session) getXiRiCommitmentMsg() util.Message {
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
 		SenderName: s.config.GetName(),
-		Type:       s.config.GetMessageType(util.XiRiCommitmentMsg),
+		Type:       util.LeaderXiRiCommitmentMsg,
 		Content:    base64.StdEncoding.EncodeToString(content),
 	}
 

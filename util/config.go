@@ -108,10 +108,6 @@ func (c *ClusterConfig) GetName() string {
 	return c.Names[c.Index]
 }
 
-func (c *ClusterConfig) GetMessageType(msgType int) int {
-	return msgType
-}
-
 func (c *ClusterConfig) IsClusterQKDUrl() bool {
 	return strings.HasPrefix(strings.ToLower(c.Crypto), "url ")
 }
@@ -123,19 +119,6 @@ func (c *ClusterConfig) GetClusterQKDUrl() string {
 func (c *LeaderConfig) GetSecretKey() []byte {
 	key, _ := base64.StdEncoding.DecodeString(c.SecretKey)
 	return key
-}
-
-func (c *LeaderConfig) GetMessageType(msgType int) int {
-	switch msgType {
-	case XiRiCommitmentMsg:
-		return LeaderXiRiCommitmentMsg
-	case AkeOneMsg:
-		return LeadAkeOneMsg
-	case AkeTwoMsg:
-		return LeadAkeTwoMsg
-	default:
-		return msgType
-	}
 }
 
 func (c *LeaderConfig) IsLeftQKDUrl() bool {
