@@ -121,13 +121,11 @@ func (t *ClusterMessageSender) Send(msg util.Message) {
 	switch msg.Type {
 	case util.AkeOneMsg, util.AkeTwoMsg:
 		t.clients.send(msg)
-	case util.KeyMsg, util.XiRiCommitmentMsg:
+	case util.KeyMsg, util.XiRiCommitmentMsg, util.QKDIDsMsg:
 		t.clients.broadcast(msg)
 	case util.TextMsg:
 		t.clients.broadcast(msg)
 		broadcastToLeaders(msg)
-	case util.QKDIDsMsg:
-		t.clients.broadcast(msg)
 	}
 }
 
@@ -141,9 +139,7 @@ func newLeaderMessageSender() *LeaderMessageSender {
 // 2-AKE messages are sent only to specific leaders, the Xi message is broadcasted.
 func (t *LeaderMessageSender) Send(msg util.Message) {
 	switch msg.Type {
-	case util.LeadAkeOneMsg:
-		sendToLeader(config.Addrs[msg.ReceiverID], msg)
-	case util.LeadAkeTwoMsg:
+	case util.LeadAkeOneMsg, util.LeadAkeTwoMsg:
 		sendToLeader(config.Addrs[msg.ReceiverID], msg)
 	case util.LeaderXiRiCommitmentMsg:
 		broadcastToLeaders(msg)
