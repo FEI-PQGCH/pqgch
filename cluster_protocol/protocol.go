@@ -235,7 +235,7 @@ func (s *Session) onQKDClusterKey(msg util.Message) {
 }
 
 func (s *Session) onQKDIDs(msg util.Message) {
-	keyMsg := util.RequestKeyWithID(s.config.ClusterQKDUrl(), msg.Content)
+	keyMsg := util.RequestKeyByID(s.config.ClusterQKDUrl(), msg.Content)
 	decoded, _ := base64.StdEncoding.DecodeString(keyMsg.Content)
 
 	util.PrintLine(fmt.Sprintf("[CRYPTO] Member established Cluster Session Key via QKD: %02x…", decoded[:4]))

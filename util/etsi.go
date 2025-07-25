@@ -30,7 +30,7 @@ func getKey(endpoint, saeID string) (string, string, error) {
 }
 
 // Make a request for the key with keyID to the ETSI QKD API.
-func getKeyWithID(endpoint, saeID, keyID string) (string, string, error) {
+func getKeyByID(endpoint, saeID, keyID string) (string, string, error) {
 	resp, err := http.Get(endpoint + saeID + "/dec_keys?key_ID=" + keyID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to call ETSI API: %w", err)
@@ -94,8 +94,8 @@ func RequestKey(url string, isLeader bool) (Message, Message) {
 	return keyMsg, IDMsg
 }
 
-func RequestKeyWithID(url, id string) Message {
-	key, _, err := getKeyWithID(url, "dummy_id", id)
+func RequestKeyByID(url, id string) Message {
+	key, _, err := getKeyByID(url, "dummy_id", id)
 	if err != nil {
 		FatalError(err.Error())
 	}
