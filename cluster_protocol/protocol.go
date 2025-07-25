@@ -89,20 +89,17 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 	}
 
 	if config.IsClusterQKDUrl() {
-		rawB64, keyID, err := util.GetKey(config.GetClusterQKDUrl(), config.GetName())
+		key, keyID, err := util.GetKey(config.GetClusterQKDUrl(), config.GetName())
 		if err != nil {
 			util.FatalError(fmt.Sprintf("ETSI QKD error: %v", err))
 		}
-		raw, err := base64.StdEncoding.DecodeString(rawB64)
-		if err != nil || len(raw) != gake.SsLen {
+		decoded, err := base64.StdEncoding.DecodeString(key)
+		if err != nil || len(decoded) != gake.SsLen {
 			util.FatalError("invalid QKD key length from ETSI API")
 		}
-		full512 := gake.Sha3_512(raw)
-		var secret [gake.SsLen]byte
-		copy(secret[:], full512[:gake.SsLen])
-		s.crypto.SharedSecret = secret
 
-		util.PrintLine(fmt.Sprintf("[QKD] Leader fetched key ID=%s, secret=%02x…", keyID, secret[:4]))
+		copy(s.crypto.SharedSecret[:], decoded)
+		util.PrintLine(fmt.Sprintf("[QKD] Leader fetched key ID=%s, secret=%02x…", keyID, decoded[:4]))
 
 		idMsg := util.Message{
 			ID:         util.UniqueID(),
@@ -123,11 +120,11 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
 	if s.config.IsClusterQKDPath() {
-		halfKey, err := s.config.GetClusterKey()
+		key, err := s.config.GetClusterKey()
 		if err != nil {
 			util.FatalError(fmt.Sprintf("failed loading cluster QKD key: %v", err))
 		}
-		s.crypto.SharedSecret = halfKey
+		s.crypto.SharedSecret = key
 
 		util.PrintLine(fmt.Sprintf("[QKD] Cluster Shared Secret established: %02x...\n", s.crypto.SharedSecret[:4]))
 		s.OnClusterKey()
@@ -256,7 +253,7 @@ func (s *Session) onText(recv util.Message) {
 }
 
 func (s *Session) onQKDIDs(msg util.Message) {
-	rawB64, _, err := util.GetKeyWithID(
+	key, _, err := util.GetKeyWithID(
 		s.config.GetClusterQKDUrl(),
 		s.config.GetName(),
 		msg.Content,
@@ -265,14 +262,11 @@ func (s *Session) onQKDIDs(msg util.Message) {
 		util.PrintLine(fmt.Sprintf("[ERROR] fetch-by-ID failed: %v", err))
 		return
 	}
-	raw, _ := base64.StdEncoding.DecodeString(rawB64)
-	full512 := gake.Sha3_512(raw)
 
-	var secret [gake.SsLen]byte
-	copy(secret[:], full512[:gake.SsLen])
-	util.PrintLine(fmt.Sprintf("[QKD] Member established 32-byte secret: %02x…", secret[:4]))
+	decoded, _ := base64.StdEncoding.DecodeString(key)
+	util.PrintLine(fmt.Sprintf("[QKD] Member established 32-byte secret: %02x…", decoded[:4]))
 
-	s.crypto.SharedSecret = secret
+	copy(s.crypto.SharedSecret[:], decoded)
 	s.OnClusterKey()
 }
 
