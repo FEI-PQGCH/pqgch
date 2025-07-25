@@ -94,16 +94,23 @@ func RequestKey(url string, isLeader bool) (Message, Message) {
 	return keyMsg, IDMsg
 }
 
-func RequestKeyByID(url, id string) Message {
+func RequestKeyByID(url, id string, isLeader bool) Message {
 	key, _, err := getKeyByID(url, "dummy_id", id)
 	if err != nil {
 		FatalError(err.Error())
 	}
 
 	// Process the received key.
+	var msgType int
+	if isLeader {
+		msgType = QKDLeftKeyMsg
+	} else {
+		msgType = QKDClusterKeyMsg
+	}
+
 	msg := Message{
 		ID:      UniqueID(),
-		Type:    QKDLeftKeyMsg,
+		Type:    msgType,
 		Content: key,
 	}
 	return msg

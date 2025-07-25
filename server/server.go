@@ -147,7 +147,7 @@ func handleConnection(
 		}
 		if msg.Type == util.QKDIDsMsg {
 			go func() {
-				msg := util.RequestKeyByID(config.LeftQKDUrl(), msg.Content)
+				msg := util.RequestKeyByID(config.LeftQKDUrl(), msg.Content, true)
 				leaderChan <- msg
 			}()
 			return

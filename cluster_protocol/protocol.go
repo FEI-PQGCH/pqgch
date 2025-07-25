@@ -235,19 +235,16 @@ func (s *Session) onText(recv util.Message) {
 
 func (s *Session) onQKDClusterKey(msg util.Message) {
 	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
-	util.PrintLine(fmt.Sprintf("[CRYPTO] Leader established Cluster Session Key via QKD: %02x…", decoded[:4]))
-
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Established Cluster Session Key via QKD: %02x…", decoded[:4]))
 	copy(s.crypto.SharedSecret[:], decoded)
+	s.OnClusterKey()
 }
 
 func (s *Session) onQKDIDs(msg util.Message) {
-	keyMsg := util.RequestKeyByID(s.config.ClusterQKDUrl(), msg.Content)
-	decoded, _ := base64.StdEncoding.DecodeString(keyMsg.Content)
-
-	util.PrintLine(fmt.Sprintf("[CRYPTO] Member established Cluster Session Key via QKD: %02x…", decoded[:4]))
-
-	copy(s.crypto.SharedSecret[:], decoded)
-	s.OnClusterKey()
+	go func() {
+		keyMsg := util.RequestKeyByID(s.config.ClusterQKDUrl(), msg.Content, false)
+		s.receiveChan <- keyMsg
+	}()
 }
 
 // Handle the received message according to its type.
