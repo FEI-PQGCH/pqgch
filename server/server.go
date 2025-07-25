@@ -62,8 +62,18 @@ func main() {
 	leaderSession.Init()
 	clusterSession.Init()
 
+	if config.IsClusterQKDUrl() {
+		go func() {
+			msg := requestKey(msgsCluster, config.GetClusterQKDUrl(), false)
+			clients.broadcast(msg)
+		}()
+	}
+
 	if config.IsRightQKDUrl() {
-		go requestKey(msgsLeader, config.GetRightQKDURL())
+		go func() {
+			msg := requestKey(msgsLeader, config.GetRightQKDURL(), true)
+			sendToLeader(config.Addrs[msg.ReceiverID], msg)
+		}()
 	}
 
 	// Accept connections in a goroutine.

@@ -34,6 +34,7 @@ var MessageTypeNames = map[int]string{
 	LeaderXiRiCommitmentMsg: "LeaderXiRiCommitmentMsg",
 	QKDLeftKeyMsg:           "QKDLeftKeyMsg",
 	QKDRightKeyMsg:          "QKDRightKeyMsg",
+	QKDClusterKeyMsg:        "QKDClusterKeyMsg",
 	QKDIDsMsg:               "QKDIDsMsg",
 }
 
@@ -53,6 +54,7 @@ const (
 	LeaderXiRiCommitmentMsg
 	QKDLeftKeyMsg
 	QKDRightKeyMsg
+	QKDClusterKeyMsg
 	QKDIDsMsg
 )
 

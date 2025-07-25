@@ -88,30 +88,6 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 		s.transport.Send(keyMsg)
 	}
 
-	if config.IsClusterQKDUrl() {
-		key, keyID, err := util.GetKey(config.GetClusterQKDUrl(), config.GetName())
-		if err != nil {
-			util.FatalError(fmt.Sprintf("ETSI QKD error: %v", err))
-		}
-		decoded, err := base64.StdEncoding.DecodeString(key)
-		if err != nil || len(decoded) != gake.SsLen {
-			util.FatalError("invalid QKD key length from ETSI API")
-		}
-
-		copy(s.crypto.SharedSecret[:], decoded)
-		util.PrintLine(fmt.Sprintf("[QKD] Leader fetched key ID=%s, secret=%02x…", keyID, decoded[:4]))
-
-		idMsg := util.Message{
-			ID:         util.UniqueID(),
-			SenderID:   config.Index,
-			SenderName: config.GetName(),
-			Type:       util.QKDIDsMsg,
-			ClusterID:  config.Index,
-			Content:    keyID,
-		}
-		s.transport.Send(idMsg)
-	}
-
 	s.mainSessionKey = keyRef
 	transport.SetMessageHandler(s.handleMessage)
 	return s
@@ -252,6 +228,13 @@ func (s *Session) onText(recv util.Message) {
 	util.PrintLineColored(text, util.ColorGreen)
 }
 
+func (s *Session) onQKDClusterKey(msg util.Message) {
+	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
+	util.PrintLine(fmt.Sprintf("[QKD] Leader established Cluster Session Key: %02x…", decoded[:4]))
+
+	copy(s.crypto.SharedSecret[:], decoded)
+}
+
 func (s *Session) onQKDIDs(msg util.Message) {
 	key, _, err := util.GetKeyWithID(
 		s.config.GetClusterQKDUrl(),
@@ -264,7 +247,7 @@ func (s *Session) onQKDIDs(msg util.Message) {
 	}
 
 	decoded, _ := base64.StdEncoding.DecodeString(key)
-	util.PrintLine(fmt.Sprintf("[QKD] Member established 32-byte secret: %02x…", decoded[:4]))
+	util.PrintLine(fmt.Sprintf("[QKD] Member established Cluster Session Key: %02x…", decoded[:4]))
 
 	copy(s.crypto.SharedSecret[:], decoded)
 	s.OnClusterKey()
@@ -273,8 +256,6 @@ func (s *Session) onQKDIDs(msg util.Message) {
 // Handle the received message according to its type.
 func (s *Session) handleMessage(recv util.Message) {
 	switch recv.Type {
-	case util.QKDIDsMsg:
-		s.onQKDIDs(recv)
 	case util.AkeOneMsg:
 		s.onAkeOne(recv)
 	case util.AkeTwoMsg:
@@ -283,6 +264,10 @@ func (s *Session) handleMessage(recv util.Message) {
 		s.onXiRiCommitment(recv)
 	case util.KeyMsg:
 		s.onKey(recv)
+	case util.QKDClusterKeyMsg:
+		s.onQKDClusterKey(recv)
+	case util.QKDIDsMsg:
+		s.onQKDIDs(recv)
 	default:
 		s.onText(recv)
 	}
