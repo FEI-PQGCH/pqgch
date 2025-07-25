@@ -15,19 +15,28 @@ var config util.LeaderConfig
 
 func main() {
 	// Parse command line flag.
-	configFlag := flag.String("config", "", "path to configuration file")
+	path := flag.String("config", "", "path to configuration file")
 	flag.Parse()
-	if *configFlag == "" {
+	if *path == "" {
 		fmt.Fprintf(os.Stderr, "[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
 		os.Exit(1)
 	}
+
 	// Load config.
-	config, _ = util.GetConfig[util.LeaderConfig](*configFlag)
-	_, port, err := net.SplitHostPort(config.Addrs[config.Index])
+	var err error
+	config, err = util.GetConfig[util.LeaderConfig](*path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing self address from config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error loading config from : %v\n", err)
 		os.Exit(1)
 	}
+
+	// Parse port from config.
+	_, port, err := net.SplitHostPort(config.Addrs[config.Index])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing self port from config: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Start TCP listener.
 	address := fmt.Sprintf(":%s", port)
 	listener, err := net.Listen("tcp", address)
@@ -42,8 +51,8 @@ func main() {
 	tracker := util.NewMessageTracker()
 	clients := newClients(config.ClusterConfig)
 
-	var clusterSession *cluster_protocol.Session
 	// Initialize leader transport and session.
+	var clusterSession *cluster_protocol.Session
 	leaderTransport := newLeaderTransport()
 	leaderSession := leader_protocol.NewSession(leaderTransport, config, func() {
 		clusterSession.OnClusterKey()
@@ -66,19 +75,21 @@ func main() {
 
 	if config.IsClusterQKDUrl() {
 		go func() {
-			msg := requestKey(msgsCluster, config.ClusterQKDUrl(), false)
-			clients.broadcast(msg)
+			keyMsg, IDMsg := util.RequestKey(config.ClusterQKDUrl(), false)
+			msgsCluster <- keyMsg
+			clients.broadcast(IDMsg)
 		}()
 	}
 
 	if config.IsRightQKDUrl() {
 		go func() {
-			msg := requestKey(msgsLeader, config.RightQKDUrl(), true)
-			sendToLeader(config.Addrs[msg.ReceiverID], msg)
+			keyMsg, IDMsg := util.RequestKey(config.RightQKDUrl(), true)
+			msgsLeader <- keyMsg
+			sendToLeader(config.Addrs[config.RightIndex()], IDMsg)
 		}()
 	}
 
-	// Accept connections in a goroutine.
+	// Accept connections (from cluster members or other leaders) in a goroutine.
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -130,7 +141,10 @@ func handleConnection(
 			return
 		}
 		if msg.Type == util.QKDIDsMsg {
-			go requestKeyWithID(leaderChan, config.LeftQKDUrl(), msg.Content)
+			go func() {
+				msg := util.RequestKeyWithID(config.LeftQKDUrl(), msg.Content)
+				leaderChan <- msg
+			}()
 			return
 		}
 		leaderChan <- msg

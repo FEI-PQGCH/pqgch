@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"pqgch/gake"
 	"strconv"
 )
@@ -19,29 +18,9 @@ type KeyContainer struct {
 	Keys []Key `json:"keys"`
 }
 
-// EXAMPLE USAGE
-//
-// TODO: use this instead of loading the keys from the file.
-// key_id should be sent to the neighbor, so he can get the same key.
-//
-// key, key_id, err := util.GetKey("http://localhost:8080/etsi/", "dummy_id")
-// if err != nil {
-// 	log.Fatalln(err.Error())
-// }
-// fmt.Println(key, key_id)
-
-// key, key_id, err = util.GetKeyWithID("http://localhost:8080/etsi/", "dummy_id", key_id)
-// if err != nil {
-// 	log.Fatalln(err.Error())
-// }
-// fmt.Println(key, key_id)
-
-// Make a request for a SINGLE key to the ETSI QKD API.
-// The length is calculated from gake.SsLen.
-func GetKey(endpoint, saeID string) (string, string, error) {
+func getKey(endpoint, saeID string) (string, string, error) {
 	resp, err := http.Get(endpoint + saeID + "/enc_keys?number=1&size=" + strconv.Itoa(gake.SsLen*8))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] failed to call ETSI API: %v\n", err)
 		return "", "", fmt.Errorf("failed to call ETSI API: %w", err)
 	}
 
@@ -51,10 +30,9 @@ func GetKey(endpoint, saeID string) (string, string, error) {
 }
 
 // Make a request for the key with keyID to the ETSI QKD API.
-func GetKeyWithID(endpoint, saeID, keyID string) (string, string, error) {
+func getKeyWithID(endpoint, saeID, keyID string) (string, string, error) {
 	resp, err := http.Get(endpoint + saeID + "/dec_keys?key_ID=" + keyID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] failed to call ETSI API: %v\n", err)
 		return "", "", fmt.Errorf("failed to call ETSI API: %w", err)
 	}
 
@@ -85,4 +63,48 @@ func parseResponse(resp *http.Response) (string, string, error) {
 	}
 
 	return response.Keys[0].Key, response.Keys[0].KeyID, nil
+}
+
+func RequestKey(url string, isLeader bool) (Message, Message) {
+	key, keyID, err := getKey(url, "dummy_id")
+	if err != nil {
+		FatalError(err.Error())
+	}
+
+	// Process the received key.
+	var msgType int
+	if isLeader {
+		msgType = QKDRightKeyMsg
+	} else {
+		msgType = QKDClusterKeyMsg
+	}
+
+	keyMsg := Message{
+		ID:      UniqueID(),
+		Type:    msgType,
+		Content: key,
+	}
+
+	IDMsg := Message{
+		ID:      UniqueID(),
+		Type:    QKDIDsMsg,
+		Content: keyID,
+	}
+
+	return keyMsg, IDMsg
+}
+
+func RequestKeyWithID(url, id string) Message {
+	key, _, err := getKeyWithID(url, "dummy_id", id)
+	if err != nil {
+		FatalError(err.Error())
+	}
+
+	// Process the received key.
+	msg := Message{
+		ID:      UniqueID(),
+		Type:    QKDLeftKeyMsg,
+		Content: key,
+	}
+	return msg
 }

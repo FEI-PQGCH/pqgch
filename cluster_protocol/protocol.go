@@ -229,24 +229,16 @@ func (s *Session) onText(recv util.Message) {
 
 func (s *Session) onQKDClusterKey(msg util.Message) {
 	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
-	util.PrintLine(fmt.Sprintf("[QKD] Leader established Cluster Session Key: %02x…", decoded[:4]))
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Leader established Cluster Session Key via QKD: %02x…", decoded[:4]))
 
 	copy(s.crypto.SharedSecret[:], decoded)
 }
 
 func (s *Session) onQKDIDs(msg util.Message) {
-	key, _, err := util.GetKeyWithID(
-		s.config.ClusterQKDUrl(),
-		s.config.Name(),
-		msg.Content,
-	)
-	if err != nil {
-		util.PrintLine(fmt.Sprintf("[ERROR] fetch-by-ID failed: %v", err))
-		return
-	}
+	keyMsg := util.RequestKeyWithID(s.config.ClusterQKDUrl(), msg.Content)
+	decoded, _ := base64.StdEncoding.DecodeString(keyMsg.Content)
 
-	decoded, _ := base64.StdEncoding.DecodeString(key)
-	util.PrintLine(fmt.Sprintf("[QKD] Member established Cluster Session Key: %02x…", decoded[:4]))
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Member established Cluster Session Key via QKD: %02x…", decoded[:4]))
 
 	copy(s.crypto.SharedSecret[:], decoded)
 	s.OnClusterKey()
