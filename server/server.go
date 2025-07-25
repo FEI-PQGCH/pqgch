@@ -14,20 +14,22 @@ import (
 var config util.LeaderConfig
 
 func main() {
+	// Parse command line flag.
 	configFlag := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *configFlag == "" {
 		fmt.Fprintf(os.Stderr, "[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
 		os.Exit(1)
 	}
+	// Load config.
 	config, _ = util.GetConfig[util.LeaderConfig](*configFlag)
 	_, port, err := net.SplitHostPort(config.Addrs[config.Index])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing self address from config: %v\n", err)
 		os.Exit(1)
 	}
+	// Start TCP listener.
 	address := fmt.Sprintf(":%s", port)
-
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Error starting TCP server: %v\n", err)
@@ -41,7 +43,7 @@ func main() {
 	clients := newClients(config.ClusterConfig)
 
 	var clusterSession *cluster_protocol.Session
-	// Initialize leader transport/session.
+	// Initialize leader transport and session.
 	leaderTransport := newLeaderTransport()
 	leaderSession := leader_protocol.NewSession(leaderTransport, config, func() {
 		clusterSession.OnClusterKey()
@@ -49,7 +51,7 @@ func main() {
 	msgsLeader := make(chan util.Message)
 	go transportManager(leaderTransport, msgsLeader)
 
-	// Initialize cluster transport/session.
+	// Initialize cluster transport and session.
 	clusterTransport := newClusterTransport(clients)
 	clusterSession = cluster_protocol.NewLeaderSession(
 		clusterTransport,
@@ -64,14 +66,14 @@ func main() {
 
 	if config.IsClusterQKDUrl() {
 		go func() {
-			msg := requestKey(msgsCluster, config.GetClusterQKDUrl(), false)
+			msg := requestKey(msgsCluster, config.ClusterQKDUrl(), false)
 			clients.broadcast(msg)
 		}()
 	}
 
 	if config.IsRightQKDUrl() {
 		go func() {
-			msg := requestKey(msgsLeader, config.GetRightQKDURL(), true)
+			msg := requestKey(msgsLeader, config.RightQKDUrl(), true)
 			sendToLeader(config.Addrs[msg.ReceiverID], msg)
 		}()
 	}
@@ -128,7 +130,7 @@ func handleConnection(
 			return
 		}
 		if msg.Type == util.QKDIDsMsg {
-			go requestKeyWithID(leaderChan, config.GetLeftQKDURL(), msg.Content)
+			go requestKeyWithID(leaderChan, config.LeftQKDUrl(), msg.Content)
 			return
 		}
 		leaderChan <- msg

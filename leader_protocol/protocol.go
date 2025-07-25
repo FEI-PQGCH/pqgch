@@ -60,7 +60,7 @@ func (s *Session) GetKeyRef() *[32]byte {
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
 	if s.config.IsRightQKDPath() {
-		rightKeyQKD, err := s.config.GetRightQKDKey()
+		rightKeyQKD, err := s.config.RightQKDKey()
 		if err != nil {
 			util.FatalError(fmt.Sprintf("Failed to load external right key. Error: %v", err))
 		}
@@ -68,7 +68,7 @@ func (s *Session) Init() {
 	}
 
 	if s.config.IsLeftQKDPath() {
-		leftKeyQKD, err := s.config.GetLeftQKDKey()
+		leftKeyQKD, err := s.config.LeftQKDKey()
 		if err != nil {
 			util.FatalError(fmt.Sprintf("Failed to load external left key. Error: %v", err))
 		}
@@ -82,14 +82,14 @@ func (s *Session) Init() {
 
 	if !s.config.IsRightQKDUrl() && !s.config.IsRightQKDPath() {
 		var akeSendARight []byte
-		akeSendARight, s.crypto.TkRight, s.crypto.EskaRight = gake.KexAkeInitA(s.config.GetRightPublicKey())
+		akeSendARight, s.crypto.TkRight, s.crypto.EskaRight = gake.KexAkeInitA(s.config.RightPublicKey())
 
 		msg := util.Message{
 			ID:         util.UniqueID(),
 			SenderID:   s.config.Index,
-			SenderName: s.config.GetName(),
+			SenderName: s.config.Name(),
 			Type:       util.LeadAkeOneMsg,
-			ReceiverID: (s.config.Index + 1) % len(s.config.Addrs),
+			ReceiverID: s.config.RightIndex(),
 			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 		}
 
@@ -110,13 +110,13 @@ func (s *Session) onAkeOne(recv util.Message) {
 	akeSendB, s.crypto.KeyLeft = gake.KexAkeSharedB(
 		akeSendA,
 		s.config.GetSecretKey(),
-		s.config.GetLeftPublicKey())
+		s.config.LeftPublicKey())
 	util.PrintLine("[CRYPTO] Established 2-AKE shared key with left neighbor")
 
 	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
-		SenderName: s.config.GetName(),
+		SenderName: s.config.Name(),
 		Type:       util.LeadAkeTwoMsg,
 		ReceiverID: recv.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
@@ -243,7 +243,7 @@ func (s *Session) getXiRiCommitmentMsg() util.Message {
 	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
-		SenderName: s.config.GetName(),
+		SenderName: s.config.Name(),
 		Type:       util.LeaderXiRiCommitmentMsg,
 		Content:    base64.StdEncoding.EncodeToString(content),
 	}

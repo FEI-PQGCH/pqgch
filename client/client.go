@@ -25,7 +25,7 @@ func main() {
 	transport.Send(util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   config.Index,
-		SenderName: config.GetName(),
+		SenderName: config.Name(),
 		Type:       util.LoginMsg,
 		ClusterID:  config.ClusterConfig.Index,
 	})

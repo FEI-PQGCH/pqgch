@@ -224,13 +224,12 @@ func requestKey(msgsChan chan<- util.Message, url string, isLeader bool) util.Me
 	msgsChan <- msg
 
 	// Send keyID to right neighbor.
-	receiverID := (config.Index + 1) % len(config.Addrs)
 	msg = util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   config.Index,
-		SenderName: config.GetName(),
+		SenderName: config.Name(),
 		Type:       util.QKDIDsMsg,
-		ReceiverID: receiverID,
+		ReceiverID: config.RightIndex(),
 		Content:    keyID,
 	}
 

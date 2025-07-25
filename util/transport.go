@@ -43,6 +43,25 @@ func NewTCPTransport(address string) (*TCPTransport, error) {
 	return t, nil
 }
 
+func (t *TCPTransport) listen() {
+	reader := NewMessageReader(t.conn)
+
+	t.mu.Lock()
+	for t.MessageHandler == nil {
+		t.cond.Wait()
+	}
+	handler := t.MessageHandler
+	t.mu.Unlock()
+
+	for reader.HasMessage() {
+		msg := reader.GetMessage()
+		if msg.Type != TextMsg {
+			PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s \n", msg.TypeName(), msg.SenderName))
+		}
+		handler(msg)
+	}
+}
+
 func (t *TCPTransport) SetMessageHandler(handler func(Message)) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -67,27 +86,4 @@ func (t *TCPTransport) Send(msg Message) {
 	if err != nil {
 		PrintLine(fmt.Sprintf("[ERROR] Error sending message: %v\n", err))
 	}
-}
-
-func (t *TCPTransport) listen() {
-	reader := NewMessageReader(t.conn)
-
-	t.mu.Lock()
-	for t.MessageHandler == nil {
-		t.cond.Wait()
-	}
-	handler := t.MessageHandler
-	t.mu.Unlock()
-
-	for reader.HasMessage() {
-		msg := reader.GetMessage()
-		if msg.Type != TextMsg {
-			PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s \n", msg.TypeName(), msg.SenderName))
-		}
-		handler(msg)
-	}
-}
-
-func (t *TCPTransport) Close() {
-	t.conn.Close()
 }

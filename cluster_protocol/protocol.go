@@ -84,7 +84,7 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 
 	s.OnClusterKey = func() {
 		util.PrintLine("[CRYPTO] Broadcasting Main Session Key to cluster")
-		keyMsg := util.EncryptAndHMAC(*keyRef, config.GetName(), s.crypto.SharedSecret)
+		keyMsg := util.EncryptAndHMAC(*keyRef, config.Name(), s.crypto.SharedSecret)
 		s.transport.Send(keyMsg)
 	}
 
@@ -96,7 +96,7 @@ func NewLeaderSession(transport util.Transport, config util.ClusterConfig, keyRe
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
 	if s.config.IsClusterQKDPath() {
-		key, err := s.config.GetClusterKey()
+		key, err := s.config.ClusterKey()
 		if err != nil {
 			util.FatalError(fmt.Sprintf("failed loading cluster QKD key: %v", err))
 		}
@@ -111,16 +111,15 @@ func (s *Session) Init() {
 		return
 	}
 
-	rightIndex := (s.config.Index + 1) % len(s.config.Names)
-	akeSendARight, tk, eska := gake.KexAkeInitA(s.config.GetPublicKeys()[rightIndex])
+	akeSendARight, tk, eska := gake.KexAkeInitA(s.config.GetPublicKeys()[s.config.RightIndex()])
 	s.crypto.TkRight, s.crypto.EskaRight = tk, eska
 
 	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
-		SenderName: s.config.GetName(),
+		SenderName: s.config.Name(),
 		Type:       util.AkeOneMsg,
-		ReceiverID: rightIndex,
+		ReceiverID: s.config.RightIndex(),
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
 	s.transport.Send(msg)
@@ -146,7 +145,7 @@ func (s *Session) onAkeOne(msg util.Message) {
 	msg = util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
-		SenderName: s.config.GetName(),
+		SenderName: s.config.Name(),
 		Type:       util.AkeTwoMsg,
 		ReceiverID: msg.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
@@ -237,8 +236,8 @@ func (s *Session) onQKDClusterKey(msg util.Message) {
 
 func (s *Session) onQKDIDs(msg util.Message) {
 	key, _, err := util.GetKeyWithID(
-		s.config.GetClusterQKDUrl(),
-		s.config.GetName(),
+		s.config.ClusterQKDUrl(),
+		s.config.Name(),
 		msg.Content,
 	)
 	if err != nil {
@@ -287,7 +286,7 @@ func (s *Session) SendText(text string) {
 	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
-		SenderName: s.config.GetName(),
+		SenderName: s.config.Name(),
 		Content:    cipherText,
 		Type:       util.TextMsg,
 		ClusterID:  s.config.Index,
@@ -336,7 +335,7 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config util.ClusterConfig) u
 	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   config.Index,
-		SenderName: config.GetName(),
+		SenderName: config.Name(),
 		Type:       util.XiRiCommitmentMsg,
 		Content:    base64.StdEncoding.EncodeToString(content),
 	}

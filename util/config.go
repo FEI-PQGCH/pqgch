@@ -81,14 +81,14 @@ func (c *ClusterConfig) IsClusterQKDPath() bool {
 	return strings.HasPrefix(strings.ToLower(c.Crypto), "path ")
 }
 
-func (c *ClusterConfig) GetClusterQKDPath() string {
+func (c *ClusterConfig) ClusterQKDPath() string {
 	return strings.TrimSpace(c.Crypto[5:])
 }
 
-func (c *ClusterConfig) GetClusterKey() ([gake.SsLen]byte, error) {
+func (c *ClusterConfig) ClusterKey() ([gake.SsLen]byte, error) {
 	var key [gake.SsLen]byte
 
-	data, err := os.ReadFile(c.GetClusterQKDPath())
+	data, err := os.ReadFile(c.ClusterQKDPath())
 	if err != nil {
 		return key, err
 	}
@@ -104,21 +104,29 @@ func (c *ClusterConfig) GetClusterKey() ([gake.SsLen]byte, error) {
 	return key, nil
 }
 
-func (c *ClusterConfig) GetName() string {
+func (c *ClusterConfig) Name() string {
 	return c.Names[c.Index]
+}
+
+func (c *ClusterConfig) RightIndex() int {
+	return (c.Index + 1) % len(c.Names)
 }
 
 func (c *ClusterConfig) IsClusterQKDUrl() bool {
 	return strings.HasPrefix(strings.ToLower(c.Crypto), "url ")
 }
 
-func (c *ClusterConfig) GetClusterQKDUrl() string {
+func (c *ClusterConfig) ClusterQKDUrl() string {
 	return strings.TrimSpace(c.Crypto[4:])
 }
 
 func (c *LeaderConfig) GetSecretKey() []byte {
 	key, _ := base64.StdEncoding.DecodeString(c.SecretKey)
 	return key
+}
+
+func (c *LeaderConfig) RightIndex() int {
+	return (c.Index + 1) % len(c.Addrs)
 }
 
 func (c *LeaderConfig) IsLeftQKDUrl() bool {
@@ -137,27 +145,27 @@ func (c *LeaderConfig) IsRightQKDPath() bool {
 	return strings.HasPrefix(strings.ToLower(c.Right), "path ")
 }
 
-func (c *LeaderConfig) GetLeftQKDURL() string {
+func (c *LeaderConfig) LeftQKDUrl() string {
 	return strings.TrimSpace(c.Left[4:])
 }
 
-func (c *LeaderConfig) GetRightQKDURL() string {
+func (c *LeaderConfig) RightQKDUrl() string {
 	return strings.TrimSpace(c.Right[4:])
 }
 
-func (c *LeaderConfig) GetLeftPublicKey() [gake.PkLen]byte {
+func (c *LeaderConfig) LeftPublicKey() [gake.PkLen]byte {
 	return decodePublicKey(c.Left)
 }
 
-func (c *LeaderConfig) GetRightPublicKey() [gake.PkLen]byte {
+func (c *LeaderConfig) RightPublicKey() [gake.PkLen]byte {
 	return decodePublicKey(c.Right)
 }
 
-func (c *LeaderConfig) GetLeftQKDKey() ([gake.SsLen]byte, error) {
+func (c *LeaderConfig) LeftQKDKey() ([gake.SsLen]byte, error) {
 	return openAndDecodeKey(strings.TrimSpace(c.Left[5:]))
 }
 
-func (c *LeaderConfig) GetRightQKDKey() ([gake.SsLen]byte, error) {
+func (c *LeaderConfig) RightQKDKey() ([gake.SsLen]byte, error) {
 	return openAndDecodeKey(strings.TrimSpace(c.Right[5:]))
 }
 
