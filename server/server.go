@@ -75,9 +75,12 @@ func main() {
 	leaderSession.Init()
 	clusterSession.Init()
 
+	// Start handling messages.
 	go leaderSession.MessageHandler()
 	go clusterSession.MessageHandler()
 
+	// If the cluster uses QKD, the leader fetches the key
+	// and sends the key ID to the cluster members.
 	if config.IsClusterQKDUrl() {
 		go func() {
 			keyMsg, IDMsg := util.RequestKey(config.ClusterQKDUrl(), false)
@@ -86,6 +89,8 @@ func main() {
 		}()
 	}
 
+	// If two leaders use QKD, one of them (this one) fetches the key
+	// and sends the key ID to his right neighbor.
 	if config.IsRightQKDUrl() {
 		go func() {
 			keyMsg, IDMsg := util.RequestKey(config.RightQKDUrl(), true)
