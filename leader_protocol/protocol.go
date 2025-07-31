@@ -60,18 +60,12 @@ func (s *Session) GetKeyRef() *[32]byte {
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
 	if s.config.IsRightQKDPath() {
-		rightKeyQKD, err := s.config.RightQKDKey()
-		if err != nil {
-			util.FatalError(fmt.Sprintf("Failed to load external right key. Error: %v", err))
-		}
+		rightKeyQKD := s.config.RightQKDKey()
 		s.crypto.KeyRight = rightKeyQKD
 	}
 
 	if s.config.IsLeftQKDPath() {
-		leftKeyQKD, err := s.config.LeftQKDKey()
-		if err != nil {
-			util.FatalError(fmt.Sprintf("Failed to load external left key. Error: %v", err))
-		}
+		leftKeyQKD := s.config.LeftQKDKey()
 		s.crypto.KeyLeft = leftKeyQKD
 	}
 

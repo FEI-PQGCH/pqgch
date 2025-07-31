@@ -73,8 +73,9 @@ func (c *ClusterConfig) GetPublicKeys() [][gake.PkLen]byte {
 }
 
 func (c *ClusterConfig) GetSecretKey() []byte {
-	key, _ := base64.StdEncoding.DecodeString(c.SecretKey)
-	return key
+	raw := openAndDecodeKey(c.SecretKey, gake.SkLen)
+	fmt.Printf("Loaded cluster secret key from %s\n", c.SecretKey)
+	return raw
 }
 
 func (c *ClusterConfig) IsClusterQKDPath() bool {
@@ -121,8 +122,10 @@ func (c *ClusterConfig) ClusterQKDUrl() string {
 }
 
 func (c *LeaderConfig) GetSecretKey() []byte {
-	key, _ := base64.StdEncoding.DecodeString(c.SecretKey)
-	return key
+	raw := openAndDecodeKey(c.SecretKey, gake.SkLen)
+	fmt.Printf("Loaded cluster secret key from %s\n", c.SecretKey)
+	fmt.Printf("Cluster secret key: %x\n", raw)
+	return raw
 }
 
 func (c *LeaderConfig) RightIndex() int {
@@ -154,38 +157,66 @@ func (c *LeaderConfig) RightQKDUrl() string {
 }
 
 func (c *LeaderConfig) LeftPublicKey() [gake.PkLen]byte {
-	return decodePublicKey(c.Left)
+	raw := openAndDecodeKey(c.Left, gake.PkLen)
+	var out [gake.PkLen]byte
+	copy(out[:], raw)
+	return out
 }
 
 func (c *LeaderConfig) RightPublicKey() [gake.PkLen]byte {
-	return decodePublicKey(c.Right)
+	raw := openAndDecodeKey(c.Right, gake.PkLen)
+	var out [gake.PkLen]byte
+	copy(out[:], raw)
+	return out
 }
 
-func (c *LeaderConfig) LeftQKDKey() ([gake.SsLen]byte, error) {
-	return openAndDecodeKey(strings.TrimSpace(c.Left[5:]))
+func (c *LeaderConfig) LeftQKDKey() [gake.SsLen]byte {
+	raw := openAndDecodeKey(strings.TrimSpace(c.Left[5:]), gake.SsLen)
+	var out [gake.SsLen]byte
+	copy(out[:], raw)
+	return out
 }
 
-func (c *LeaderConfig) RightQKDKey() ([gake.SsLen]byte, error) {
-	return openAndDecodeKey(strings.TrimSpace(c.Right[5:]))
+func (c *LeaderConfig) RightQKDKey() [gake.SsLen]byte {
+	raw := openAndDecodeKey(strings.TrimSpace(c.Right[5:]), gake.SsLen)
+	var out [gake.SsLen]byte
+	copy(out[:], raw)
+	return out
 }
 
-func openAndDecodeKey(filePath string) ([gake.SsLen]byte, error) {
-	var key [gake.SsLen]byte
-
-	data, err := os.ReadFile(filePath)
+func loadJSONKey(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return key, err
+		return nil, fmt.Errorf("cannot read key file %q: %w", path, err)
 	}
-	trimmed := strings.TrimSpace(string(data))
-	decoded, err := hex.DecodeString(trimmed)
+	var blob struct {
+		Key string `json:"key"`
+	}
+	if err := json.Unmarshal(data, &blob); err != nil {
+		return nil, fmt.Errorf("invalid JSON in %q: %w", path, err)
+	}
+	raw, err := base64.StdEncoding.DecodeString(blob.Key)
+	if err == nil {
+		return raw, nil
+	}
+	raw, err = hex.DecodeString(blob.Key)
+	if err == nil {
+		return raw, nil
+	}
+	return nil, fmt.Errorf("key in %q is neither valid base64 nor hex", path)
+}
+
+func openAndDecodeKey(path string, expectLen int) []byte {
+	raw, err := loadJSONKey(path)
 	if err != nil {
-		return key, err
+		fmt.Printf("Error loading key from %s: %v\n", path, err)
+		return nil
 	}
-	if len(decoded) != gake.SsLen {
-		return key, errors.New("key length mismatch")
+	if len(raw) != expectLen {
+		fmt.Printf("Key length mismatch for %s: expected %d, got %d\n", path, expectLen, len(raw))
+		return nil
 	}
-	copy(key[:], decoded)
-	return key, nil
+	return raw
 }
 
 func decodePublicKey(key string) [gake.PkLen]byte {
