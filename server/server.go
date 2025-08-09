@@ -58,7 +58,7 @@ func main() {
 	leaderSession := leader_protocol.NewSession(
 		newLeaderMessageSender(),
 		config,
-		func() { clusterSession.OnClusterKey() },
+		func() { clusterSession.TransportMainSessionKey() },
 		msgsLeader,
 	)
 
@@ -68,7 +68,7 @@ func main() {
 	clusterSession = cluster_protocol.NewLeaderSession(
 		newClusterMessageSender(clients),
 		config.ClusterConfig,
-		leaderSession.GetKeyRef(),
+		leaderSession.GetMainSessionKeyRef(),
 		msgsCluster,
 	)
 
