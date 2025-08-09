@@ -84,12 +84,12 @@ func NewLeaderSession(sender util.MessageSender, config util.ClusterConfig, keyR
 	}
 
 	s.OnClusterKey = func() {
-		if keyRef == nil || *keyRef == [32]byte{} {
+		if *s.mainSessionKey == [32]byte{} {
 			util.PrintLine("[CRYPTO] No main session key yet, skipping")
 			return
 		}
 		util.PrintLine("[CRYPTO] Broadcasting Main Session Key to cluster")
-		keyMsg := util.EncryptAndHMAC(*keyRef, config.Name(), s.crypto.SharedSecret)
+		keyMsg := util.EncryptAndHMAC(*s.mainSessionKey, config.Name(), s.crypto.SharedSecret)
 		s.sender.Send(keyMsg)
 	}
 

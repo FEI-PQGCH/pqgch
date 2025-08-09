@@ -13,7 +13,6 @@ type MessageSender interface {
 
 type TCPTransport struct {
 	conn        net.Conn
-	cond        *sync.Cond
 	mu          sync.Mutex
 	receiveChan chan Message
 }
@@ -28,7 +27,6 @@ func NewTCPTransport(address string, receiveChan chan Message) (*TCPTransport, e
 		conn:        conn,
 		receiveChan: receiveChan,
 	}
-	t.cond = sync.NewCond(&t.mu)
 
 	go t.listen()
 
