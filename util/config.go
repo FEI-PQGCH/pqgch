@@ -123,8 +123,6 @@ func (c *ClusterConfig) ClusterQKDUrl() string {
 
 func (c *LeaderConfig) GetSecretKey() []byte {
 	raw := openAndDecodeKey(c.SecretKey, gake.SkLen)
-	fmt.Printf("Loaded cluster secret key from %s\n", c.SecretKey)
-	fmt.Printf("Cluster secret key: %x\n", raw)
 	return raw
 }
 
