@@ -74,7 +74,6 @@ func (c *ClusterConfig) GetPublicKeys() [][gake.PkLen]byte {
 
 func (c *ClusterConfig) GetSecretKey() []byte {
 	raw := openAndDecodeKey(c.SecretKey, gake.SkLen)
-	fmt.Printf("Loaded cluster secret key from %s\n", c.SecretKey)
 	return raw
 }
 

@@ -68,7 +68,7 @@ func parseResponse(resp *http.Response) (string, string, error) {
 func RequestKey(url string, isLeader bool) (Message, Message) {
 	key, keyID, err := getKey(url, "dummy_id")
 	if err != nil {
-		FatalError(err.Error())
+		ExitWithMsg(err.Error())
 	}
 
 	// Process the received key.
@@ -97,7 +97,7 @@ func RequestKey(url string, isLeader bool) (Message, Message) {
 func RequestKeyByID(url, id string, isLeader bool) Message {
 	key, _, err := getKeyByID(url, "dummy_id", id)
 	if err != nil {
-		FatalError(err.Error())
+		ExitWithMsg(err.Error())
 	}
 
 	// Process the received key.

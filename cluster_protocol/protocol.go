@@ -106,11 +106,11 @@ func (s *Session) Init() {
 	if s.config.IsClusterQKDPath() {
 		key, err := s.config.ClusterKey()
 		if err != nil {
-			util.FatalError(fmt.Sprintf("failed loading cluster QKD key: %v", err))
+			util.ExitWithMsg(fmt.Sprintf("failed loading cluster QKD key: %v", err))
 		}
 		s.crypto.SharedSecret = key
 
-		util.PrintLine(fmt.Sprintf("[QKD] Cluster Shared Secret established: %02x...\n", s.crypto.SharedSecret[:4]))
+		util.PrintLine(fmt.Sprintf("[QKD] Cluster Shared Secret established: %02x...", s.crypto.SharedSecret[:4]))
 		s.OnClusterKey()
 		return
 	}
@@ -215,7 +215,7 @@ func (s *Session) onXiRiCommitment(recv util.Message) {
 func (s *Session) onKey(recv util.Message) {
 	decoded, err := base64.StdEncoding.DecodeString(recv.Content)
 	if err != nil {
-		util.PrintLine(fmt.Sprintf("[ERROR] Failed to decode key message: %v\n", err))
+		util.PrintLine(fmt.Sprintf("[ERROR] Failed to decode key message: %v", err))
 		return
 	}
 	if s.crypto.SharedSecret == [gake.SsLen]byte{} {
@@ -283,7 +283,7 @@ func (s *Session) SendText(text string) {
 	}
 	cipherText, err := util.EncryptAesGcm(text, s.mainSessionKey[:])
 	if err != nil {
-		util.PrintLine(fmt.Sprintf("[ERROR] Encryption failed: %v\n", err))
+		util.PrintLine(fmt.Sprintf("[ERROR] Encryption failed: %v", err))
 		return
 	}
 	msg := util.Message{
@@ -294,7 +294,7 @@ func (s *Session) SendText(text string) {
 		Type:       util.TextMsg,
 		ClusterID:  s.config.Index,
 	}
-	s.sender.Send(msg)
+	go s.sender.Send(msg)
 }
 
 // Check whether we have both keyLeft and keyRight available. If so, compute the Xi, Ri and Commitment message and return it.
@@ -377,18 +377,18 @@ func (s *Session) tryFinalizeProtocol() {
 	util.PrintLine("[CRYPTO] Received all Xs")
 
 	for i, x := range s.crypto.Xs {
-		util.PrintLine(fmt.Sprintf("[CRYPTO] X%d: %02x\n", i, x[:4]))
+		util.PrintLine(fmt.Sprintf("[CRYPTO] X%d: %02x", i, x[:4]))
 	}
 
 	ok := util.CheckXs(s.crypto.Xs, len(s.config.Names))
 	if !ok {
-		util.FatalError("Failed XS check")
+		util.ExitWithMsg("Failed XS check")
 	}
 	util.PrintLine("[CRYPTO] Xs check: success")
 
 	ok = checkCommitments(s.crypto.Xs, s.config.GetPublicKeys(), s.crypto.Rs, s.crypto.Commitments)
 	if !ok {
-		util.FatalError("Failed Commitments check")
+		util.ExitWithMsg("Failed Commitments check")
 	}
 	util.PrintLine("[CRYPTO] Commitments check: success")
 
@@ -401,7 +401,7 @@ func (s *Session) tryFinalizeProtocol() {
 
 	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.Names), s.config.Index, s.crypto.KeyLeft, s.crypto.Xs, PIDs)
 	s.crypto.SharedSecret = computeSharedSecret(otherLeftKeys, PIDs, len(s.config.Names))
-	util.PrintLine(fmt.Sprintf("[CRYPTO] Cluster Shared Secret established: %02x...\n", s.crypto.SharedSecret[:4]))
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Cluster Shared Secret established: %02x...", s.crypto.SharedSecret[:4]))
 
 	s.OnClusterKey()
 }
@@ -413,7 +413,7 @@ func (s *Session) decryptAndStoreKey(content []byte) {
 		return
 	}
 	copy(s.mainSessionKey[:], mainSessionKey)
-	util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x\n", s.mainSessionKey[:4]))
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x", s.mainSessionKey[:4]))
 }
 
 // Recalculate the commitments and compare them to the received ones.

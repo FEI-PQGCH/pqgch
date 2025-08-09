@@ -45,7 +45,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer listener.Close()
-	util.PrintLine(fmt.Sprintf("[ROUTE]: server listening on %s\n", address))
+	util.PrintLine(fmt.Sprintf("[ROUTE]: server listening on %s", address))
 
 	// Create message tracker and in-memory client registry.
 	tracker := util.NewMessageTracker()
@@ -104,7 +104,7 @@ func main() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				util.PrintLine(fmt.Sprintf("[ERROR] Error accepting connection: %v\n", err))
+				util.PrintLine(fmt.Sprintf("[ERROR] Error accepting connection: %v", err))
 				continue
 			}
 			go handleConnection(clients, conn, tracker, msgsCluster, msgsLeader)
@@ -144,7 +144,7 @@ func handleConnection(
 			return
 		}
 		// Log receipt of a leader protocol message.
-		util.PrintLine(fmt.Sprintf("[ROUTE] Received %s message from Leader\n", msg.TypeName()))
+		util.PrintLine(fmt.Sprintf("[ROUTE] Received %s message from Leader", msg.TypeName()))
 		if msg.Type == util.TextMsg {
 			clusterChan <- msg
 			clients.broadcast(msg)
@@ -162,7 +162,7 @@ func handleConnection(
 	}
 
 	// Handle client login.
-	util.PrintLine(fmt.Sprintf("[INFO] New client (%s, %s) joined\n", msg.SenderName, conn.RemoteAddr()))
+	util.PrintLine(fmt.Sprintf("[INFO] New client (%s, %s) joined", msg.SenderName, conn.RemoteAddr()))
 	clientID := msg.SenderID
 
 	clients.makeOnline(clientID, conn)
@@ -174,7 +174,7 @@ func handleConnection(
 	// Handle messages from this client in an infinite loop.
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		util.PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s\n", msg.TypeName(), msg.SenderName))
+		util.PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s", msg.TypeName(), msg.SenderName))
 
 		if !tracker.AddMessage(msg.ID) {
 			continue

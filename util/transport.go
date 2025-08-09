@@ -41,7 +41,7 @@ func (t *TCPTransport) listen() {
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
 		if msg.Type != TextMsg {
-			PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s \n", msg.TypeName(), msg.SenderName))
+			PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s", msg.TypeName(), msg.SenderName))
 		}
 		t.receiveChan <- msg
 	}

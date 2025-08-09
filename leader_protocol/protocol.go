@@ -263,18 +263,18 @@ func (s *Session) tryFinalizeProtocol() {
 	util.PrintLine("[CRYPTO] Received all Xs")
 
 	for i, x := range s.crypto.Xs {
-		util.PrintLine(fmt.Sprintf("[CRYPTO] X%d: %02x\n", i, x[:4]))
+		util.PrintLine(fmt.Sprintf("[CRYPTO] X%d: %02x", i, x[:4]))
 	}
 
 	ok := util.CheckXs(s.crypto.Xs, len(s.config.Addrs))
 	if !ok {
-		util.FatalError("Failed XS check")
+		util.ExitWithMsg("Failed XS check")
 	}
 	util.PrintLine("[CRYPTO] Xs check: success")
 
 	ok = checkCommitments(len(s.config.Addrs), s.crypto.Xs, s.crypto.Rs, s.crypto.Commitments)
 	if !ok {
-		util.FatalError("Failed Commitments check")
+		util.ExitWithMsg("Failed Commitments check")
 	}
 	util.PrintLine("[CRYPTO] Commitments check: success")
 
@@ -288,7 +288,7 @@ func (s *Session) tryFinalizeProtocol() {
 	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.Addrs), s.config.Index, s.crypto.KeyLeft, s.crypto.Xs, PIDs)
 	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(s.config.Addrs))
 
-	util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x...\n", sharedSecret[:4]))
+	util.PrintLine(fmt.Sprintf("[CRYPTO] Main Session Key established: %02x...", sharedSecret[:4]))
 
 	s.crypto.SharedSecret = sharedSecret
 	s.onMainSessionKey()

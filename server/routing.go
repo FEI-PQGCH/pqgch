@@ -73,7 +73,7 @@ func (clients *Clients) send(msg util.Message) {
 	client := &clients.data[msg.ReceiverID]
 	if client.conn == nil {
 		client.queue.Add(msg)
-		util.PrintLine("[ROUTE] Stored message\n")
+		util.PrintLine("[ROUTE] Stored message")
 		return
 	}
 	msg.Send(client.conn)
@@ -97,12 +97,12 @@ func (clients *Clients) broadcast(msg util.Message) {
 
 		err := msg.Send(c.conn)
 		if err != nil {
-			util.PrintLine(fmt.Sprintf("[ERROR] sending message to client: %v\n", err))
+			util.PrintLine(fmt.Sprintf("[ERROR] sending message to client: %v", err))
 			c.conn.Close()
 			return
 		}
 	}
-	util.PrintLine(fmt.Sprintf("[ROUTE] Broadcasted message %s from %s\n", msg.TypeName(), msg.SenderName))
+	util.PrintLine(fmt.Sprintf("[ROUTE] Broadcasted message %s from %s", msg.TypeName(), msg.SenderName))
 }
 
 // Cluster transport for communication between the leader and clients in its cluster.
@@ -163,13 +163,13 @@ func sendToLeader(address string, msg util.Message) {
 		var err error
 		conn, err = net.Dial("tcp", address)
 		if err != nil {
-			util.PrintLine(fmt.Sprintf("[ERROR] Leader (%s) connection error: %v. Retrying...\n", address, err))
+			util.PrintLine(fmt.Sprintf("[ERROR] Leader (%s) connection error: %v. Retrying...", address, err))
 			time.Sleep(2 * time.Second)
 			continue
 		}
 		break
 	}
-	util.PrintLine(fmt.Sprintf("[ROUTE] Sending message %s to Leader %s\n", msg.TypeName(), address))
+	util.PrintLine(fmt.Sprintf("[ROUTE] Sending message %s to Leader %s", msg.TypeName(), address))
 
 	msg.Send(conn)
 }

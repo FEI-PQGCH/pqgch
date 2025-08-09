@@ -5,9 +5,15 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"unsafe"
+)
+
+const (
+	esc           = "\033["
+	clearLineCode = esc + "2K"
+	cursorShow    = esc + "?25h"
+	cursorHide    = esc + "?25l"
 )
 
 type winsize struct {
@@ -17,7 +23,7 @@ type winsize struct {
 	ypixels uint16
 }
 
-func getTerminalSize() (rows, cols int) {
+func getTerminalWidth() (cols int) {
 	ws := &winsize{}
 	_, _, errno := syscall.Syscall(
 		syscall.SYS_IOCTL,
@@ -28,43 +34,7 @@ func getTerminalSize() (rows, cols int) {
 	if errno != 0 {
 		panic(errno)
 	}
-	return int(ws.rows), int(ws.cols)
-}
-
-const (
-	esc                = "\033["
-	alternateScreenOn  = esc + "?1049h"
-	alternateScreenOff = esc + "?1049l"
-	clearLineCode      = esc + "2K"
-	clearScreen        = esc + "2J\033[H"
-	cursorShow         = esc + "?25h"
-	cursorHide         = esc + "?25l"
-)
-
-func enterAlternateScreen() {
-	fmt.Print(alternateScreenOn)
-}
-
-func exitAlternateScreen() {
-	fmt.Print(alternateScreenOff)
-}
-
-func moveToLine(sb *strings.Builder, i int) {
-	fmt.Fprintf(sb, "%s%d;%dH", esc, i, 1)
-}
-
-func clearLine(sb *strings.Builder) {
-	fmt.Fprint(sb, clearLineCode)
-}
-
-func print(sb *strings.Builder, m string) {
-	fmt.Fprint(sb, m)
-}
-
-func printLineAt(sb *strings.Builder, m string, i int) {
-	moveToLine(sb, i)
-	clearLine(sb)
-	print(sb, m)
+	return int(ws.cols)
 }
 
 var oldTermios syscall.Termios
@@ -89,6 +59,8 @@ func enableRawMode() {
 		uintptr(syscall.TCSETS),
 		uintptr(unsafe.Pointer(&newt)),
 	)
+
+	fmt.Print(cursorHide)
 }
 
 func disableRawMode() {
@@ -98,38 +70,7 @@ func disableRawMode() {
 		uintptr(syscall.TCSETS),
 		uintptr(unsafe.Pointer(&oldTermios)),
 	)
-}
-
-func wrapLines(lines []Log, width int) []Log {
-	var wrapped []Log
-	for _, line := range lines {
-		current := ""
-		for _, r := range line.Text {
-			if len(current) >= width {
-				wrapped = append(wrapped, Log{Text: current, Color: line.Color})
-				current = ""
-			}
-			current += string(r)
-		}
-		if current != "" {
-			wrapped = append(wrapped, Log{Text: current, Color: line.Color})
-		}
-	}
-	return wrapped
-}
-
-func wrapInput(input string, width int) []Log {
-	wrapped := []Log{}
-	line := "> "
-	for _, r := range input {
-		if len(line) >= width {
-			wrapped = append(wrapped, Log{Text: line, Color: ColorWhite})
-			line = "> "
-		}
-		line += string(r)
-	}
-	wrapped = append(wrapped, Log{Text: line, Color: ColorWhite})
-	return wrapped
+	fmt.Print(cursorShow)
 }
 
 type Color string
@@ -155,31 +96,43 @@ type Log struct {
 var lineChan = make(chan Log, 100)
 
 func PrintLine(msg string) {
-	PrintLineColored(msg, ColorWhite)
+	PrintLineColored(msg, ColorReset)
 }
 
 func PrintLineColored(msg string, color Color) {
 	lineChan <- Log{Text: msg, Color: color}
 }
 
-var errChan = make(chan Log, 1)
-
-func FatalError(msg string) {
-	errChan <- Log{Text: msg, Color: ColorRed}
+func ExitWithMsg(msg string) {
+	lineChan <- Log{Text: msg, Color: ColorRed}
+	exit()
 }
 
 func exit() {
-	exitAlternateScreen()
 	disableRawMode()
 	os.Exit(0)
 }
 
+func printPrompt(input string) {
+	terminalWidth := getTerminalWidth()
+	promptLen := len(input) + 2
+	start := max(promptLen-terminalWidth, 0)
+	clearLine()
+	fmt.Print("> ")
+
+	if len(input) > 0 {
+		fmt.Print(string(input[start:]))
+	} else {
+		fmt.Print(colorize("Enter your message here", ColorWhite))
+	}
+}
+
+func clearLine() {
+	fmt.Print("\r" + clearLineCode)
+}
+
 func StartTUI(onLine func(string)) {
 	// Initialization
-	enterAlternateScreen()
-	defer exitAlternateScreen()
-	fmt.Print(clearScreen)
-
 	enableRawMode()
 	defer disableRawMode()
 
@@ -206,13 +159,12 @@ func StartTUI(onLine func(string)) {
 				if inputReader.Buffered() >= 2 {
 					r1, _, _ := inputReader.ReadRune()
 					r2, _, _ := inputReader.ReadRune()
+					// Keyboard arrows
 					if r1 == '[' {
 						switch r2 {
 						case 'A':
-							keyboardCh <- '↑'
 							continue
 						case 'B':
-							keyboardCh <- '↓'
 							continue
 						}
 					}
@@ -225,116 +177,38 @@ func StartTUI(onLine func(string)) {
 		}
 	}()
 
-	// Render loop
 	input := []rune{}
-	inputHeight := 0
-	lastInputHeight := 0
-	logs := []Log{}
-	scrollOffset := 0
-	lastFrame := []string{}
-	failed := false
-
 	for {
-		rows, cols := getTerminalSize()
-
-		if len(lastFrame) != max(rows-inputHeight, 0) {
-			lastFrame = make([]string, max(rows-inputHeight, 0))
-		}
-
-		wrappedInput := wrapInput(string(input), cols)
-		wrappedMessages := wrapLines(logs, cols)
-
-		lastInputHeight = inputHeight
-		inputHeight = len(wrappedInput)
-
-		viewSpace := max(rows-inputHeight, 0)
-
-		start := max(len(wrappedMessages)-viewSpace, 0)
-		end := len(wrappedMessages)
-
-		start = max(start-scrollOffset, 0)
-		end -= scrollOffset
-
-		if len(wrappedMessages) >= viewSpace && end < viewSpace {
-			end = viewSpace
-		}
-
-		view := wrappedMessages[start:end]
-
-		var sb strings.Builder
-		// Clear old input space
-		if inputHeight < lastInputHeight {
-			from := rows - lastInputHeight + 1
-			for i := range lastInputHeight - inputHeight {
-				moveToLine(&sb, from+i)
-				clearLine(&sb)
-			}
-		}
-		if len(lastFrame) != len(view) {
-			lastFrame = make([]string, len(view))
-		}
-
-		// Draw messages
-		for i, line := range view {
-			if i >= len(lastFrame) || lastFrame[i] != line.Text {
-				printLineAt(&sb, colorize(line.Text, line.Color), i+1)
-				lastFrame[i] = view[i].Text
-			}
-		}
-
-		// Draw input
-		from := rows - inputHeight + 1
-		for i, line := range wrappedInput {
-			printLineAt(&sb, colorize(line.Text, line.Color), from+i)
-		}
-
-		// Render
-		os.Stdout.Write([]byte(sb.String()))
-
-		// Get next input and update state accordingly
-		fmt.Print(cursorShow)
 		select {
 		case key := <-keyboardCh:
-			if failed {
-				exit()
-			}
-
 			switch key {
 			case '\r', '\n':
 				if len(input) == 0 {
+					printPrompt("")
 					continue
 				}
-				logs = append(logs, Log{Text: "You: " + string(input), Color: ColorGreen})
+				clearLine()
+				log := "You: " + string(input)
+				fmt.Println(colorize(log, ColorGreen))
 				onLine(string(input))
 				input = []rune{}
+				printPrompt("")
 				continue
 			case 127:
 				if len(input) > 0 {
 					input = input[:len(input)-1]
 				}
-				continue
-			case '↑':
-				scrollOffset++
-				maxScroll := max(len(wrappedMessages)-viewSpace, 0)
-				scrollOffset = min(scrollOffset, maxScroll)
-				continue
-			case '↓':
-				scrollOffset--
-				scrollOffset = max(scrollOffset, 0)
+				printPrompt(string(input))
 				continue
 			default:
 				input = append(input, key)
+				printPrompt(string(input))
 				continue
 			}
 		case line := <-lineChan:
-			if !failed {
-				logs = append(logs, line)
-			}
-		case err := <-errChan:
-			logs = append(logs, err)
-			logs = append(logs, Log{Text: "Press any key to exit", Color: ColorRed})
-			failed = true
+			clearLine()
+			fmt.Println(colorize(line.Text, line.Color))
+			printPrompt(string(input))
 		}
-		fmt.Print(cursorHide)
 	}
 }
