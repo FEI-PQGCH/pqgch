@@ -104,7 +104,8 @@ func PrintLineColored(msg string, color Color) {
 }
 
 func ExitWithMsg(msg string) {
-	lineChan <- Log{Text: msg, Color: ColorRed}
+	clearLine()
+	fmt.Println(colorize(msg, ColorRed))
 	exit()
 }
 
@@ -144,6 +145,7 @@ func StartTUI(onLine func(string)) {
 		exit()
 	}()
 
+	printPrompt("")
 	// Input loop
 	inputReader := bufio.NewReader(os.Stdin)
 	keyboardCh := make(chan rune, 256)

@@ -89,7 +89,7 @@ func NewLeaderSession(sender util.MessageSender, config util.ClusterConfig, keyR
 			return
 		}
 		if keyRef == nil || *keyRef == [32]byte{} {
-			util.PrintLine("[CRYPTO] No main session key reference, skipping")
+			util.PrintLine("[CRYPTO] No main session key yet, skipping")
 			return
 		}
 		util.PrintLine("[CRYPTO] Broadcasting Main Session Key to cluster")
@@ -130,7 +130,7 @@ func (s *Session) Init() {
 		ReceiverID: s.config.RightIndex(),
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
-	s.sender.Send(msg)
+	go s.sender.Send(msg)
 }
 
 func (s *Session) MessageHandler() {

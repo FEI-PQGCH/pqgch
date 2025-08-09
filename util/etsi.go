@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"pqgch/gake"
 	"strconv"
+	"time"
 )
 
 type Key struct {
@@ -66,9 +67,16 @@ func parseResponse(resp *http.Response) (string, string, error) {
 }
 
 func RequestKey(url string, isLeader bool) (Message, Message) {
-	key, keyID, err := getKey(url, "dummy_id")
-	if err != nil {
-		ExitWithMsg(err.Error())
+	var key, keyID string
+	for {
+		var err error
+		key, keyID, err = getKey(url, "dummy_id")
+		if err != nil {
+			PrintLine(fmt.Sprintf("[ERROR] Requesting QKD key: %v. Retrying...", err))
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
 	}
 
 	// Process the received key.
@@ -95,9 +103,16 @@ func RequestKey(url string, isLeader bool) (Message, Message) {
 }
 
 func RequestKeyByID(url, id string, isLeader bool) Message {
-	key, _, err := getKeyByID(url, "dummy_id", id)
-	if err != nil {
-		ExitWithMsg(err.Error())
+	var key string
+	for {
+		var err error
+		key, _, err = getKeyByID(url, "dummy_id", id)
+		if err != nil {
+			PrintLine(fmt.Sprintf("[ERROR] Requesting QKD key by ID: %v. Retrying...", err))
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
 	}
 
 	// Process the received key.

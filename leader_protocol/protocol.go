@@ -87,7 +87,7 @@ func (s *Session) Init() {
 			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 		}
 
-		s.sender.Send(msg)
+		go s.sender.Send(msg)
 	}
 }
 
