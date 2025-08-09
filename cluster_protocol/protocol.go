@@ -84,10 +84,6 @@ func NewLeaderSession(sender util.MessageSender, config util.ClusterConfig, keyR
 	}
 
 	s.OnClusterKey = func() {
-		if s.crypto.SharedSecret == [gake.SsLen]byte{} {
-			util.PrintLine("[CRYPTO] No cluster session key yet, skipping")
-			return
-		}
 		if keyRef == nil || *keyRef == [32]byte{} {
 			util.PrintLine("[CRYPTO] No main session key yet, skipping")
 			return
