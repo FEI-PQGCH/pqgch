@@ -52,6 +52,7 @@ const (
 	LeadAkeOneMsg
 	LeadAkeTwoMsg
 	LeaderXiRiCommitmentMsg
+	MainSessionKeyMsg
 	QKDLeftKeyMsg
 	QKDRightKeyMsg
 	QKDClusterKeyMsg

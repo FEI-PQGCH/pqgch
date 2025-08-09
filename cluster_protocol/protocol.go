@@ -38,8 +38,8 @@ type Session struct {
 	config                  util.ClusterConfig
 	crypto                  CryptoSession
 	keyCiphertext           []byte
-	mainSessionKey          *[32]byte
-	TransportMainSessionKey func() // Callback function to transport the main session key between cluster leader and members.
+	mainSessionKey          [32]byte
+	transportMainSessionKey func() // Callback function to transport the main session key between cluster leader and members.
 	// If the session user is a cluster member, the callback tries to decrypt the main session key ciphertext.
 	// This ciphertext is to be received from the cluster leader.
 	// If the session user is a cluster leader, the cluster leader uses the cluster session key
@@ -52,14 +52,13 @@ func NewSession(
 	config util.ClusterConfig,
 	receiveChan chan util.Message) *Session {
 	s := &Session{
-		receiveChan:    receiveChan,
-		sender:         sender,
-		crypto:         NewCryptoSession(config),
-		config:         config,
-		mainSessionKey: &[32]byte{},
+		receiveChan: receiveChan,
+		sender:      sender,
+		crypto:      NewCryptoSession(config),
+		config:      config,
 	}
 
-	s.TransportMainSessionKey = func() {
+	s.transportMainSessionKey = func() {
 		if s.keyCiphertext == nil {
 			util.PrintLine("[CRYPTO] No key ciphertext, skipping")
 			return
@@ -72,28 +71,29 @@ func NewSession(
 
 // Create a new Cluster Leader session. This is the session used for interacting with cluster members.
 // The Transport defines how the messages produced by the protocol will be routed.
-// mainSessionKeyRef is a reference to the main session key. We encrypt this key in the OnSharedKey handler.
 // It is assumed to already be established by the time we establish the cluster session key.
 func NewLeaderSession(
 	sender util.MessageSender,
 	config util.ClusterConfig,
-	mainSessionKeyRef *[32]byte,
 	receiveChan chan util.Message) *Session {
 	s := &Session{
-		receiveChan:    receiveChan,
-		sender:         sender,
-		crypto:         NewCryptoSession(config),
-		config:         config,
-		mainSessionKey: mainSessionKeyRef,
+		receiveChan: receiveChan,
+		sender:      sender,
+		crypto:      NewCryptoSession(config),
+		config:      config,
 	}
 
-	s.TransportMainSessionKey = func() {
-		if *s.mainSessionKey == [32]byte{} {
+	s.transportMainSessionKey = func() {
+		if s.mainSessionKey == [32]byte{} {
 			util.PrintLine("[CRYPTO] No main session key yet, skipping")
 			return
 		}
+		if s.crypto.clusterSessionKey == [32]byte{} {
+			util.PrintLine("[CRYPTO] No cluster session key yet, skipping")
+			return
+		}
 		util.PrintLine("[CRYPTO] Broadcasting Main Session Key to cluster")
-		keyMsg := util.EncryptAndHMAC(*s.mainSessionKey, config.Name(), s.crypto.clusterSessionKey)
+		keyMsg := util.EncryptAndHMAC(s.mainSessionKey, config.Name(), s.crypto.clusterSessionKey)
 		s.sender.Send(keyMsg)
 	}
 
@@ -110,7 +110,7 @@ func (s *Session) Init() {
 		s.crypto.clusterSessionKey = key
 
 		util.PrintLine(fmt.Sprintf("[QKD] Cluster Shared Secret established: %02x...", s.crypto.clusterSessionKey[:4]))
-		s.TransportMainSessionKey()
+		s.transportMainSessionKey()
 		return
 	}
 
@@ -227,7 +227,7 @@ func (s *Session) onKey(recv util.Message) {
 
 // Handle a onText message - we decrypt it using the main session key and send it to the Received channel.
 func (s *Session) onText(recv util.Message) {
-	if *s.mainSessionKey == [gake.SsLen]byte{} {
+	if s.mainSessionKey == [gake.SsLen]byte{} {
 		util.PrintLine("[INFO] No Main Session Key yet. Skipping message.")
 		return
 	}
@@ -240,11 +240,17 @@ func (s *Session) onText(recv util.Message) {
 	util.PrintLineColored(text, util.ColorGreen)
 }
 
+func (s *Session) onMainSessionKey(recv util.Message) {
+	decoded, _ := base64.StdEncoding.DecodeString(recv.Content)
+	copy(s.mainSessionKey[:], decoded)
+	s.transportMainSessionKey()
+}
+
 func (s *Session) onQKDClusterKey(msg util.Message) {
 	decoded, _ := base64.StdEncoding.DecodeString(msg.Content)
 	util.PrintLine(fmt.Sprintf("[CRYPTO] Established Cluster Session Key via QKD: %02x…", decoded[:4]))
 	copy(s.crypto.clusterSessionKey[:], decoded)
-	s.TransportMainSessionKey()
+	s.transportMainSessionKey()
 }
 
 func (s *Session) onQKDIDs(msg util.Message) {
@@ -265,6 +271,8 @@ func (s *Session) handleMessage(recv util.Message) {
 		s.onXiRiCommitment(recv)
 	case util.KeyMsg:
 		s.onKey(recv)
+	case util.MainSessionKeyMsg:
+		s.onMainSessionKey(recv)
 	case util.QKDClusterKeyMsg:
 		s.onQKDClusterKey(recv)
 	case util.QKDIDsMsg:
@@ -276,7 +284,7 @@ func (s *Session) handleMessage(recv util.Message) {
 
 // Encrypt and send the text message. To be used by client code.
 func (s *Session) SendText(text string) {
-	if [32]byte(*s.mainSessionKey) == [32]byte{} {
+	if s.mainSessionKey == [32]byte{} {
 		util.PrintLine("[CRYPTO] No Main Session Key yet. Not sending message.")
 		return
 	}
@@ -402,7 +410,7 @@ func (s *Session) tryFinalizeProtocol() {
 	s.crypto.clusterSessionKey = computeSharedSecret(otherLeftKeys, PIDs, len(s.config.Names))
 	util.PrintLine(fmt.Sprintf("[CRYPTO] Cluster Shared Secret established: %02x...", s.crypto.clusterSessionKey[:4]))
 
-	s.TransportMainSessionKey()
+	s.transportMainSessionKey()
 }
 
 func (s *Session) decryptAndStoreKey(content []byte) {

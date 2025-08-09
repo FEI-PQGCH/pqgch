@@ -51,25 +51,21 @@ func main() {
 	tracker := util.NewMessageTracker()
 	clients := newClients(config.ClusterConfig)
 
-	// Initialize leader transport and session.
-	var clusterSession *cluster_protocol.Session
-	msgsLeader := make(chan util.Message)
+	// Initialize cluster transport and session.
+	msgsCluster := make(chan util.Message)
+	clusterSession := cluster_protocol.NewLeaderSession(
+		newClusterMessageSender(clients),
+		config.ClusterConfig,
+		msgsCluster,
+	)
 
+	// Initialize leader transport and session.
+	msgsLeader := make(chan util.Message)
 	leaderSession := leader_protocol.NewSession(
 		newLeaderMessageSender(),
 		config,
-		func() { clusterSession.TransportMainSessionKey() },
-		msgsLeader,
-	)
-
-	// Initialize cluster transport and session.
-	msgsCluster := make(chan util.Message)
-
-	clusterSession = cluster_protocol.NewLeaderSession(
-		newClusterMessageSender(clients),
-		config.ClusterConfig,
-		leaderSession.GetMainSessionKeyRef(),
 		msgsCluster,
+		msgsLeader,
 	)
 
 	leaderSession.Init()
