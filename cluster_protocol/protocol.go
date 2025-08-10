@@ -107,7 +107,7 @@ func NewLeaderSession(
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
 	if s.config.IsClusterQKDPath() {
-		key, err := s.config.ClusterKey()
+		key, err := s.config.ClusterQKDKeyFromFile()
 		if err != nil {
 			util.ExitWithMsg(fmt.Sprintf("failed loading cluster QKD key: %v", err))
 		}
@@ -229,7 +229,7 @@ func (s *Session) onKey(recv util.Message) {
 	s.decryptAndStoreKey(decoded)
 }
 
-// Handle a onText message - we decrypt it using the main session key and send it to the Received channel.
+// Handle a onText message - we decrypt it using the main session key and print.
 func (s *Session) onText(recv util.Message) {
 	if s.mainSessionKey == [gake.SsLen]byte{} {
 		util.LogCrypto("No Main Session Key yet. Skipping message.")

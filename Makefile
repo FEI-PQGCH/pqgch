@@ -26,6 +26,14 @@ mock:
 	@echo "[Make]: Running QKD mock server..."
 	@cd qkd && CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go
 
-gen:
-	@echo "[Make]: Generating the KEM keypairs..."
-	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run util/cmd/main.go -c $(or $(n),1)
+gen_2ake:
+	@echo "[Make]: Generating 2-AKE shared secret..."
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run util/cmd/main.go -m 2
+
+gen_kem:
+	@echo "[Make]: Generating KEM keypairs..."
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run util/cmd/main.go -c $(or $(n),1) -m 1
+
+gen_ss:
+	@echo "[Make]: Generating shared secret..."
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run util/cmd/main.go -m 0

@@ -2,9 +2,7 @@ package util
 
 import (
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"pqgch/gake"
@@ -79,26 +77,14 @@ func (c *ClusterConfig) IsClusterQKDPath() bool {
 	return strings.HasPrefix(strings.ToLower(c.Crypto), "path ")
 }
 
-func (c *ClusterConfig) ClusterQKDPath() string {
+func (c *ClusterConfig) clusterQKDPath() string {
 	return strings.TrimSpace(c.Crypto[5:])
 }
 
-func (c *ClusterConfig) ClusterKey() ([2 * gake.SsLen]byte, error) {
+func (c *ClusterConfig) ClusterQKDKeyFromFile() ([2 * gake.SsLen]byte, error) {
 	var key [2 * gake.SsLen]byte
-
-	data, err := os.ReadFile(c.ClusterQKDPath())
-	if err != nil {
-		return key, err
-	}
-	trimmed := strings.TrimSpace(string(data))
-	dec, err := hex.DecodeString(trimmed)
-	if err != nil {
-		return key, err
-	}
-	if len(dec) != len(key) {
-		return key, errors.New("cluster QKD key length mismatch")
-	}
-	copy(key[:], dec)
+	raw := openAndDecodeKey(c.clusterQKDPath(), 2*gake.SsLen)
+	copy(key[:], raw)
 	return key, nil
 }
 
@@ -205,11 +191,7 @@ func loadJSONKey(path string) ([]byte, error) {
 	if err == nil {
 		return raw, nil
 	}
-	raw, err = hex.DecodeString(blob.Key)
-	if err == nil {
-		return raw, nil
-	}
-	return nil, fmt.Errorf("key in %q is neither valid base64 nor hex", path)
+	return nil, fmt.Errorf("key in %q is invalid base64", path)
 }
 
 func decodePublicKey(key string) [gake.PkLen]byte {
