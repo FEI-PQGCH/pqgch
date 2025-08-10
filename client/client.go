@@ -20,7 +20,7 @@ func main() {
 	// Load config.
 	config, err := util.GetConfig[util.UserConfig](*path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error loading config from : %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error loading config from : %v\n", err)
 		os.Exit(1)
 	}
 
@@ -31,6 +31,8 @@ func main() {
 		fmt.Printf("Unable to connect to server: %v\n", err)
 		os.Exit(1)
 	}
+
+	util.EnableRawMode()
 	transport.Send(util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   config.Index,

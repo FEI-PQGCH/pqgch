@@ -39,7 +39,7 @@ func getTerminalWidth() (cols int) {
 
 var oldTermios syscall.Termios
 
-func enableRawMode() {
+func EnableRawMode() {
 	fd := int(os.Stdin.Fd())
 	var newt syscall.Termios
 
@@ -76,31 +76,48 @@ func disableRawMode() {
 type Color string
 
 const (
-	ColorReset Color = "\033[0m"
-	ColorRed   Color = "\033[31m"
-	ColorGreen Color = "\033[32m"
-	ColorBlue  Color = "\033[34m"
-	ColorCyan  Color = "\033[36m"
-	ColorWhite Color = "\033[37m"
+	ColorReset  Color = "\033[0m"
+	ColorRed    Color = "\033[31m"
+	ColorGreen  Color = "\033[32m"
+	ColorYellow Color = "\033[33m"
+	ColorBlue   Color = "\033[34m"
+	ColorPurple Color = "\033[35m"
+	ColorCyan   Color = "\033[36m"
+	ColorWhite  Color = "\033[37m"
 )
 
 func colorize(msg string, color Color) string {
 	return string(color) + msg + string(ColorReset)
 }
 
-type Log struct {
-	Text  string
-	Color Color
+var lineChan = make(chan string, 100)
+
+func LogInfo(msg string) {
+	header := colorize("[INFO] ", ColorYellow)
+	lineChan <- header + msg
 }
 
-var lineChan = make(chan Log, 100)
+func LogRoute(msg string) {
+	header := colorize("[ROUTE] ", ColorPurple)
+	lineChan <- header + msg
+}
+
+func LogError(msg string) {
+	header := colorize("[ERROR] ", ColorRed)
+	lineChan <- header + msg
+}
+
+func LogCrypto(msg string) {
+	header := colorize("[CRYPTO] ", ColorCyan)
+	lineChan <- header + msg
+}
 
 func PrintLine(msg string) {
 	PrintLineColored(msg, ColorReset)
 }
 
 func PrintLineColored(msg string, color Color) {
-	lineChan <- Log{Text: msg, Color: color}
+	lineChan <- colorize(msg, color)
 }
 
 func ExitWithMsg(msg string) {
@@ -134,7 +151,6 @@ func clearLine() {
 
 func StartTUI(onLine func(string)) {
 	// Initialization
-	enableRawMode()
 	defer disableRawMode()
 
 	// CTRL-C handler
@@ -209,7 +225,7 @@ func StartTUI(onLine func(string)) {
 			}
 		case line := <-lineChan:
 			clearLine()
-			fmt.Println(colorize(line.Text, line.Color))
+			fmt.Println(line)
 			printPrompt(string(input))
 		}
 	}

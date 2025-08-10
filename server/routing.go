@@ -49,7 +49,7 @@ func (clients *Clients) makeOnline(id int, conn net.Conn) {
 func (clients *Clients) makeOffline(id int) {
 	clients.lock.Lock()
 	defer clients.lock.Unlock()
-	util.PrintLine(fmt.Sprint("[INFO] Client disconnected:", clients.data[id].conn.RemoteAddr()))
+	util.LogInfo(fmt.Sprint("Client disconnected:", clients.data[id].conn.RemoteAddr()))
 	clients.data[id].conn.Close()
 }
 
@@ -73,7 +73,7 @@ func (clients *Clients) send(msg util.Message) {
 	client := &clients.data[msg.ReceiverID]
 	if client.conn == nil {
 		client.queue.Add(msg)
-		util.PrintLine("[ROUTE] Stored message")
+		util.LogRoute("Stored message")
 		return
 	}
 	msg.Send(client.conn)
@@ -97,12 +97,12 @@ func (clients *Clients) broadcast(msg util.Message) {
 
 		err := msg.Send(c.conn)
 		if err != nil {
-			util.PrintLine(fmt.Sprintf("[ERROR] sending message to client: %v", err))
+			util.LogError(fmt.Sprintf("Sending message to client: %v", err))
 			c.conn.Close()
 			return
 		}
 	}
-	util.PrintLine(fmt.Sprintf("[ROUTE] Broadcasted message %s from %s", msg.TypeName(), msg.SenderName))
+	util.LogRoute(fmt.Sprintf("Broadcasted %s from %s", msg.TypeName(), msg.SenderName))
 }
 
 // Cluster transport for communication between the leader and clients in its cluster.
@@ -121,9 +121,10 @@ func (t *ClusterMessageSender) Send(msg util.Message) {
 	switch msg.Type {
 	case util.AkeOneMsg, util.AkeTwoMsg:
 		t.clients.send(msg)
-	case util.KeyMsg, util.XiRiCommitmentMsg, util.QKDIDsMsg:
+	case util.KeyMsg, util.XiRiCommitmentMsg, util.QKDIDMsg:
 		t.clients.broadcast(msg)
 	case util.TextMsg:
+		msg.ClusterID = config.Index
 		t.clients.broadcast(msg)
 		broadcastToLeaders(msg)
 	}
@@ -163,13 +164,12 @@ func sendToLeader(address string, msg util.Message) {
 		var err error
 		conn, err = net.Dial("tcp", address)
 		if err != nil {
-			util.PrintLine(fmt.Sprintf("[ERROR] Leader (%s) connection error: %v. Retrying...", address, err))
+			util.LogError(fmt.Sprintf("Leader (%s) connection error: %v. Retrying...", address, err))
 			time.Sleep(2 * time.Second)
 			continue
 		}
 		break
 	}
-	util.PrintLine(fmt.Sprintf("[ROUTE] Sending message %s to Leader %s", msg.TypeName(), address))
-
 	msg.Send(conn)
+	util.LogRoute(fmt.Sprintf("Sent %s to Leader %s", msg.TypeName(), address))
 }

@@ -52,8 +52,7 @@ func GetConfig[T any](path string) (T, error) {
 func (c *ClusterConfig) GetPublicKeys() [][gake.PkLen]byte {
 	data, err := os.ReadFile(c.PublicKeys)
 	if err != nil {
-		// TODO: return fmt.Errorf("couldn't load cluster public-keys from %s: %v", c.PublicKeys, err)
-		return nil
+		ExitWithMsg(fmt.Sprintf("couldn't load cluster public keys from %s: %v", c.PublicKeys, err))
 	}
 
 	var blob struct {
@@ -61,8 +60,7 @@ func (c *ClusterConfig) GetPublicKeys() [][gake.PkLen]byte {
 	}
 
 	if err := json.Unmarshal(data, &blob); err != nil {
-		// TODO: return fmt.Errorf("bad JSON in %s: %v", c.PublicKeys, err)
-		return nil
+		ExitWithMsg(fmt.Sprintf("bad JSON in %s: %v", c.PublicKeys, err))
 	}
 
 	out := make([][gake.PkLen]byte, len(blob.PublicKeys))
@@ -85,8 +83,8 @@ func (c *ClusterConfig) ClusterQKDPath() string {
 	return strings.TrimSpace(c.Crypto[5:])
 }
 
-func (c *ClusterConfig) ClusterKey() ([gake.SsLen]byte, error) {
-	var key [gake.SsLen]byte
+func (c *ClusterConfig) ClusterKey() ([2 * gake.SsLen]byte, error) {
+	var key [2 * gake.SsLen]byte
 
 	data, err := os.ReadFile(c.ClusterQKDPath())
 	if err != nil {
@@ -181,6 +179,17 @@ func (c *LeaderConfig) RightQKDKey() [gake.SsLen]byte {
 	return out
 }
 
+func openAndDecodeKey(path string, expectLen int) []byte {
+	raw, err := loadJSONKey(path)
+	if err != nil {
+		ExitWithMsg(fmt.Sprintf("Error loading key from %s: %v\n", path, err))
+	}
+	if len(raw) != expectLen {
+		ExitWithMsg(fmt.Sprintf("Key length mismatch for %s: expected %d, got %d\n", path, expectLen, len(raw)))
+	}
+	return raw
+}
+
 func loadJSONKey(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -201,19 +210,6 @@ func loadJSONKey(path string) ([]byte, error) {
 		return raw, nil
 	}
 	return nil, fmt.Errorf("key in %q is neither valid base64 nor hex", path)
-}
-
-func openAndDecodeKey(path string, expectLen int) []byte {
-	raw, err := loadJSONKey(path)
-	if err != nil {
-		fmt.Printf("Error loading key from %s: %v\n", path, err)
-		return nil
-	}
-	if len(raw) != expectLen {
-		fmt.Printf("Key length mismatch for %s: expected %d, got %d\n", path, expectLen, len(raw))
-		return nil
-	}
-	return raw
 }
 
 func decodePublicKey(key string) [gake.PkLen]byte {

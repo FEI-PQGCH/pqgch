@@ -20,7 +20,7 @@ type KeyContainer struct {
 }
 
 func getKey(endpoint, saeID string) (string, string, error) {
-	resp, err := http.Get(endpoint + saeID + "/enc_keys?number=1&size=" + strconv.Itoa(gake.SsLen*8))
+	resp, err := http.Get(endpoint + saeID + "/enc_keys?number=1&size=" + strconv.Itoa(gake.SsLen*8*2))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to call ETSI API: %w", err)
 	}
@@ -72,7 +72,7 @@ func RequestKey(url string, isLeader bool) (Message, Message) {
 		var err error
 		key, keyID, err = getKey(url, "dummy_id")
 		if err != nil {
-			PrintLine(fmt.Sprintf("[ERROR] Requesting QKD key: %v. Retrying...", err))
+			LogError(fmt.Sprintf("Requesting QKD key: %v. Retrying...", err))
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -95,7 +95,7 @@ func RequestKey(url string, isLeader bool) (Message, Message) {
 
 	IDMsg := Message{
 		ID:      UniqueID(),
-		Type:    QKDIDsMsg,
+		Type:    QKDIDMsg,
 		Content: keyID,
 	}
 
@@ -108,7 +108,7 @@ func RequestKeyByID(url, id string, isLeader bool) Message {
 		var err error
 		key, _, err = getKeyByID(url, "dummy_id", id)
 		if err != nil {
-			PrintLine(fmt.Sprintf("[ERROR] Requesting QKD key by ID: %v. Retrying...", err))
+			LogError(fmt.Sprintf("Requesting QKD key by ID: %v. Retrying...", err))
 			time.Sleep(2 * time.Second)
 			continue
 		}

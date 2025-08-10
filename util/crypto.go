@@ -15,15 +15,15 @@ import (
 
 // XOR all the Xs together. The result should be the zero byte array.
 // If it is not, abort the protocol.
-func CheckXs(xs [][32]byte, numParties int) bool {
-	var check [32]byte
+func CheckXs(xs [][gake.SsLen]byte, numParties int) bool {
+	var check [gake.SsLen]byte
 	copy(check[:], xs[0][:])
 
 	for i := range numParties - 1 {
 		check = gake.XorKeys(xs[i+1], check)
 	}
 
-	for i := range 32 {
+	for i := range gake.SsLen {
 		if check[i] != 0 {
 			return false
 		}
@@ -33,15 +33,15 @@ func CheckXs(xs [][32]byte, numParties int) bool {
 }
 
 // Compute all the left keys of all the protocol participants.
-func ComputeAllLeftKeys(numParties int, partyIndex int, keyLeft [32]byte, xs [][32]byte, pids [][20]byte) [][32]byte {
-	otherLeftKeys := make([][32]byte, numParties)  // Left keys of the other protocol participants.
-	copy(otherLeftKeys[partyIndex][:], keyLeft[:]) // We already know our keyLeft.
+func ComputeAllLeftKeys(numParties int, partyIndex int, keyLeft [gake.SsLen]byte, xs [][gake.SsLen]byte, pids [][gake.PidLen]byte) [][gake.SsLen]byte {
+	otherLeftKeys := make([][gake.SsLen]byte, numParties) // Left keys of the other protocol participants.
+	copy(otherLeftKeys[partyIndex][:], keyLeft[:])        // We already know our keyLeft.
 
 	// Here, we compute the numParties-1 left keys of participant (partyIndex-j) mod numParties for j = 1..n-1.
 	// These are the left keys of every other participant.
 	// We can compute them using the Xs.
 	for j := 1; j < numParties; j++ {
-		var otherLeftKey [32]byte
+		var otherLeftKey [gake.SsLen]byte
 		copy(otherLeftKey[:], keyLeft[:])
 
 		for x := range j {
@@ -64,7 +64,6 @@ func EncryptAesGcm(plaintext string, key []byte) (string, error) {
 	case 3:
 		aesKey = key[:24]
 	case 4:
-
 		aesKey = key[:32]
 	default:
 		return "", fmt.Errorf("unsupported kyber ID: %d", gake.KyberK)
@@ -132,15 +131,19 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 	return string(plainText), nil
 }
 
-// mainSessionKey is 32 bytes. We encrypt the mainSessionKey by XOR-ing it with the first 32 bytes of the clusterSessionKey.
-// Then, we create the MAC using the other 32 bytes of the clusterSessionKey.
-func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessionKey [gake.SsLen]byte) Message {
+// Encrypt and HMAC the Main Session Key with the Cluster Session Key for transpot to the cluster members.
+func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessionKey [2 * gake.SsLen]byte) (Message, error) {
+	maskingKey, hmacKey, err := splitAndCheckKey(clusterSessionKey)
+	if err != nil {
+		return Message{}, err
+	}
+
 	ciphertext := make([]byte, gake.SsLen)
 	for i := range gake.SsLen {
-		ciphertext[i] = mainSessionKey[i] ^ clusterSessionKey[i]
+		ciphertext[i] = mainSessionKey[i] ^ maskingKey[i]
 	}
-	hmacKey := clusterSessionKey[gake.SsLen:]
-	mac := hmac.New(sha256.New, hmacKey)
+
+	mac := hmac.New(sha256.New, hmacKey[:])
 	mac.Write(ciphertext)
 	tag := mac.Sum(nil)
 	ciphertext = append(ciphertext, tag...)
@@ -151,22 +154,40 @@ func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessi
 		Type:       KeyMsg,
 		Content:    base64.StdEncoding.EncodeToString(ciphertext),
 	}
-	return msg
+	return msg, nil
 }
 
-func DecryptAndCheckHMAC(encryptedText []byte, key [gake.SsLen]byte) ([]byte, error) {
-	ciphertext := encryptedText[:gake.SsLen]
-	tag := encryptedText[gake.SsLen:]
-	hmacKey := key[gake.SsLen:]
-	mac := hmac.New(sha256.New, hmacKey)
+// Decrypt and check HMAC of the received Main Session Key ciphertext using the Cluster Session Key.
+func DecryptAndCheckHMAC(encryptedMainSessionKey []byte, clusterSessionKey [2 * gake.SsLen]byte) ([]byte, error) {
+	maskingKey, hmacKey, err := splitAndCheckKey(clusterSessionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	ciphertext := encryptedMainSessionKey[:gake.SsLen]
+	tag := encryptedMainSessionKey[gake.SsLen:]
+	mac := hmac.New(sha256.New, hmacKey[:])
 	mac.Write(ciphertext)
 	expectedTag := mac.Sum(nil)
+
 	if !hmac.Equal(tag, expectedTag) {
 		return nil, errors.New("tag mismatch")
 	}
-	recoveredKey := make([]byte, gake.SsLen)
+
+	mainSessionKey := make([]byte, gake.SsLen)
 	for i := range gake.SsLen {
-		recoveredKey[i] = key[i] ^ ciphertext[i]
+		mainSessionKey[i] = maskingKey[i] ^ ciphertext[i]
 	}
-	return recoveredKey, nil
+	return mainSessionKey, nil
+}
+
+func splitAndCheckKey(key [2 * gake.SsLen]byte) ([gake.SsLen]byte, [gake.SsLen]byte, error) {
+	var maskingKey, hmacKey [gake.SsLen]byte
+	copy(maskingKey[:], key[:gake.SsLen])
+	copy(hmacKey[:], key[gake.SsLen:])
+
+	if maskingKey == [gake.SsLen]byte{} || hmacKey == [gake.SsLen]byte{} {
+		return [gake.SsLen]byte{}, [gake.SsLen]byte{}, errors.New("nil key")
+	}
+	return maskingKey, hmacKey, nil
 }

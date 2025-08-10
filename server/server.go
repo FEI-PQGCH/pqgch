@@ -18,7 +18,7 @@ func main() {
 	path := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *path == "" {
-		fmt.Fprintf(os.Stderr, "[ERROR] Configuration file missing. Please provide it using the -config flag.\n")
+		fmt.Fprintf(os.Stderr, "Configuration file missing. Please provide it using the -config flag.\n")
 		os.Exit(1)
 	}
 
@@ -26,14 +26,14 @@ func main() {
 	var err error
 	config, err = util.GetConfig[util.LeaderConfig](*path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error loading config from : %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error loading config from : %v\n", err)
 		os.Exit(1)
 	}
 
 	// Parse port from config.
 	_, port, err := net.SplitHostPort(config.Addrs[config.Index])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error parsing self port from config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error parsing self port from config: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -41,11 +41,12 @@ func main() {
 	address := fmt.Sprintf(":%s", port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error starting TCP server: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error starting TCP server: %v\n", err)
 		os.Exit(1)
 	}
 	defer listener.Close()
-	util.PrintLine(fmt.Sprintf("[ROUTE]: server listening on %s", address))
+	util.EnableRawMode()
+	util.LogInfo(fmt.Sprintf("Server listening on %s", address))
 
 	// Create message tracker and in-memory client registry.
 	tracker := util.NewMessageTracker()
@@ -81,6 +82,7 @@ func main() {
 		go func() {
 			keyMsg, IDMsg := util.RequestKey(config.ClusterQKDUrl(), false)
 			msgsCluster <- keyMsg
+			IDMsg.SenderName = config.Name()
 			clients.broadcast(IDMsg)
 		}()
 	}
@@ -100,7 +102,7 @@ func main() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				util.PrintLine(fmt.Sprintf("[ERROR] Error accepting connection: %v", err))
+				util.LogError(fmt.Sprintf("Error accepting connection: %v", err))
 				continue
 			}
 			go handleConnection(clients, conn, tracker, msgsCluster, msgsLeader)
@@ -125,7 +127,7 @@ func handleConnection(
 	reader := util.NewMessageReader(conn)
 	// Verify that the client sent some message.
 	if !reader.HasMessage() {
-		util.PrintLine("[ERROR] Client did not send any message")
+		util.LogError("Client did not send any message")
 		return
 	}
 
@@ -140,13 +142,13 @@ func handleConnection(
 			return
 		}
 		// Log receipt of a leader protocol message.
-		util.PrintLine(fmt.Sprintf("[ROUTE] Received %s message from Leader", msg.TypeName()))
+		util.LogRoute(fmt.Sprintf("Received %s from Leader %s", msg.TypeName(), config.Addrs[msg.ClusterID]))
 		if msg.Type == util.TextMsg {
 			clusterChan <- msg
 			clients.broadcast(msg)
 			return
 		}
-		if msg.Type == util.QKDIDsMsg {
+		if msg.Type == util.QKDIDMsg {
 			go func() {
 				msg := util.RequestKeyByID(config.LeftQKDUrl(), msg.Content, true)
 				leaderChan <- msg
@@ -158,7 +160,7 @@ func handleConnection(
 	}
 
 	// Handle client login.
-	util.PrintLine(fmt.Sprintf("[INFO] New client (%s, %s) joined", msg.SenderName, conn.RemoteAddr()))
+	util.LogInfo(fmt.Sprintf("New client (%s, %s) joined", msg.SenderName, conn.RemoteAddr()))
 	clientID := msg.SenderID
 
 	clients.makeOnline(clientID, conn)
@@ -170,7 +172,7 @@ func handleConnection(
 	// Handle messages from this client in an infinite loop.
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		util.PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s", msg.TypeName(), msg.SenderName))
+		util.LogRoute(fmt.Sprintf("Received %s from %s", msg.TypeName(), msg.SenderName))
 
 		if !tracker.AddMessage(msg.ID) {
 			continue

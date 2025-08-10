@@ -6,6 +6,14 @@ KYBER_K ?= 4
 CGO_CFLAGS := -I. -I./kyber-gake/ref -DKYBER_K=$(KYBER_K)
 export CGO_CFLAGS
 
+c:
+	@echo "[Make]: Building client binary (KYBER_K=$(KYBER_K))..."
+	@cd client && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go build -o ../client_pqgch
+
+s:
+	@echo "[Make]: Building server binary (KYBER_K=$(KYBER_K))..."
+	@cd server && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go build -o ../server_pqgch
+
 c%:
 	@echo "[Make]: Running client$* (KYBER_K=$(KYBER_K))…"
 	@cd client && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/c$*conf.json"

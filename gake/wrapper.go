@@ -119,8 +119,8 @@ func KexAkeSharedA(ake_sendb []byte, tk []byte, eska []byte, ska []byte) [32]byt
 	return ka
 }
 
-func XorKeys(x [32]byte, y [32]byte) [32]byte {
-	var out [32]byte
+func XorKeys(x [SsLen]byte, y [SsLen]byte) [SsLen]byte {
+	var out [SsLen]byte
 
 	C.xor_keys(
 		(*C.uchar)(unsafe.Pointer(&x[0])),
@@ -130,12 +130,12 @@ func XorKeys(x [32]byte, y [32]byte) [32]byte {
 	return out
 }
 
-func GetRi() [44]byte {
-	var coin [44]byte
+func GetRi() [CoinLen]byte {
+	var coin [CoinLen]byte
 
 	C.randombytes(
 		(*C.uchar)(unsafe.Pointer(&coin[0])),
-		44)
+		CoinLen)
 
 	return coin
 }
@@ -151,7 +151,7 @@ func Sha3_512(x []byte) [64]byte {
 	return out
 }
 
-func Commit_pke(pk [PkLen]byte, xi_i [36]byte, ri [44]byte) Commitment {
+func Commit_pke(pk [PkLen]byte, xi_i [SsLen + 4]byte, ri [CoinLen]byte) Commitment {
 	var commitment Commitment
 
 	C.commit(

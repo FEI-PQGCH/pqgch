@@ -39,7 +39,7 @@ func (t *TCPTransport) listen() {
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
 		if msg.Type != TextMsg {
-			PrintLine(fmt.Sprintf("[ROUTE] Received %s from %s", msg.TypeName(), msg.SenderName))
+			LogRoute(fmt.Sprintf("Received %s from %s", msg.TypeName(), msg.SenderName))
 		}
 		t.receiveChan <- msg
 	}
@@ -51,7 +51,7 @@ func (t *TCPTransport) Send(msg Message) {
 
 	msgData, err := json.Marshal(msg)
 	if err != nil {
-		PrintLine(fmt.Sprintf("[ERROR] Error marshaling message: %v", err))
+		LogError(fmt.Sprintf("Error marshaling message: %v", err))
 		return
 	}
 
@@ -59,6 +59,6 @@ func (t *TCPTransport) Send(msg Message) {
 
 	_, err = t.conn.Write(msgData)
 	if err != nil {
-		PrintLine(fmt.Sprintf("[ERROR] Error sending message: %v\n", err))
+		LogError(fmt.Sprintf("Error sending message: %v\n", err))
 	}
 }
