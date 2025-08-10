@@ -3,6 +3,6 @@
   "clusterConfig": {
     "names": ["User1", "Server2"],
     "index": 0,
-    "crypto": "url http://localhost:8080/etsi/"
+    "crypto": "url http://localhost:8080/etsi/dummy_id"
   }
 }

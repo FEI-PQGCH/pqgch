@@ -1,20 +1,13 @@
 {
   "clusterConfig": {
-    "names": [
-      "User1",
-      "Server2"
-    ],
+    "names": ["User1", "Server2"],
     "index": 1,
     "publicKeys": "../.keys/cluster2_public_keys.json",
     "secretKey": "../.keys/leaders/leader2/secret_cluster.json"
   },
-  "leftCrypto": "url http://localhost:8080/etsi/",
+  "leftCrypto": "url http://localhost:8080/etsi/dummy_id",
   "rightCrypto": "../.keys/leaders/leader3/public_leader.json",
-  "servers": [
-    "localhost:9000",
-    "localhost:9001",
-    "localhost:9002"
-  ],
+  "servers": ["localhost:9000", "localhost:9001", "localhost:9002"],
   "index": 1,
   "secretKey": "../.keys/leaders/leader2/secret_leader.json"
 }
