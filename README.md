@@ -183,48 +183,70 @@ curl -X GET "http://localhost:8080/etsi/DUMMY_ID/dec_keys?key_ID=d21fe47e2ecb684
 
 Use this section for testing with clusters which are not on the same network as your cluster (e.g. Huntsville cluster and Bratislava cluster)
 
-> **_Overview:_** You and the other leaders will join the same Tailscale tailnet, note the Tailscale IPs of each **cluster leader** (server), open the required ports in your OS firewall, and then update the configuration files (`sXconf.json`) to point to those IPs (and ports).
+> **_Overview:_** You and the other leaders will join the same ZeroTier virtual network, note the ZeroTier IPs of each **cluster leader** (server), open the required ports in your OS firewall, and then update the configuration files (`sXconf.json`) to point to those IPs (and ports).
 
-### 1) Join the same Tailscale network
+---
+
+### 1) Join the same ZeroTier network
 
 #### Windows
 
-1. Install Tailscale from https://tailscale.com/download and sign in.
-2. Ask the tailnet owner to approve your device if required.
-3. Find your Tailscale IP:
-   - Tailscale tray icon → your device → **Copy device IP**, or
-   - PowerShell:
+1. Install ZeroTier from [https://www.zerotier.com/download/](https://www.zerotier.com/download/) and sign in.
+2. Join the network (the **Network ID** will be provided by the network owner):
+   - Open the ZeroTier tray icon → **Join Network** → enter the Network ID.
+3. Ask the network owner to authorize your device if required (in ZeroTier Central).
+4. Find your ZeroTier IP:
+   - ZeroTier tray icon → your device → **Details**, or  
+   - Command Prompt / PowerShell:
      ```powershell
-     tailscale ip -4
-     tailscale status
+     zerotier-cli listnetworks
      ```
-     You’ll see an IP in `100.64.0.0/10` (e.g., `100.72.10.5`).
+     Look for the `ZT` interface with an IP in your network’s range (often `10.x.x.x` or `192.168.x.x`).
+
+---
 
 #### Linux
 
-1. Install Tailscale via your package manager (see Tailscale docs for your distro).
-2. Bring it up and sign in:
-   ```bash
-   sudo tailscale up
-   tailscale status
-   tailscale ip -4
-   ```
-3. Note the `100.x.x.x` address.
+1. Install ZeroTier via your package manager:
+```bash
+curl -s https://install.zerotier.com | sudo bash
+```
+*(See [ZeroTier Docs](https://docs.zerotier.com/devices/linux) for other distros.)*
+
+2. Join the network (Network ID provided by the network owner):
+
+```bash
+sudo zerotier-cli join <NETWORK_ID>
+```
+
+3. Ask the network owner to authorize your device in ZeroTier Central.
+
+4. Check your ZeroTier IP:
+```bash
+sudo zerotier-cli listnetworks
+```
+
+or
+```bash
+ip addr show
+```
+
+Look for an interface starting with zt (e.g., ztabc1234) and note the assigned IP.
 
 ### 2) Open OS firewalls for the ports
 
-Please open your OS firewall is necessary.
+Please open your OS firewall if necessary.
 
 ### 3) Pick the addresses for leaders and clients
 
-- For each **cluster leader** machine, write down its Tailscale IP (e.g., `100.72.10.5`).
+- For each **cluster leader** machine, write down its IP
 - Decide which TCP port each leader will use (defaults: `9000`, `9001`, `9002`).
 
 ### 4) Update the configuration files
 
 #### Server configuration (`sXconf.json`)
 
-- Set the `servers` array to the **Tailscale IP:port** of every cluster leader in ring order.
+- Set the `servers` array to the **Zerotier IP:port** of every cluster leader in ring order.
 
 ```json
 {
