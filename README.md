@@ -17,7 +17,13 @@ It uses Kyber-GAKE for secure, quantum-resistant group key establishment among c
    1. [Client](#client-configuration-cxconfjson)
    2. [Server](#server-configuration-sxconfjson)
 3. [Mock ETSI QKD API server](#mock-etsi-qkd-api-server)
+
 4. [Setting up communication over the network](#setting-up-communication-over-the-network)
+
+   1. [Join the same ZeroTier network](#join-the-same-zerotier-network)
+   2. [Open OS firewalls for the ports](#open-os-firewalls-for-the-ports)
+   3. [Pick the addresses for leaders and clients](#pick-the-addresses-for-leaders-and-clients)
+   4. [Update the configuration files](#update-the-configuration-files)
 
 ## Running the application
 
@@ -181,13 +187,13 @@ curl -X GET "http://localhost:8080/etsi/DUMMY_ID/dec_keys?key_ID=d21fe47e2ecb684
 
 ## Setting up communication over the network
 
-Use this section for testing with clusters which are not on the same network as your cluster (e.g. Huntsville cluster and Bratislava cluster)
+Use this section for testing with clusters which are not on the same network as your cluster (e.g. Huntsville cluster and Bratislava cluster).
 
 > **_Overview:_** You and the other leaders will join the same ZeroTier virtual network, note the ZeroTier IPs of each **cluster leader** (server), open the required ports in your OS firewall, and then update the configuration files (`sXconf.json`) to point to those IPs (and ports).
 
 ---
 
-### 1) Join the same ZeroTier network
+### Join the same ZeroTier network
 
 #### Windows
 
@@ -196,7 +202,7 @@ Use this section for testing with clusters which are not on the same network as 
    - Open the ZeroTier tray icon → **Join Network** → enter the Network ID.
 3. Ask the network owner to authorize your device if required (in ZeroTier Central).
 4. Find your ZeroTier IP:
-   - ZeroTier tray icon → your device → **Details**, or  
+   - ZeroTier tray icon → your device → **Details**, or
    - Command Prompt / PowerShell:
      ```powershell
      zerotier-cli listnetworks
@@ -207,11 +213,13 @@ Use this section for testing with clusters which are not on the same network as 
 
 #### Linux
 
-1. Install ZeroTier via your package manager:
+1. Install ZeroTier:
+
 ```bash
 curl -s https://install.zerotier.com | sudo bash
 ```
-*(See [ZeroTier Docs](https://docs.zerotier.com/devices/linux) for other distros.)*
+
+_(See [ZeroTier website](https://www.zerotier.com/download/) for more info.)_
 
 2. Join the network (Network ID provided by the network owner):
 
@@ -222,27 +230,29 @@ sudo zerotier-cli join <NETWORK_ID>
 3. Ask the network owner to authorize your device in ZeroTier Central.
 
 4. Check your ZeroTier IP:
+
 ```bash
 sudo zerotier-cli listnetworks
 ```
 
 or
+
 ```bash
 ip addr show
 ```
 
 Look for an interface starting with zt (e.g., ztabc1234) and note the assigned IP.
 
-### 2) Open OS firewalls for the ports
+### Open OS firewalls for the ports
 
 Please open your OS firewall if necessary.
 
-### 3) Pick the addresses for leaders and clients
+### Pick the addresses for leaders and clients
 
-- For each **cluster leader** machine, write down its IP
+- For each **cluster leader** machine, write down its IP.
 - Decide which TCP port each leader will use (defaults: `9000`, `9001`, `9002`).
 
-### 4) Update the configuration files
+### Update the configuration files
 
 #### Server configuration (`sXconf.json`)
 
