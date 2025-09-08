@@ -1,7 +1,7 @@
 package gake
 
 /*
-#cgo CFLAGS: -I./kyber-gake/ref -Wall  -Wextra -Wpedantic -Werror  -Wshadow -Wpointer-arith -O3
+#cgo CFLAGS: -I./kyber-gake/ref -Wall  -Wextra -Wpedantic -Wshadow -Wpointer-arith -O3
 #cgo LDFLAGS: -L./kyber-gake/ref -lssl -lcrypto
 
 #include "params.h"
