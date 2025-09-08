@@ -41,7 +41,7 @@ Then, you can copy the `*.json` files from the `.samples/` directory to your fre
 
 > **_NOTE:_** The configuration files in the `.samples/` directory refer to keys in the `.keys/` directory. You can use different keys. You can generate Kyber KEM keypairs using the helper utility `make gen_kem`. So for example if you want to generate 3 keypairs, you can run `make gen_kem n=3`, which will print out the keys in a config-friendly way. For the shared secrets (here found in the files starting with `qkd`) you can use either `make gen_ss` or `make gen_2ake`.
 
-> **_IMPORTANT:_** This configuration is for a **local** setup on a single computer. If you want to use the application on mutliple computers on a network, you need to change the configuration files accordingly (mainly the IP adresses). You can also customize the number of clients and cluster leaders (servers). For a guide on how to do this via Tailscale VPN see [Setting up communication over the network](#setting-up-communication-over-the-network).
+> **_IMPORTANT:_** This configuration is for a **local** setup on a single computer. If you want to use the application on mutliple computers on a network, you need to change the configuration files accordingly (mainly the IP adresses). You can also customize the number of clients and cluster leaders (servers). For a guide on how to do this via ZeroTier VPN see [Setting up communication over the network](#setting-up-communication-over-the-network).
 
 Afterwards you have multiple options for running the application.
 
