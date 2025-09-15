@@ -78,11 +78,11 @@ func main() {
 
 	// If the cluster uses QKD, the leader fetches the key
 	// and sends the key ID to the cluster members.
-	if config.IsClusterQKDUrl() {
+	if config.ClusterConfig.IsClusterQKDUrl() {
 		go func() {
-			keyMsg, IDMsg := util.RequestKey(config.ClusterQKDUrl(), false)
+			keyMsg, IDMsg := util.RequestKey(config.ClusterConfig.ClusterQKDUrl(), false)
 			msgsCluster <- keyMsg
-			IDMsg.SenderName = config.Name()
+			IDMsg.SenderName = config.ClusterConfig.Name()
 			clients.broadcast(IDMsg)
 		}()
 	}

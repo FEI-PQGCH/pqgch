@@ -76,7 +76,7 @@ func (s *Session) Init() {
 		msg := util.Message{
 			ID:         util.UniqueID(),
 			SenderID:   s.config.Index,
-			SenderName: s.config.Name(),
+			SenderName: s.config.ClusterConfig.Name(),
 			Type:       util.LeadAkeOneMsg,
 			ReceiverID: s.config.RightIndex(),
 			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
@@ -112,7 +112,7 @@ func (s *Session) onAkeOne(recv util.Message) {
 	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
-		SenderName: s.config.Name(),
+		SenderName: s.config.ClusterConfig.Name(),
 		Type:       util.LeadAkeTwoMsg,
 		ReceiverID: recv.SenderID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
@@ -240,7 +240,7 @@ func (s *Session) getXiRiCommitmentMsg() util.Message {
 	msg := util.Message{
 		ID:         util.UniqueID(),
 		SenderID:   s.config.Index,
-		SenderName: s.config.Name(),
+		SenderName: s.config.ClusterConfig.Name(),
 		Type:       util.LeaderXiRiCommitmentMsg,
 		Content:    base64.StdEncoding.EncodeToString(content),
 		ClusterID:  s.config.Index,

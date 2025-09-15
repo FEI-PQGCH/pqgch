@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"pqgch/util"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -20,8 +21,12 @@ type Client struct {
 	queue util.MessageQueue
 }
 
-func newClients(config util.ClusterConfig) *Clients {
+func newClients(config *util.ClusterConfig) *Clients {
 	var clients Clients
+
+	if !config.HasCluster() {
+		return &clients
+	}
 
 	for i, addr := range config.Names {
 		if i == config.Index {
@@ -125,6 +130,11 @@ func (t *ClusterMessageSender) Send(msg util.Message) {
 		t.clients.broadcast(msg)
 	case util.TextMsg:
 		msg.ClusterID = config.Index
+		if len(config.Name) > 0 {
+			msg.SenderName = config.Name
+		} else if !config.ClusterConfig.HasCluster() {
+			msg.SenderName = "Server" + strconv.Itoa(config.Index+1)
+		}
 		t.clients.broadcast(msg)
 		broadcastToLeaders(msg)
 	}

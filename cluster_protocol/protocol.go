@@ -20,7 +20,7 @@ type CryptoSession struct {
 	clusterSessionKey [2 * gake.SsLen]byte // The resulting cluster session key used for intra-cluster communication.
 }
 
-func NewCryptoSession(config util.ClusterConfig) CryptoSession {
+func NewCryptoSession(config *util.ClusterConfig) CryptoSession {
 	return CryptoSession{
 		xs:          make([][gake.SsLen]byte, len(config.Names)),
 		commitments: make([]gake.Commitment, len(config.Names)),
@@ -35,7 +35,7 @@ func NewCryptoSession(config util.ClusterConfig) CryptoSession {
 type Session struct {
 	receiveChan             chan util.Message
 	sender                  util.MessageSender
-	config                  util.ClusterConfig
+	config                  *util.ClusterConfig
 	crypto                  CryptoSession
 	keyCiphertext           []byte
 	mainSessionKey          [gake.SsLen]byte
@@ -54,8 +54,8 @@ func NewSession(
 	s := &Session{
 		receiveChan: receiveChan,
 		sender:      sender,
-		crypto:      NewCryptoSession(config),
-		config:      config,
+		crypto:      NewCryptoSession(&config),
+		config:      &config,
 	}
 
 	s.transportMainSessionKey = func() {
@@ -74,8 +74,15 @@ func NewSession(
 // It is assumed to already be established by the time we establish the cluster session key.
 func NewLeaderSession(
 	sender util.MessageSender,
-	config util.ClusterConfig,
+	config *util.ClusterConfig,
 	receiveChan chan util.Message) *Session {
+	if !config.HasCluster() {
+		return &Session{
+			receiveChan: receiveChan,
+			sender:      sender,
+		}
+	}
+
 	s := &Session{
 		receiveChan: receiveChan,
 		sender:      sender,
@@ -106,6 +113,10 @@ func NewLeaderSession(
 
 // Initialize the session by sending the first message of the 2-AKE to the neighbor.
 func (s *Session) Init() {
+	if !s.config.HasCluster() || s.config.IsClusterQKDUrl() {
+		return
+	}
+
 	if s.config.IsClusterQKDPath() {
 		key, err := s.config.ClusterQKDKeyFromFile()
 		if err != nil {
@@ -118,16 +129,12 @@ func (s *Session) Init() {
 		return
 	}
 
-	if s.config.IsClusterQKDUrl() {
-		return
-	}
-
 	akeSendARight, tk, eska := gake.KexAkeInitA(s.config.GetPublicKeys()[s.config.RightIndex()])
 	s.crypto.tkRight, s.crypto.eskaRight = tk, eska
 
 	msg := util.Message{
 		ID:         util.UniqueID(),
-		SenderID:   s.config.Index,
+		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.Name(),
 		Type:       util.AkeOneMsg,
 		ReceiverID: s.config.RightIndex(),
@@ -138,6 +145,9 @@ func (s *Session) Init() {
 
 func (s *Session) MessageHandler() {
 	for msg := range s.receiveChan {
+		if !s.config.HasCluster() && msg.Type != util.MainSessionKeyMsg && msg.Type != util.TextMsg {
+			continue
+		}
 		s.handleMessage(msg)
 	}
 }
@@ -161,7 +171,7 @@ func (s *Session) onAkeOne(msg util.Message) {
 
 	msg = util.Message{
 		ID:         util.UniqueID(),
-		SenderID:   s.config.Index,
+		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.Name(),
 		Type:       util.AkeTwoMsg,
 		ReceiverID: msg.SenderID,
@@ -247,7 +257,10 @@ func (s *Session) onText(recv util.Message) {
 func (s *Session) onMainSessionKey(recv util.Message) {
 	decoded, _ := base64.StdEncoding.DecodeString(recv.Content)
 	copy(s.mainSessionKey[:], decoded)
-	s.transportMainSessionKey()
+
+	if s.config.HasCluster() {
+		s.transportMainSessionKey()
+	}
 }
 
 func (s *Session) onQKDClusterKey(msg util.Message) {
@@ -299,7 +312,7 @@ func (s *Session) SendText(text string) {
 	}
 	msg := util.Message{
 		ID:         util.UniqueID(),
-		SenderID:   s.config.Index,
+		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.Name(),
 		Content:    cipherText,
 		Type:       util.TextMsg,
@@ -312,7 +325,7 @@ func (s *Session) SendText(text string) {
 func (s *Session) checkLeftRightKeys() util.Message {
 	if s.crypto.keyRight != [gake.SsLen]byte{} && s.crypto.keyLeft != [gake.SsLen]byte{} {
 		util.LogCrypto("Established 2-AKE shared keys with both neighbors")
-		msg := getXiCommitmentCoinMsg(&s.crypto, s.config)
+		msg := getXiCommitmentCoinMsg(&s.crypto, *s.config)
 		s.tryFinalizeProtocol()
 		return msg
 	}
@@ -329,14 +342,14 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config util.ClusterConfig) u
 	xi := gake.XorKeys(session.keyRight, session.keyLeft)
 	ri := gake.GetRi()
 	commitment := computeCommitment(
-		config.Index,
-		config.GetPublicKeys()[config.Index],
+		config.GetIndex(),
+		config.GetPublicKeys()[config.GetIndex()],
 		xi,
 		ri)
 
-	session.xs[config.Index] = xi
-	session.commitments[config.Index] = commitment
-	session.rs[config.Index] = ri
+	session.xs[config.GetIndex()] = xi
+	session.commitments[config.GetIndex()] = commitment
+	session.rs[config.GetIndex()] = ri
 
 	content := append(append(append(append(
 		xi[:],
@@ -347,7 +360,7 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config util.ClusterConfig) u
 
 	msg := util.Message{
 		ID:         util.UniqueID(),
-		SenderID:   config.Index,
+		SenderID:   config.GetIndex(),
 		SenderName: config.Name(),
 		Type:       util.XiRiCommitmentMsg,
 		Content:    base64.StdEncoding.EncodeToString(content),
@@ -409,7 +422,7 @@ func (s *Session) tryFinalizeProtocol() {
 		PIDs[i] = byteArr
 	}
 
-	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.Names), s.config.Index, s.crypto.keyLeft, s.crypto.xs, PIDs)
+	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.Names), s.config.GetIndex(), s.crypto.keyLeft, s.crypto.xs, PIDs)
 	s.crypto.clusterSessionKey = computeSharedSecret(otherLeftKeys, PIDs, len(s.config.Names))
 	util.LogCrypto(fmt.Sprintf("Cluster Session Key established: %02x...", s.crypto.clusterSessionKey[:4]))
 

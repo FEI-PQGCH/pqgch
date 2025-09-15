@@ -23,12 +23,13 @@ type UserConfig struct {
 }
 
 type LeaderConfig struct {
-	ClusterConfig `json:"clusterConfig"`
-	Index         int      `json:"index"`
-	Addrs         []string `json:"servers"`
-	SecretKey     string   `json:"secretKey"`
-	Left          string   `json:"leftCrypto"`
-	Right         string   `json:"rightCrypto"`
+	ClusterConfig *ClusterConfig `json:"clusterConfig,omitempty"`
+	Name          string         `json:"name,omitempty"`
+	Index         int            `json:"index"`
+	Addrs         []string       `json:"servers"`
+	SecretKey     string         `json:"secretKey"`
+	Left          string         `json:"leftCrypto"`
+	Right         string         `json:"rightCrypto"`
 }
 
 func GetConfig[T any](path string) (T, error) {
@@ -89,6 +90,9 @@ func (c *ClusterConfig) ClusterQKDKeyFromFile() ([2 * gake.SsLen]byte, error) {
 }
 
 func (c *ClusterConfig) Name() string {
+	if c == nil {
+		return ""
+	}
 	return c.Names[c.Index]
 }
 
@@ -97,12 +101,24 @@ func (c *ClusterConfig) RightIndex() int {
 }
 
 func (c *ClusterConfig) IsClusterQKDUrl() bool {
+	if c == nil {
+		return false
+	}
 	return strings.HasPrefix(strings.ToLower(c.Crypto), "url ")
 }
 
 func (c *ClusterConfig) ClusterQKDUrl() string {
 	return strings.TrimSpace(c.Crypto[4:])
 }
+
+func (c *ClusterConfig) GetIndex() int {
+	if c == nil {
+		return -1
+	}
+	return c.Index
+}
+
+func (c *ClusterConfig) HasCluster() bool { return c != nil }
 
 func (c *LeaderConfig) GetSecretKey() []byte {
 	raw := openAndDecodeKey(c.SecretKey, gake.SkLen)
