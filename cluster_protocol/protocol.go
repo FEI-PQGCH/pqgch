@@ -100,12 +100,21 @@ func NewLeaderSession(
 			return
 		}
 		util.LogCrypto("Broadcasting Main Session Key to cluster")
-		keyMsg, err := util.EncryptAndHMAC(s.mainSessionKey, config.Name(), s.crypto.clusterSessionKey)
+		key, err := util.EncryptAndHMAC(s.mainSessionKey, config.Name(), s.crypto.clusterSessionKey)
 		if err != nil {
 			util.ExitWithMsg(fmt.Sprintf("Failed to encrypt and HMAC the Main Session Key. %v", err))
 		}
 
-		s.sender.Send(keyMsg)
+		msg := util.Message{
+			ID:         util.UniqueID(),
+			SenderID:   s.config.MemberID,
+			ClusterID:  s.config.ClusterID,
+			Type:       util.KeyMsg,
+			Content:    key,
+			SenderName: s.config.Name(),
+		}
+
+		s.sender.Send(msg)
 	}
 
 	return s
