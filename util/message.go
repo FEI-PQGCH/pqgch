@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"sync"
 )
 
 type Message struct {
@@ -134,46 +133,4 @@ func (reader *MessageReader) GetMessage() Message {
 
 func (m Message) IsEmpty() bool {
 	return m == Message{}
-}
-
-// Message Tracker for tracking received messages.
-// We track them so we do not process the same message twice.
-// We distinguish messages according to their ID.
-type MessageTracker struct {
-	lock     sync.Mutex
-	messages map[string]bool
-}
-
-func NewMessageTracker() *MessageTracker {
-	return &MessageTracker{
-		messages: make(map[string]bool),
-	}
-}
-
-// AddMessage adds a message ID to the tracker and returns true if it was not already present.
-func (tracker *MessageTracker) AddMessage(msgID string) bool {
-	tracker.lock.Lock()
-	defer tracker.lock.Unlock()
-	if tracker.messages[msgID] {
-		return false
-	}
-	tracker.messages[msgID] = true
-	return true
-}
-
-// Message Queue for storing messages that we could not deliver.
-type MessageQueue []Message
-
-func (queue *MessageQueue) Add(msg Message) {
-	*queue = append(*queue, msg)
-}
-
-func (queue *MessageQueue) Remove(msg Message) {
-	tmp := MessageQueue{}
-	for _, x := range *queue {
-		if x.ID != msg.ID {
-			tmp.Add(x)
-		}
-	}
-	*queue = tmp
 }

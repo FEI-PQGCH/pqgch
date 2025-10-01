@@ -10,26 +10,26 @@ import (
 )
 
 type ClusterConfig struct {
-	Names      []string `json:"names"`
-	Index      int      `json:"index"`
+	ClusterID  int      `json:"clusterID"`
+	MemberID   int      `json:"memberID,omitempty"`
+	Names      []string `json:"names,omitempty"`
 	PublicKeys string   `json:"publicKeys,omitempty"`
 	SecretKey  string   `json:"secretKey,omitempty"`
 	Crypto     string   `json:"crypto,omitempty"`
 }
 
-type UserConfig struct {
-	ClusterConfig `json:"clusterConfig"`
-	LeadAddr      string `json:"leadAddr"`
+type MemberConfig struct {
+	ClusterConfig ClusterConfig `json:"cluster"`
+	Server        string        `json:"server"`
 }
 
 type LeaderConfig struct {
-	ClusterConfig *ClusterConfig `json:"clusterConfig,omitempty"`
-	Name          string         `json:"name,omitempty"`
-	Index         int            `json:"index"`
-	Addrs         []string       `json:"servers"`
-	SecretKey     string         `json:"secretKey"`
-	Left          string         `json:"leftCrypto"`
-	Right         string         `json:"rightCrypto"`
+	ClusterConfig ClusterConfig `json:"cluster"`
+	Server        string        `json:"server"`
+	LeaderNames   []string      `json:"leaderNames"`
+	SecretKey     string        `json:"secretKey"`
+	LeftCrypto    string        `json:"leftCrypto"`
+	RightCrypto   string        `json:"rightCrypto"`
 }
 
 func GetConfig[T any](path string) (T, error) {
@@ -93,11 +93,11 @@ func (c *ClusterConfig) Name() string {
 	if c == nil {
 		return ""
 	}
-	return c.Names[c.Index]
+	return c.Names[c.MemberID]
 }
 
 func (c *ClusterConfig) RightIndex() int {
-	return (c.Index + 1) % len(c.Names)
+	return (c.MemberID + 1) % len(c.Names)
 }
 
 func (c *ClusterConfig) IsClusterQKDUrl() bool {
@@ -115,10 +115,10 @@ func (c *ClusterConfig) GetIndex() int {
 	if c == nil {
 		return -1
 	}
-	return c.Index
+	return c.MemberID
 }
 
-func (c *ClusterConfig) HasCluster() bool { return c != nil }
+func (c *ClusterConfig) HasCluster() bool { return c.Names != nil }
 
 func (c *LeaderConfig) GetSecretKey() []byte {
 	raw := openAndDecodeKey(c.SecretKey, gake.SkLen)
@@ -126,59 +126,66 @@ func (c *LeaderConfig) GetSecretKey() []byte {
 }
 
 func (c *LeaderConfig) RightIndex() int {
-	return (c.Index + 1) % len(c.Addrs)
+	return (c.ClusterConfig.ClusterID + 1) % len(c.LeaderNames)
 }
 
 func (c *LeaderConfig) IsLeftQKDUrl() bool {
-	return strings.HasPrefix(strings.ToLower(c.Left), "url ")
+	return strings.HasPrefix(strings.ToLower(c.LeftCrypto), "url ")
 }
 
 func (c *LeaderConfig) IsLeftQKDPath() bool {
-	return strings.HasPrefix(strings.ToLower(c.Left), "path ")
+	return strings.HasPrefix(strings.ToLower(c.LeftCrypto), "path ")
 }
 
 func (c *LeaderConfig) IsRightQKDUrl() bool {
-	return strings.HasPrefix(strings.ToLower(c.Right), "url ")
+	return strings.HasPrefix(strings.ToLower(c.RightCrypto), "url ")
 }
 
 func (c *LeaderConfig) IsRightQKDPath() bool {
-	return strings.HasPrefix(strings.ToLower(c.Right), "path ")
+	return strings.HasPrefix(strings.ToLower(c.RightCrypto), "path ")
 }
 
 func (c *LeaderConfig) LeftQKDUrl() string {
-	return strings.TrimSpace(c.Left[4:])
+	return strings.TrimSpace(c.LeftCrypto[4:])
 }
 
 func (c *LeaderConfig) RightQKDUrl() string {
-	return strings.TrimSpace(c.Right[4:])
+	return strings.TrimSpace(c.RightCrypto[4:])
 }
 
 func (c *LeaderConfig) LeftPublicKey() [gake.PkLen]byte {
-	raw := openAndDecodeKey(c.Left, gake.PkLen)
+	raw := openAndDecodeKey(c.LeftCrypto, gake.PkLen)
 	var out [gake.PkLen]byte
 	copy(out[:], raw)
 	return out
 }
 
 func (c *LeaderConfig) RightPublicKey() [gake.PkLen]byte {
-	raw := openAndDecodeKey(c.Right, gake.PkLen)
+	raw := openAndDecodeKey(c.RightCrypto, gake.PkLen)
 	var out [gake.PkLen]byte
 	copy(out[:], raw)
 	return out
 }
 
 func (c *LeaderConfig) LeftQKDKey() [gake.SsLen]byte {
-	raw := openAndDecodeKey(strings.TrimSpace(c.Left[5:]), gake.SsLen)
+	raw := openAndDecodeKey(strings.TrimSpace(c.LeftCrypto[5:]), gake.SsLen)
 	var out [gake.SsLen]byte
 	copy(out[:], raw)
 	return out
 }
 
 func (c *LeaderConfig) RightQKDKey() [gake.SsLen]byte {
-	raw := openAndDecodeKey(strings.TrimSpace(c.Right[5:]), gake.SsLen)
+	raw := openAndDecodeKey(strings.TrimSpace(c.RightCrypto[5:]), gake.SsLen)
 	var out [gake.SsLen]byte
 	copy(out[:], raw)
 	return out
+}
+
+func (c *LeaderConfig) Name() string {
+	if c == nil {
+		return ""
+	}
+	return c.LeaderNames[c.ClusterConfig.ClusterID]
 }
 
 func openAndDecodeKey(path string, expectLen int) []byte {

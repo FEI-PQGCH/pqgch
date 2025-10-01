@@ -7,6 +7,7 @@ import (
 	"pqgch/gake"
 	"pqgch/util"
 	"slices"
+	"strconv"
 )
 
 // CryptoSession contains the cryptographic data used for computing the main session key.
@@ -22,9 +23,9 @@ type CryptoSession struct {
 
 func NewCryptoSession(config util.LeaderConfig) CryptoSession {
 	return CryptoSession{
-		xs:          make([][gake.SsLen]byte, len(config.Addrs)),
-		commitments: make([][gake.SsLen]byte, len(config.Addrs)),
-		rs:          make([][gake.CoinLen]byte, len(config.Addrs)),
+		xs:          make([][gake.SsLen]byte, len(config.LeaderNames)),
+		commitments: make([][gake.SsLen]byte, len(config.LeaderNames)),
+		rs:          make([][gake.CoinLen]byte, len(config.LeaderNames)),
 	}
 }
 
@@ -75,12 +76,12 @@ func (s *Session) Init() {
 
 		msg := util.Message{
 			ID:         util.UniqueID(),
-			SenderID:   s.config.Index,
+			SenderID:   s.config.ClusterConfig.MemberID,
 			SenderName: s.config.ClusterConfig.Name(),
 			Type:       util.LeadAkeOneMsg,
 			ReceiverID: s.config.RightIndex(),
 			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
-			ClusterID:  s.config.Index,
+			ClusterID:  s.config.ClusterConfig.ClusterID,
 		}
 
 		go s.sender.Send(msg)
@@ -111,12 +112,12 @@ func (s *Session) onAkeOne(recv util.Message) {
 
 	msg := util.Message{
 		ID:         util.UniqueID(),
-		SenderID:   s.config.Index,
+		SenderID:   s.config.ClusterConfig.MemberID,
 		SenderName: s.config.ClusterConfig.Name(),
 		Type:       util.LeadAkeTwoMsg,
-		ReceiverID: recv.SenderID,
+		ReceiverID: recv.ClusterID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
-		ClusterID:  s.config.Index,
+		ClusterID:  s.config.ClusterConfig.ClusterID,
 	}
 	s.sender.Send(msg)
 
@@ -154,9 +155,9 @@ func (s *Session) onXiRiCommitment(recv util.Message) {
 		return
 	}
 
-	s.crypto.xs[recv.SenderID] = [gake.SsLen]byte(decoded[:gake.SsLen])
-	s.crypto.commitments[recv.SenderID] = [gake.SsLen]byte(decoded[gake.SsLen : 2*gake.SsLen])
-	s.crypto.rs[recv.SenderID] = [gake.CoinLen]byte(decoded[2*gake.SsLen:])
+	s.crypto.xs[recv.ClusterID] = [gake.SsLen]byte(decoded[:gake.SsLen])
+	s.crypto.commitments[recv.ClusterID] = [gake.SsLen]byte(decoded[gake.SsLen : 2*gake.SsLen])
+	s.crypto.rs[recv.ClusterID] = [gake.CoinLen]byte(decoded[2*gake.SsLen:])
 
 	s.tryFinalizeProtocol()
 }
@@ -232,18 +233,18 @@ func (s *Session) getXiRiCommitmentMsg() util.Message {
 	x := append(xi[:], ri[:]...)
 	commitment := sha256.Sum256(x)
 
-	s.crypto.xs[s.config.Index] = xi
-	s.crypto.commitments[s.config.Index] = commitment
-	s.crypto.rs[s.config.Index] = ri
+	s.crypto.xs[s.config.ClusterConfig.ClusterID] = xi
+	s.crypto.commitments[s.config.ClusterConfig.ClusterID] = commitment
+	s.crypto.rs[s.config.ClusterConfig.ClusterID] = ri
 
 	content := append(append(xi[:], commitment[:]...), ri[:]...)
 	msg := util.Message{
 		ID:         util.UniqueID(),
-		SenderID:   s.config.Index,
+		SenderID:   s.config.ClusterConfig.MemberID,
 		SenderName: s.config.ClusterConfig.Name(),
 		Type:       util.LeaderXiRiCommitmentMsg,
 		Content:    base64.StdEncoding.EncodeToString(content),
-		ClusterID:  s.config.Index,
+		ClusterID:  s.config.ClusterConfig.ClusterID,
 	}
 
 	return msg
@@ -264,27 +265,27 @@ func (s *Session) tryFinalizeProtocol() {
 		util.LogCrypto(fmt.Sprintf("X%d: %02x", i, x[:4]))
 	}
 
-	ok := util.CheckXs(s.crypto.xs, len(s.config.Addrs))
+	ok := util.CheckXs(s.crypto.xs, len(s.config.LeaderNames))
 	if !ok {
 		util.ExitWithMsg("Failed XS check")
 	}
 	util.LogCrypto("Xs check: success")
 
-	ok = checkCommitments(len(s.config.Addrs), s.crypto.xs, s.crypto.rs, s.crypto.commitments)
+	ok = checkCommitments(len(s.config.LeaderNames), s.crypto.xs, s.crypto.rs, s.crypto.commitments)
 	if !ok {
 		util.ExitWithMsg("Failed Commitments check")
 	}
 	util.LogCrypto("Commitments check: success")
 
-	PIDs := make([][gake.PidLen]byte, len(s.config.Addrs))
-	for i, n := range s.config.Addrs {
+	PIDs := make([][gake.PidLen]byte, len(s.config.LeaderNames))
+	for i := range len(s.config.LeaderNames) {
 		var byteArr [gake.PidLen]byte
-		copy(byteArr[:], []byte(n))
+		copy(byteArr[:], []byte(strconv.Itoa(i)))
 		PIDs[i] = byteArr
 	}
 
-	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.Addrs), s.config.Index, s.crypto.keyLeft, s.crypto.xs, PIDs)
-	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(s.config.Addrs))
+	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.LeaderNames), s.config.ClusterConfig.ClusterID, s.crypto.keyLeft, s.crypto.xs, PIDs)
+	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(s.config.LeaderNames))
 
 	util.LogCrypto(fmt.Sprintf("Main Session Key established: %02x...", sharedSecret[:4]))
 
