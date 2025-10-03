@@ -10,20 +10,20 @@ c:
 	@echo "[Make]: Building client binary (KYBER_K=$(KYBER_K))..."
 	@cd client && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go build -o ../client_pqgch
 
-s:
-	@echo "[Make]: Building server binary (KYBER_K=$(KYBER_K))..."
-	@cd server && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go build -o ../server_pqgch
+l:
+	@echo "[Make]: Building leader binary (KYBER_K=$(KYBER_K))..."
+	@cd leader && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go build -o ../leader_pqgch
 
 c%:
 	@echo "[Make]: Running client$* (KYBER_K=$(KYBER_K))…"
 	@cd client && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/c$*conf.json"
 
-s%:
-	@echo "[Make]: Running server$* (KYBER_K=$(KYBER_K))…"
-	@cd server && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/s$*conf.json"
+l%:
+	@echo "[Make]: Running leader$* (KYBER_K=$(KYBER_K))…"
+	@cd leader && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/s$*conf.json"
 
 mock:
-	@echo "[Make]: Running QKD mock server..."
+	@echo "[Make]: Running QKD mock leader..."
 	@cd qkd && CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go
 
 gen_2ake:
