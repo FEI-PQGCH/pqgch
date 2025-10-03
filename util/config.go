@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+type Leader struct {
+	Name string `json:"name"`
+	Addr string `json:"addr"`
+}
+
 type ClusterConfig struct {
 	Names      []string `json:"names"`
 	Index      int      `json:"index"`
@@ -19,17 +24,18 @@ type ClusterConfig struct {
 
 type UserConfig struct {
 	ClusterConfig `json:"clusterConfig"`
-	LeadAddr      string `json:"leadAddr"`
+	Leader        Leader `json:"leader"`
 }
 
 type LeaderConfig struct {
 	ClusterConfig *ClusterConfig `json:"clusterConfig,omitempty"`
 	Name          string         `json:"name,omitempty"`
 	Index         int            `json:"index"`
-	Addrs         []string       `json:"servers"`
-	SecretKey     string         `json:"secretKey"`
-	Left          string         `json:"leftCrypto"`
-	Right         string         `json:"rightCrypto"`
+	// Addrs         []string       `json:"servers"`
+	Servers   []Leader `json:"servers"`
+	SecretKey string   `json:"secretKey"`
+	Left      string   `json:"leftCrypto"`
+	Right     string   `json:"rightCrypto"`
 }
 
 func GetConfig[T any](path string) (T, error) {
@@ -126,7 +132,7 @@ func (c *LeaderConfig) GetSecretKey() []byte {
 }
 
 func (c *LeaderConfig) RightIndex() int {
-	return (c.Index + 1) % len(c.Addrs)
+	return (c.Index + 1) % len(c.Servers)
 }
 
 func (c *LeaderConfig) IsLeftQKDUrl() bool {

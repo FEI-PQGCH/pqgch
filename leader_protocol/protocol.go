@@ -22,9 +22,9 @@ type CryptoSession struct {
 
 func NewCryptoSession(config util.LeaderConfig) CryptoSession {
 	return CryptoSession{
-		xs:          make([][gake.SsLen]byte, len(config.Addrs)),
-		commitments: make([][gake.SsLen]byte, len(config.Addrs)),
-		rs:          make([][gake.CoinLen]byte, len(config.Addrs)),
+		xs:          make([][gake.SsLen]byte, len(config.Servers)),
+		commitments: make([][gake.SsLen]byte, len(config.Servers)),
+		rs:          make([][gake.CoinLen]byte, len(config.Servers)),
 	}
 }
 
@@ -264,29 +264,30 @@ func (s *Session) tryFinalizeProtocol() {
 		util.LogCrypto(fmt.Sprintf("X%d: %02x", i, x[:4]))
 	}
 
-	ok := util.CheckXs(s.crypto.xs, len(s.config.Addrs))
+	ok := util.CheckXs(s.crypto.xs, len(s.config.Servers))
 	if !ok {
 		util.ExitWithMsg("Failed XS check")
 	}
 	util.LogCrypto("Xs check: success")
 
-	ok = checkCommitments(len(s.config.Addrs), s.crypto.xs, s.crypto.rs, s.crypto.commitments)
+	ok = checkCommitments(len(s.config.Servers), s.crypto.xs, s.crypto.rs, s.crypto.commitments)
 	if !ok {
 		util.ExitWithMsg("Failed Commitments check")
 	}
 	util.LogCrypto("Commitments check: success")
 
-	PIDs := make([][gake.PidLen]byte, len(s.config.Addrs))
-	for i, n := range s.config.Addrs {
+	PIDs := make([][gake.PidLen]byte, len(s.config.Servers))
+	for i, leader := range s.config.Servers {
 		var byteArr [gake.PidLen]byte
-		copy(byteArr[:], []byte(n))
+		copy(byteArr[:], []byte(leader.Addr))
 		PIDs[i] = byteArr
 	}
 
-	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.Addrs), s.config.Index, s.crypto.keyLeft, s.crypto.xs, PIDs)
-	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(s.config.Addrs))
+	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.Servers), s.config.Index, s.crypto.keyLeft, s.crypto.xs, PIDs)
+	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(s.config.Servers))
 
 	util.LogCrypto(fmt.Sprintf("Main Session Key established: %02x...", sharedSecret[:4]))
+	util.PrintLineColored("Main Session Key established, you can now chat securely!", util.ColorCyan)
 
 	s.clusterSessionChan <- util.Message{
 		Type:    util.MainSessionKeyMsg,

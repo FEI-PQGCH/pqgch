@@ -78,7 +78,7 @@ func (clients *Clients) send(msg util.Message) {
 	client := &clients.data[msg.ReceiverID]
 	if client.conn == nil {
 		client.queue.Add(msg)
-		util.LogRoute("Stored message")
+		// util.LogRoute("Stored message")
 		return
 	}
 	msg.Send(client.conn)
@@ -151,7 +151,7 @@ func newLeaderMessageSender() *LeaderMessageSender {
 func (t *LeaderMessageSender) Send(msg util.Message) {
 	switch msg.Type {
 	case util.LeadAkeOneMsg, util.LeadAkeTwoMsg:
-		sendToLeader(config.Addrs[msg.ReceiverID], msg)
+		sendToLeader(config.Servers[msg.ReceiverID], msg)
 	case util.LeaderXiRiCommitmentMsg:
 		broadcastToLeaders(msg)
 	}
@@ -159,27 +159,27 @@ func (t *LeaderMessageSender) Send(msg util.Message) {
 
 // Broadcast msg to all the other leaders.
 func broadcastToLeaders(msg util.Message) {
-	for i, addr := range config.Addrs {
+	for i, leader := range config.Servers {
 		if i == config.Index {
 			continue
 		}
-		sendToLeader(addr, msg)
+		sendToLeader(leader, msg)
 	}
 }
 
 // Send msg to specific leader at address.
-func sendToLeader(address string, msg util.Message) {
+func sendToLeader(leader util.Leader, msg util.Message) {
 	var conn net.Conn
 	for {
 		var err error
-		conn, err = net.Dial("tcp", address)
+		conn, err = net.Dial("tcp", leader.Addr)
 		if err != nil {
-			util.LogError(fmt.Sprintf("Leader (%s) connection error: %v. Retrying...", address, err))
+			util.LogError(fmt.Sprintf("Leader (%s) connection error: %v. Retrying...", leader.Name, err))
 			time.Sleep(2 * time.Second)
 			continue
 		}
 		break
 	}
 	msg.Send(conn)
-	util.LogRoute(fmt.Sprintf("Sent %s to Leader %s", msg.TypeName(), address))
+	util.LogRoute(fmt.Sprintf("Sent %s to Leader %s", msg.TypeName(), leader.Addr))
 }

@@ -26,7 +26,7 @@ func main() {
 
 	// Initialize TCP transport.
 	msgChan := make(chan util.Message)
-	transport, err := util.NewTCPTransport(config.LeadAddr, msgChan)
+	transport, err := util.NewTCPTransport(config.Leader.Addr, msgChan)
 	if err != nil {
 		fmt.Printf("Unable to connect to server: %v\n", err)
 		os.Exit(1)

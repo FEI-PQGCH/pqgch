@@ -31,7 +31,7 @@ func main() {
 	}
 
 	// Parse port from config.
-	_, port, err := net.SplitHostPort(config.Addrs[config.Index])
+	_, port, err := net.SplitHostPort(config.Servers[config.Index].Addr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing self port from config: %v\n", err)
 		os.Exit(1)
@@ -93,7 +93,7 @@ func main() {
 		go func() {
 			keyMsg, IDMsg := util.RequestKey(config.RightQKDUrl(), true)
 			msgsLeader <- keyMsg
-			sendToLeader(config.Addrs[config.RightIndex()], IDMsg)
+			sendToLeader(config.Servers[config.RightIndex()], IDMsg)
 		}()
 	}
 
@@ -142,7 +142,7 @@ func handleConnection(
 			return
 		}
 		// Log receipt of a leader protocol message.
-		util.LogRoute(fmt.Sprintf("Received %s from Leader %s", msg.TypeName(), config.Addrs[msg.ClusterID]))
+		util.LogRoute(fmt.Sprintf("Received %s from Leader %s", msg.TypeName(), config.Servers[msg.ClusterID].Addr))
 		if msg.Type == util.TextMsg {
 			clusterChan <- msg
 			clients.broadcast(msg)

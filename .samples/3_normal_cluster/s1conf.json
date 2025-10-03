@@ -13,9 +13,18 @@
   "leftCrypto": "../.keys/leaders/leader3/public_leader.json",
   "rightCrypto": "../.keys/leaders/leader2/public_leader.json",
   "servers": [
-    "localhost:9000",
-    "localhost:9001",
-    "localhost:9002"
+    {
+      "addr": "localhost:9000",
+      "name": "Server1"
+    },
+    {
+      "addr": "localhost:9001",
+      "name": "Server2"
+    },
+    {
+      "addr": "localhost:9002",
+      "name": "Server3"
+    }
   ],
   "index": 0,
   "secretKey": "../.keys/leaders/leader1/secret_leader.json"
