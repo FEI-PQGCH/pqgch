@@ -88,13 +88,11 @@ func RequestKey(url string, isLeader bool) (Message, Message) {
 	}
 
 	keyMsg := Message{
-		ID:      UniqueID(),
 		Type:    msgType,
 		Content: key,
 	}
 
 	IDMsg := Message{
-		ID:      UniqueID(),
 		Type:    QKDIDMsg,
 		Content: keyID,
 	}
@@ -124,7 +122,6 @@ func RequestKeyByID(url, id string, isLeader bool) Message {
 	}
 
 	msg := Message{
-		ID:      UniqueID(),
 		Type:    msgType,
 		Content: key,
 	}

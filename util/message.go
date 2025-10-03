@@ -2,8 +2,6 @@ package util
 
 import (
 	"bufio"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -11,11 +9,10 @@ import (
 
 type Message struct {
 	// Routing metadata
-	ID         string `json:"id"`
-	SenderID   int    `json:"sendId"`
-	ReceiverID int    `json:"recvId"`
-	Type       int    `json:"type"`
-	ClusterID  int    `json:"clusterId"`
+	SenderID   int `json:"sendId"`
+	ReceiverID int `json:"recvId"`
+	Type       int `json:"type"`
+	ClusterID  int `json:"clusterId"`
 	// Message content for user
 	SenderName string `json:"sender"`
 	Content    string `json:"content"`
@@ -57,6 +54,8 @@ const (
 	QKDRightKeyMsg                 // Response from the ETSI API server for Right Key.
 	QKDClusterKeyMsg               // Response from the ETSI API server for Cluster Session Key.
 	QKDIDMsg                       // Message containg the QKD ID for retrieving the second copy of the key.
+	Ping                    = 98
+	Pong                    = 99
 )
 
 func (m Message) Send(conn net.Conn) error {
@@ -73,15 +72,6 @@ func (m Message) Send(conn net.Conn) error {
 	}
 
 	return nil
-}
-
-func UniqueID() string {
-	bytes := make([]byte, 16)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		panic(err)
-	}
-	return hex.EncodeToString(bytes)
 }
 
 type MessageReader struct {

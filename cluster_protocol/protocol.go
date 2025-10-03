@@ -106,7 +106,6 @@ func NewLeaderSession(
 		}
 
 		msg := util.Message{
-			ID:         util.UniqueID(),
 			SenderID:   s.config.MemberID,
 			ClusterID:  s.config.ClusterID,
 			Type:       util.KeyMsg,
@@ -142,7 +141,6 @@ func (s *Session) Init() {
 	s.crypto.tkRight, s.crypto.eskaRight = tk, eska
 
 	msg := util.Message{
-		ID:         util.UniqueID(),
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.Name(),
 		Type:       util.AkeOneMsg,
@@ -180,7 +178,6 @@ func (s *Session) onAkeOne(msg util.Message) {
 	util.LogCrypto("Established 2-AKE shared key with left neighbor")
 
 	msg = util.Message{
-		ID:         util.UniqueID(),
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.Name(),
 		Type:       util.AkeTwoMsg,
@@ -322,7 +319,6 @@ func (s *Session) SendText(text string) {
 		return
 	}
 	msg := util.Message{
-		ID:         util.UniqueID(),
 		SenderID:   s.config.GetIndex(),
 		SenderName: s.config.Name(),
 		Content:    cipherText,
@@ -371,7 +367,6 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config util.ClusterConfig) u
 		ri[:]...)
 
 	msg := util.Message{
-		ID:         util.UniqueID(),
 		SenderID:   config.GetIndex(),
 		SenderName: config.Name(),
 		Type:       util.XiRiCommitmentMsg,

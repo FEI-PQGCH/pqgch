@@ -75,7 +75,6 @@ func (s *Session) Init() {
 		akeSendARight, s.crypto.tkRight, s.crypto.eskaRight = gake.KexAkeInitA(s.config.RightPublicKey())
 
 		msg := util.Message{
-			ID:         util.UniqueID(),
 			SenderID:   s.config.ClusterConfig.MemberID,
 			SenderName: s.config.ClusterConfig.Name(),
 			Type:       util.LeadAkeOneMsg,
@@ -111,7 +110,6 @@ func (s *Session) onAkeOne(recv util.Message) {
 	util.LogCrypto("Established 2-AKE shared key with left neighbor")
 
 	msg := util.Message{
-		ID:         util.UniqueID(),
 		SenderID:   s.config.ClusterConfig.MemberID,
 		SenderName: s.config.ClusterConfig.Name(),
 		Type:       util.LeadAkeTwoMsg,
@@ -239,7 +237,6 @@ func (s *Session) getXiRiCommitmentMsg() util.Message {
 
 	content := append(append(xi[:], commitment[:]...), ri[:]...)
 	msg := util.Message{
-		ID:         util.UniqueID(),
 		SenderID:   s.config.ClusterConfig.MemberID,
 		SenderName: s.config.ClusterConfig.Name(),
 		Type:       util.LeaderXiRiCommitmentMsg,

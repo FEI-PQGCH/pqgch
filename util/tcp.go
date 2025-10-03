@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 type MessageSender interface {
@@ -17,10 +18,10 @@ type TCPTransport struct {
 	receiveChan chan Message
 }
 
-func NewTCPTransport(address string, receiveChan chan Message) (*TCPTransport, error) {
+func NewTCPTransport(address string, receiveChan chan Message, clientID, clusterID int) (*TCPTransport, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %w", err)
+		return nil, err
 	}
 
 	t := &TCPTransport{
@@ -29,8 +30,23 @@ func NewTCPTransport(address string, receiveChan chan Message) (*TCPTransport, e
 	}
 
 	go t.listen()
+	go t.pingPong(clientID, clusterID)
 
 	return t, nil
+}
+
+func (t *TCPTransport) pingPong(clientID, clusterID int) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		ping := Message{
+			SenderID:  clientID,
+			ClusterID: clusterID,
+			Type:      Ping,
+		}
+		t.Send(ping)
+	}
 }
 
 func (t *TCPTransport) listen() {
@@ -38,6 +54,10 @@ func (t *TCPTransport) listen() {
 
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
+		if msg.Type == Pong {
+			LogInfo("Pong!")
+			continue
+		}
 		if msg.Type != TextMsg {
 			LogRoute(fmt.Sprintf("Received %s from %s", msg.TypeName(), msg.SenderName))
 		}
@@ -59,6 +79,6 @@ func (t *TCPTransport) Send(msg Message) {
 
 	_, err = t.conn.Write(msgData)
 	if err != nil {
-		LogError(fmt.Sprintf("Error sending message: %v\n", err))
+		ExitWithMsg(fmt.Sprintf("failed to send message: %v\nexiting...", err))
 	}
 }

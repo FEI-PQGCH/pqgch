@@ -37,12 +37,12 @@ func GetConfig[T any](path string) (T, error) {
 
 	configFile, err := os.Open(path)
 	if err != nil {
-		return config, fmt.Errorf("error opening config file at %s: %v", path, err)
+		return config, err
 	}
 	defer configFile.Close()
 
 	if err := json.NewDecoder(configFile).Decode(&config); err != nil {
-		return config, fmt.Errorf("error parsing config file: %v", err)
+		return config, err
 	}
 
 	return config, nil
