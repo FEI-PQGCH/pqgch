@@ -19,7 +19,8 @@ type Message struct {
 }
 
 var MessageTypeNames = map[int]string{
-	LoginMsg:                "Login Message",
+	MemberAuthMsg:           "Member Authentication Message",
+	LeaderAuthMsg:           "Leader Authentication Message",
 	TextMsg:                 "Text Message",
 	AkeOneMsg:               "First AKE-2 Message",
 	AkeTwoMsg:               "Second AKE-2 Message",
@@ -40,20 +41,21 @@ func (m Message) TypeName() string {
 
 // All message types used in the application.
 const (
-	LoginMsg                = iota // Sent by cluster members to cluster leaders when logging on.
-	TextMsg                        // Main Session Key encrypted text message.
-	AkeOneMsg                      // First message of the 2-AKE protocol.
-	AkeTwoMsg                      // Second message of the 2-AKE protocol.
-	XiRiCommitmentMsg              // Message containing the Xi, Ri and Commitment values.
-	KeyMsg                         // Message containg the encrypted Main Session Key. This key is encrypted using the Cluster Session Key.
-	LeadAkeOneMsg                  // Same as AkeOneMsg, but for leaders.
-	LeadAkeTwoMsg                  // Same as AkeTwoMsg, but for leaders.
-	LeaderXiRiCommitmentMsg        // Same as XiRiCommitmentMsg, but for leaders.
-	MainSessionKeyMsg              // Internal message used for transport from leader_protocol to cluster_protocol.
-	QKDLeftKeyMsg                  // Response from the ETSI API server for Left Key.
-	QKDRightKeyMsg                 // Response from the ETSI API server for Right Key.
-	QKDClusterKeyMsg               // Response from the ETSI API server for Cluster Session Key.
-	QKDIDMsg                       // Message containg the QKD ID for retrieving the second copy of the key.
+	MemberAuthMsg = iota
+	LeaderAuthMsg
+	TextMsg                 // Main Session Key encrypted text message.
+	AkeOneMsg               // First message of the 2-AKE protocol.
+	AkeTwoMsg               // Second message of the 2-AKE protocol.
+	XiRiCommitmentMsg       // Message containing the Xi, Ri and Commitment values.
+	KeyMsg                  // Message containg the encrypted Main Session Key. This key is encrypted using the Cluster Session Key.
+	LeadAkeOneMsg           // Same as AkeOneMsg, but for leaders.
+	LeadAkeTwoMsg           // Same as AkeTwoMsg, but for leaders.
+	LeaderXiRiCommitmentMsg // Same as XiRiCommitmentMsg, but for leaders.
+	MainSessionKeyMsg       // Internal message used for transport from leader_protocol to cluster_protocol.
+	QKDLeftKeyMsg           // Response from the ETSI API server for Left Key.
+	QKDRightKeyMsg          // Response from the ETSI API server for Right Key.
+	QKDClusterKeyMsg        // Response from the ETSI API server for Cluster Session Key.
+	QKDIDMsg                // Message containg the QKD ID for retrieving the second copy of the key.
 	Ping                    = 98
 	Pong                    = 99
 )

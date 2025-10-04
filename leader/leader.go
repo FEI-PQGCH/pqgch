@@ -82,7 +82,7 @@ func main() {
 	transport.Send(util.Message{
 		SenderID:   config.ClusterConfig.MemberID,
 		SenderName: config.Name(),
-		Type:       util.LoginMsg,
+		Type:       util.LeaderAuthMsg,
 		ClusterID:  config.ClusterConfig.ClusterID,
 	})
 

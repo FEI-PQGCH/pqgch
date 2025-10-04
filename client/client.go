@@ -36,7 +36,7 @@ func main() {
 	transport.Send(util.Message{
 		SenderID:   config.ClusterConfig.MemberID,
 		SenderName: config.ClusterConfig.Name(),
-		Type:       util.LoginMsg,
+		Type:       util.MemberAuthMsg,
 		ClusterID:  config.ClusterConfig.ClusterID,
 	})
 
