@@ -1,20 +1,14 @@
 {
-  "clusterConfig": {
-    "names": [
-      "Test1",
-      "Server3"
-    ],
-    "index": 1,
+  "server": "localhost:9000",
+  "cluster": {
+    "clusterID": 2,
+    "memberID": 1,
+    "names": ["Test1", "Server3"],
     "publicKeys": "../.keys/cluster3_public_keys.json",
     "secretKey": "../.keys/leaders/leader3/secret_cluster.json"
   },
+  "leaderNames": ["Server One", "Server Two", "Server Three"],
   "leftCrypto": "../.keys/leaders/leader2/public_leader.json",
   "rightCrypto": "../.keys/leaders/leader1/public_leader.json",
-  "servers": [
-    "localhost:9000",
-    "localhost:9001",
-    "localhost:9002"
-  ],
-  "index": 2,
   "secretKey": "../.keys/leaders/leader3/secret_leader.json"
 }

@@ -1,11 +1,9 @@
 {
-  "leadAddr": "localhost:9001",
-  "clusterConfig": {
-    "names": [
-      "User1",
-      "Server2"
-    ],
-    "index": 0,
+  "server": "localhost:9000",
+  "cluster": {
+    "clusterID": 1,
+    "memberID": 0,
+    "names": ["User1", "Server2"],
     "publicKeys": "../.keys/cluster2_public_keys.json",
     "secretKey": "../.keys/clients/client4/secret.json"
   }
