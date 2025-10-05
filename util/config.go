@@ -9,11 +9,6 @@ import (
 	"strings"
 )
 
-type Leader struct {
-	Name string `json:"name"`
-	Addr string `json:"addr"`
-}
-
 type ClusterConfig struct {
 	Names      []string `json:"names"`
 	Index      int      `json:"index"`
