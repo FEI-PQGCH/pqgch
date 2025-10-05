@@ -189,6 +189,13 @@ func (s *Session) onRightKey(recv util.Message) {
 	}
 }
 
+func (s *Session) onQKDID(recv util.Message) {
+	key := util.RequestKeyByID(s.config.LeftQKDUrl(), recv.Content)
+	s.onLeftKey(util.Message{
+		Content: key,
+	})
+}
+
 // Handle the received message according to its type.
 func (s *Session) handleMessage(recv util.Message) {
 	switch recv.Type {
@@ -202,6 +209,8 @@ func (s *Session) handleMessage(recv util.Message) {
 		s.onLeftKey(recv)
 	case util.QKDRightKeyMsg:
 		s.onRightKey(recv)
+	case util.QKDIDLeaderMsg:
+		s.onQKDID(recv)
 	default:
 		util.LogError("Unknown message type encountered")
 	}

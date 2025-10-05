@@ -16,7 +16,6 @@ func demux(in <-chan util.Message) (chan util.Message, chan util.Message) {
 	go func() {
 		defer close(cluster)
 		defer close(leader)
-
 		for msg := range in {
 			switch msg.Type {
 			case util.AkeOneMsg:
@@ -31,8 +30,6 @@ func demux(in <-chan util.Message) (chan util.Message, chan util.Message) {
 				fallthrough
 			case util.QKDClusterKeyMsg:
 				fallthrough
-			case util.QKDIDMsg:
-				fallthrough
 			case util.TextMsg:
 				cluster <- msg
 			case util.LeadAkeOneMsg:
@@ -44,6 +41,8 @@ func demux(in <-chan util.Message) (chan util.Message, chan util.Message) {
 			case util.QKDLeftKeyMsg:
 				fallthrough
 			case util.QKDRightKeyMsg:
+				fallthrough
+			case util.QKDIDLeaderMsg:
 				leader <- msg
 			default:
 				util.LogError("Unknown message type encountered")
@@ -112,10 +111,20 @@ func main() {
 
 	if config.ClusterConfig.IsClusterQKDUrl() {
 		go func() {
-			//keyMsg, IDMsg := util.RequestKey(config.ClusterConfig.ClusterQKDUrl(), false)
-			//msgsCluster <- keyMsg
-			//IDMsg.SenderName = config.ClusterConfig.Name()
-			// TODO: send ID to cluster member
+			key, keyID := util.RequestKey(config.ClusterConfig.ClusterQKDUrl())
+
+			msgsCluster <- util.Message{
+				Type:    util.QKDClusterKeyMsg,
+				Content: key,
+			}
+
+			transport.Send(util.Message{
+				ClusterID:  config.ClusterConfig.ClusterID,
+				SenderID:   config.ClusterConfig.MemberID,
+				SenderName: config.Name(),
+				Type:       util.QKDIDMemberMsg,
+				Content:    keyID,
+			})
 		}()
 	}
 
@@ -123,9 +132,21 @@ func main() {
 	// and sends the key ID to his right neighbor.
 	if config.IsRightQKDUrl() {
 		go func() {
-			keyMsg, _ := util.RequestKey(config.RightQKDUrl(), true)
-			msgsLeader <- keyMsg
-			// TODO: send ID to leader
+			key, keyID := util.RequestKey(config.RightQKDUrl())
+
+			msgsLeader <- util.Message{
+				Type:    util.QKDRightKeyMsg,
+				Content: key,
+			}
+
+			transport.Send(util.Message{
+				ClusterID:  config.ClusterConfig.ClusterID,
+				SenderID:   config.ClusterConfig.MemberID,
+				ReceiverID: config.RightIndex(),
+				SenderName: config.Name(),
+				Type:       util.QKDIDLeaderMsg,
+				Content:    keyID,
+			})
 		}()
 	}
 

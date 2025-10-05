@@ -32,7 +32,8 @@ var MessageTypeNames = map[int]string{
 	QKDLeftKeyMsg:           "Left QKD Key Message",
 	QKDRightKeyMsg:          "Right QKD Key Message",
 	QKDClusterKeyMsg:        "Cluster QKD Key Message",
-	QKDIDMsg:                "QKD ID Message",
+	QKDIDLeaderMsg:          "QKD ID Message",
+	QKDIDMemberMsg:          "QKD ID Message",
 }
 
 func (m Message) TypeName() string {
@@ -51,14 +52,16 @@ const (
 	LeadAkeOneMsg           // Same as AkeOneMsg, but for leaders.
 	LeadAkeTwoMsg           // Same as AkeTwoMsg, but for leaders.
 	LeaderXiRiCommitmentMsg // Same as XiRiCommitmentMsg, but for leaders.
-	MainSessionKeyMsg       // Internal message used for transport from leader_protocol to cluster_protocol.
-	QKDLeftKeyMsg           // Response from the ETSI API server for Left Key.
-	QKDRightKeyMsg          // Response from the ETSI API server for Right Key.
-	QKDClusterKeyMsg        // Response from the ETSI API server for Cluster Session Key.
-	QKDIDMsg                // Message containg the QKD ID for retrieving the second copy of the key.
-	Ping                    = 98
-	Pong                    = 99
-	Error                   = 100
+	QKDIDLeaderMsg          // Message containg the QKD ID for retrieving the second copy of the key.
+	QKDIDMemberMsg
+	Ping
+	Pong
+	Error
+
+	QKDLeftKeyMsg     // Response from the ETSI API server for Left Key.
+	QKDRightKeyMsg    // Response from the ETSI API server for Right Key.
+	QKDClusterKeyMsg  // Response from the ETSI API server for Cluster Session Key.
+	MainSessionKeyMsg // Internal message used for transport from leader_protocol to cluster_protocol.
 )
 
 func (m Message) Send(conn net.Conn) error {

@@ -280,8 +280,11 @@ func (s *Session) onQKDClusterKey(msg util.Message) {
 
 func (s *Session) onQKDID(msg util.Message) {
 	go func() {
-		keyMsg := util.RequestKeyByID(s.config.ClusterQKDUrl(), msg.Content, false)
-		s.receiveChan <- keyMsg
+		key := util.RequestKeyByID(s.config.ClusterQKDUrl(), msg.Content)
+		s.receiveChan <- util.Message{
+			Type:    util.QKDClusterKeyMsg,
+			Content: key,
+		}
 	}()
 }
 
@@ -300,7 +303,7 @@ func (s *Session) handleMessage(recv util.Message) {
 		s.onMainSessionKey(recv)
 	case util.QKDClusterKeyMsg:
 		s.onQKDClusterKey(recv)
-	case util.QKDIDMsg:
+	case util.QKDIDMemberMsg:
 		s.onQKDID(recv)
 	default:
 		s.onText(recv)
