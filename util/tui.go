@@ -122,7 +122,9 @@ func PrintLineColored(msg string, color Color) {
 
 func ExitWithMsg(msg string) {
 	clearLine()
-	fmt.Println(colorize(msg, ColorRed))
+	header := colorize("[ERROR] ", ColorRed)
+	content := colorize(msg, ColorRed)
+	fmt.Println(header + content)
 	exit()
 }
 

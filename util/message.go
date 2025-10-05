@@ -58,6 +58,7 @@ const (
 	QKDIDMsg                // Message containg the QKD ID for retrieving the second copy of the key.
 	Ping                    = 98
 	Pong                    = 99
+	Error                   = 100
 )
 
 func (m Message) Send(conn net.Conn) error {

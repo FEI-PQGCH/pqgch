@@ -58,6 +58,9 @@ func (t *TCPTransport) listen() {
 			LogInfo("Pong!")
 			continue
 		}
+		if msg.Type == Error {
+			ExitWithMsg("From routing server: " + msg.Content)
+		}
 		if msg.Type != TextMsg {
 			LogRoute(fmt.Sprintf("Received %s from %s", msg.TypeName(), msg.SenderName))
 		}
