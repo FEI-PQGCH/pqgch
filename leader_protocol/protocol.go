@@ -265,11 +265,11 @@ func (s *Session) tryFinalizeProtocol() {
 	if slices.Contains(s.crypto.xs, [gake.SsLen]byte{}) {
 		return
 	}
-	util.LogCrypto("Received all Xs")
 
-	// for i, x := range s.crypto.xs {
-	// 	util.LogCrypto(fmt.Sprintf("X%d: %02x", i, x[:4]))
-	// }
+	for i, x := range s.crypto.xs {
+		util.LogCrypto(fmt.Sprintf("X%d: %02x", i, x[:4]))
+	}
+	util.LogCrypto("Received all Xs")
 
 	ok := util.CheckXs(s.crypto.xs, len(s.config.LeaderNames))
 	if !ok {
@@ -293,7 +293,8 @@ func (s *Session) tryFinalizeProtocol() {
 	otherLeftKeys := util.ComputeAllLeftKeys(len(s.config.LeaderNames), s.config.ClusterConfig.ClusterID, s.crypto.keyLeft, s.crypto.xs, PIDs)
 	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, len(s.config.LeaderNames))
 
-	util.LogCrypto(fmt.Sprintf("🔑  Main Session Key established: %02x...\n💬 Main Session Key established, you can now chat securely!", sharedSecret[:4]))
+	util.LogCrypto(fmt.Sprintf("Main Session Key established: %02x...", sharedSecret[:4]))
+	util.LogCrypto("You can now securely chat!")
 
 	s.clusterSessionChan <- util.Message{
 		Type:    util.MainSessionKeyMsg,

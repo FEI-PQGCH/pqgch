@@ -92,11 +92,9 @@ func NewLeaderSession(
 
 	s.transportMainSessionKey = func() {
 		if s.mainSessionKey == [gake.SsLen]byte{} {
-			util.LogCrypto("No Main Session Key yet, skipping")
 			return
 		}
 		if s.crypto.clusterSessionKey == [2 * gake.SsLen]byte{} {
-			// util.LogCrypto("No Cluster Session Key yet, skipping")
 			return
 		}
 		util.LogCrypto("Broadcasting Main Session Key to cluster")
@@ -240,7 +238,6 @@ func (s *Session) onKey(recv util.Message) {
 		return
 	}
 	if s.crypto.clusterSessionKey == [2 * gake.SsLen]byte{} {
-		// util.LogCrypto("No Cluster Session Key yet. Storing Encrypted Main Session Key message.")
 		s.keyCiphertext = decoded
 		return
 	}
@@ -447,7 +444,9 @@ func (s *Session) decryptAndStoreKey(content []byte) {
 		return
 	}
 	copy(s.mainSessionKey[:], mainSessionKey)
-	util.LogCrypto(fmt.Sprintf("Main Session Key established: %02x", s.mainSessionKey[:4]))
+
+	util.LogCrypto(fmt.Sprintf("Main Session Key established: %02x...", s.mainSessionKey[:4]))
+	util.LogCrypto("You can now securely chat!")
 }
 
 // Recalculate the commitments and compare them to the received ones.
