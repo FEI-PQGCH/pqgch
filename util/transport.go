@@ -39,7 +39,7 @@ func (t *TCPTransport) listen() {
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
 		if msg.Type != TextMsg {
-			LogRoute(fmt.Sprintf("Received %s from %s", msg.TypeName(), msg.SenderName))
+			LogRouteWithNames("RECEIVED", msg.TypeName(), "from", msg.SenderName)
 		}
 		t.receiveChan <- msg
 	}

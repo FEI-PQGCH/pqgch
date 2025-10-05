@@ -107,7 +107,7 @@ func (clients *Clients) broadcast(msg util.Message) {
 			return
 		}
 	}
-	util.LogRoute(fmt.Sprintf("Broadcasted %s from %s", msg.TypeName(), msg.SenderName))
+	util.LogRouteWithNames("BROADCAST", msg.TypeName(), "from", msg.SenderName)
 }
 
 // Cluster transport for communication between the leader and clients in its cluster.
@@ -181,5 +181,5 @@ func sendToLeader(leader util.Leader, msg util.Message) {
 		break
 	}
 	msg.Send(conn)
-	util.LogRoute(fmt.Sprintf("Sent %s to Leader %s", msg.TypeName(), leader.Addr))
+	util.LogRouteWithNames("SENT", msg.TypeName(), "to", leader.Name)
 }

@@ -142,7 +142,7 @@ func handleConnection(
 			return
 		}
 		// Log receipt of a leader protocol message.
-		util.LogRoute(fmt.Sprintf("Received %s from Leader %s", msg.TypeName(), config.Servers[msg.ClusterID].Addr))
+		util.LogRouteWithNames("RECEIVED", msg.TypeName(), "from Leader", config.Servers[msg.ClusterID].Name)
 		if msg.Type == util.TextMsg {
 			clusterChan <- msg
 			clients.broadcast(msg)
@@ -172,7 +172,7 @@ func handleConnection(
 	// Handle messages from this client in an infinite loop.
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
-		util.LogRoute(fmt.Sprintf("Received %s from %s", msg.TypeName(), msg.SenderName))
+		util.LogRouteWithNames("RECEIVED", msg.TypeName(), "from", msg.SenderName)
 
 		if !tracker.AddMessage(msg.ID) {
 			continue

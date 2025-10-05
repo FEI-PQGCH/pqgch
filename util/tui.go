@@ -103,6 +103,12 @@ func LogRoute(msg string) {
 	logChan <- header + msg
 }
 
+func LogRouteWithNames(form string, item string, from string, to string) {
+	header := colorize("[ROUTE] ", ColorPurple)
+	body := colorize(form, ColorBlue) + " " + item + " " + from + " " + colorize(to, ColorBlue)
+	logChan <- header + body
+}
+
 func LogError(msg string) {
 	header := colorize("[ERROR] ", ColorRed)
 	logChan <- header + msg
