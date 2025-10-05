@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+type Leader struct {
+	Name string `json:"name"`
+	Addr string `json:"addr"`
+}
+
 type ClusterConfig struct {
 	ClusterID  int      `json:"clusterID"`
 	MemberID   int      `json:"memberID,omitempty"`

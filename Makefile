@@ -22,6 +22,12 @@ l%:
 	@echo "[Make]: Running leader$* (KYBER_K=$(KYBER_K))…"
 	@cd leader && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/s$*conf.json"
 
+c%.clean:
+	@cd client && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/c$*conf.json" 2>/dev/null
+
+s%.clean:
+	@cd server && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/s$*conf.json" 2>/dev/null
+
 mock:
 	@echo "[Make]: Running QKD mock leader..."
 	@cd qkd && CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go

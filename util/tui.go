@@ -90,26 +90,33 @@ func colorize(msg string, color Color) string {
 	return string(color) + msg + string(ColorReset)
 }
 
-var lineChan = make(chan string, 100)
+var logChan = make(chan string, 100)
+var msgChan = make(chan string, 100)
 
 func LogInfo(msg string) {
 	header := colorize("[INFO] ", ColorYellow)
-	lineChan <- header + msg
+	logChan <- header + msg
 }
 
 func LogRoute(msg string) {
 	header := colorize("[ROUTE] ", ColorPurple)
-	lineChan <- header + msg
+	logChan <- header + msg
+}
+
+func LogRouteWithNames(form string, item string, from string, to string) {
+	header := colorize("[ROUTE] ", ColorPurple)
+	body := colorize(form, ColorBlue) + " " + item + " " + from + " " + colorize(to, ColorBlue)
+	logChan <- header + body
 }
 
 func LogError(msg string) {
 	header := colorize("[ERROR] ", ColorRed)
-	lineChan <- header + msg
+	logChan <- header + msg
 }
 
 func LogCrypto(msg string) {
 	header := colorize("[CRYPTO] ", ColorCyan)
-	lineChan <- header + msg
+	logChan <- header + msg
 }
 
 func PrintLine(msg string) {
@@ -117,7 +124,7 @@ func PrintLine(msg string) {
 }
 
 func PrintLineColored(msg string, color Color) {
-	lineChan <- colorize(msg, color)
+	msgChan <- colorize(msg, color)
 }
 
 func ExitWithMsg(msg string) {
@@ -209,7 +216,7 @@ func StartTUI(onLine func(string)) {
 				}
 				clearLine()
 				log := "You: " + string(input)
-				fmt.Println(colorize(log, ColorGreen))
+				fmt.Fprintln(os.Stdout, colorize(log, ColorGreen)) // ✅ user messages to stdout
 				onLine(string(input))
 				input = []rune{}
 				printPrompt("")
@@ -225,10 +232,17 @@ func StartTUI(onLine func(string)) {
 				printPrompt(string(input))
 				continue
 			}
-		case line := <-lineChan:
+
+		case log := <-logChan:
 			clearLine()
-			fmt.Println(line)
+			fmt.Fprintln(os.Stderr, log)
+			printPrompt(string(input))
+
+		case msg := <-msgChan:
+			clearLine()
+			fmt.Fprintln(os.Stdout, msg)
 			printPrompt(string(input))
 		}
 	}
+
 }

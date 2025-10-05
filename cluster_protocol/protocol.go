@@ -96,7 +96,7 @@ func NewLeaderSession(
 			return
 		}
 		if s.crypto.clusterSessionKey == [2 * gake.SsLen]byte{} {
-			util.LogCrypto("No Cluster Session Key yet, skipping")
+			// util.LogCrypto("No Cluster Session Key yet, skipping")
 			return
 		}
 		util.LogCrypto("Broadcasting Main Session Key to cluster")
@@ -240,7 +240,7 @@ func (s *Session) onKey(recv util.Message) {
 		return
 	}
 	if s.crypto.clusterSessionKey == [2 * gake.SsLen]byte{} {
-		util.LogCrypto("No Cluster Session Key yet. Storing Encrypted Main Session Key message.")
+		// util.LogCrypto("No Cluster Session Key yet. Storing Encrypted Main Session Key message.")
 		s.keyCiphertext = decoded
 		return
 	}

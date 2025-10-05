@@ -1,5 +1,8 @@
 {
-  "leadAddr": "localhost:9002",
+  "leader": {
+    "addr": "localhost:9002",
+    "name": "Server3"
+  },
   "clusterConfig": {
     "names": [
       "Test1",
