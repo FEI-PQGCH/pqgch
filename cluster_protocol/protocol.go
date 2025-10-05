@@ -80,6 +80,7 @@ func NewLeaderSession(
 		return &Session{
 			receiveChan: receiveChan,
 			sender:      sender,
+			config:      config,
 		}
 	}
 

@@ -118,7 +118,9 @@ func (c *ClusterConfig) GetIndex() int {
 	return c.MemberID
 }
 
-func (c *ClusterConfig) HasCluster() bool { return c.Names != nil }
+func (c *ClusterConfig) HasCluster() bool {
+	return len(c.Crypto) != 0 || len(c.PublicKeys) != 0 || len(c.SecretKey) != 0
+}
 
 func (c *LeaderConfig) GetSecretKey() []byte {
 	raw := openAndDecodeKey(c.SecretKey, gake.SkLen)
