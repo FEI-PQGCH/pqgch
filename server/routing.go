@@ -66,6 +66,9 @@ func (clients *Clients) sendQueued(id int) {
 	for _, msg := range clients.data[id].queue {
 		msg.Send(clients.data[id].conn)
 		clients.data[id].queue.Remove(msg)
+		if msg.Type != util.TextMsg {
+			util.LogRouteWithNames("SENT", msg.TypeName(), "to", config.ClusterConfig.Names[msg.ReceiverID])
+		}
 	}
 }
 
@@ -82,6 +85,9 @@ func (clients *Clients) send(msg util.Message) {
 		return
 	}
 	msg.Send(client.conn)
+	if msg.Type != util.TextMsg {
+		util.LogRouteWithNames("SENT", msg.TypeName(), "to", config.ClusterConfig.Names[msg.ReceiverID])
+	}
 }
 
 // Broadcast message to all clients
@@ -107,7 +113,6 @@ func (clients *Clients) broadcast(msg util.Message) {
 			return
 		}
 	}
-	util.LogRouteWithNames("BROADCAST", msg.TypeName(), "from", msg.SenderName)
 }
 
 // Cluster transport for communication between the leader and clients in its cluster.
@@ -181,5 +186,8 @@ func sendToLeader(leader util.Leader, msg util.Message) {
 		break
 	}
 	msg.Send(conn)
-	util.LogRouteWithNames("SENT", msg.TypeName(), "to", leader.Name)
+
+	if msg.Type != util.TextMsg {
+		util.LogRouteWithNames("SENT", msg.TypeName(), "to", leader.Name)
+	}
 }
