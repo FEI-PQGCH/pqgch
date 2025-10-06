@@ -17,6 +17,11 @@ type ClusterConfig struct {
 	Crypto     string   `json:"crypto,omitempty"`
 }
 
+type Leader struct {
+	Name string `json:"name"`
+	Addr string `json:"addr"`
+}
+
 type UserConfig struct {
 	ClusterConfig `json:"clusterConfig"`
 	Leader        Leader `json:"leader"`
