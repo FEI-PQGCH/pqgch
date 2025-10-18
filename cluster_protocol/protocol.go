@@ -107,7 +107,7 @@ func NewLeaderSession(
 		}
 
 		msg := util.Message{
-			SenderID:   s.config.Cluster.MemberID,
+			SenderID:   s.config.GetMemberID(),
 			ClusterID:  s.config.ClusterID,
 			Type:       util.KeyMsg,
 			Content:    key,
@@ -142,7 +142,7 @@ func (s *Session) Init() {
 	s.crypto.tkRight, s.crypto.eskaRight = tk, eska
 
 	msg := util.Message{
-		SenderID:   s.config.Cluster.MemberID,
+		SenderID:   s.config.GetMemberID(),
 		SenderName: s.config.Name,
 		Type:       util.AkeOneMsg,
 		ReceiverID: s.config.Cluster.RightMemberID(),
@@ -179,7 +179,7 @@ func (s *Session) onAkeOne(msg util.Message) {
 	util.LogCrypto("Established 2-AKE shared key with left neighbor")
 
 	msg = util.Message{
-		SenderID:   s.config.Cluster.MemberID,
+		SenderID:   s.config.GetMemberID(),
 		SenderName: s.config.Name,
 		Type:       util.AkeTwoMsg,
 		ReceiverID: msg.SenderID,
@@ -323,7 +323,7 @@ func (s *Session) SendText(text string) {
 		return
 	}
 	msg := util.Message{
-		SenderID:   s.config.Cluster.MemberID,
+		SenderID:   s.config.GetMemberID(),
 		SenderName: s.config.Name,
 		Content:    cipherText,
 		ClusterID:  s.config.ClusterID,
@@ -354,15 +354,15 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config util.BaseConfig) util
 	xi := gake.XorKeys(session.keyRight, session.keyLeft)
 	ri := gake.GetRi()
 	commitment := computeCommitment(
-		config.Cluster.MemberID,
-		config.Cluster.GetPublicKeys()[config.Cluster.MemberID],
+		config.GetMemberID(),
+		config.Cluster.GetPublicKeys()[config.GetMemberID()],
 		xi,
 		ri)
 
-	session.xs[config.Cluster.MemberID] = xi
-	session.commitments[config.Cluster.MemberID] = commitment
-	session.rs[config.Cluster.MemberID] = ri
-	session.pids[config.Cluster.MemberID] = config.Name
+	session.xs[config.GetMemberID()] = xi
+	session.commitments[config.GetMemberID()] = commitment
+	session.rs[config.GetMemberID()] = ri
+	session.pids[config.GetMemberID()] = config.Name
 
 	content := append(append(append(append(
 		xi[:],
@@ -372,7 +372,7 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config util.BaseConfig) util
 		ri[:]...)
 
 	msg := util.Message{
-		SenderID:   config.Cluster.MemberID,
+		SenderID:   config.GetMemberID(),
 		SenderName: config.Name,
 		Type:       util.XiRiCommitmentMsg,
 		ClusterID:  config.ClusterID,
@@ -436,7 +436,7 @@ func (s *Session) tryFinalizeProtocol() {
 		PIDs[i] = byteArr
 	}
 
-	otherLeftKeys := util.ComputeAllLeftKeys(s.config.Cluster.NMembers, s.config.Cluster.MemberID, s.crypto.keyLeft, s.crypto.xs, PIDs)
+	otherLeftKeys := util.ComputeAllLeftKeys(s.config.Cluster.NMembers, s.config.GetMemberID(), s.crypto.keyLeft, s.crypto.xs, PIDs)
 	s.crypto.clusterSessionKey = computeSharedSecret(otherLeftKeys, PIDs, s.config.Cluster.NMembers)
 	util.LogCrypto(fmt.Sprintf("Cluster Session Key established: %02x...", s.crypto.clusterSessionKey[:4]))
 

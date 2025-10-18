@@ -71,7 +71,7 @@ func main() {
 
 	// Initialize TCP transport.
 	msgChan := make(chan util.Message)
-	transport, err := util.NewTCPTransport(config.Server, msgChan, config.Cluster.MemberID, config.ClusterID)
+	transport, err := util.NewTCPTransport(config.Server, msgChan, config.GetMemberID(), config.ClusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to connect to server: %v\n", err)
 		os.Exit(1)
@@ -79,7 +79,7 @@ func main() {
 
 	util.EnableRawMode()
 	transport.Send(util.Message{
-		SenderID:   config.Cluster.MemberID,
+		SenderID:   config.GetMemberID(),
 		SenderName: config.Name,
 		Type:       util.LeaderAuthMsg,
 		ClusterID:  config.ClusterID,
@@ -120,7 +120,7 @@ func main() {
 
 			transport.Send(util.Message{
 				ClusterID:  config.ClusterID,
-				SenderID:   config.Cluster.MemberID,
+				SenderID:   config.GetMemberID(),
 				SenderName: config.Name,
 				Type:       util.QKDIDMemberMsg,
 				Content:    keyID,
@@ -141,7 +141,7 @@ func main() {
 
 			transport.Send(util.Message{
 				ClusterID:  config.ClusterID,
-				SenderID:   config.Cluster.MemberID,
+				SenderID:   config.GetMemberID(),
 				ReceiverID: config.RightClusterID(),
 				SenderName: config.Name,
 				Type:       util.QKDIDLeaderMsg,

@@ -56,6 +56,14 @@ func (c *BaseConfig) RightClusterID() int {
 	return (c.ClusterID + 1) % c.Leader.NClusters
 }
 
+func (c *BaseConfig) GetMemberID() int {
+	memberID := 0
+	if c.HasCluster() {
+		memberID = c.Cluster.MemberID
+	}
+	return memberID
+}
+
 func (c *ClusterConfig) GetPublicKeys() [][gake.PkLen]byte {
 	data, err := os.ReadFile(c.PublicKeys)
 	if err != nil {
