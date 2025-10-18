@@ -29,8 +29,11 @@ s%.clean:
 	@cd server && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/s$*conf.json" 2>/dev/null
 
 mock:
-	@echo "[Make]: Running QKD mock leader..."
+	@echo "[Make]: Running ETSI API mock server..."
 	@cd qkd && CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go
+
+config:
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run util/cmd/main.go -m 3
 
 gen_2ake:
 	@echo "[Make]: Generating 2-AKE shared secret..."
