@@ -18,7 +18,7 @@ func main() {
 	}
 
 	// Load config.
-	config, err := util.GetConfig[util.MemberConfig](*path)
+	config, err := util.GetConfig[util.BaseConfig](*path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
@@ -26,7 +26,7 @@ func main() {
 
 	// Initialize TCP transport.
 	msgChan := make(chan util.Message)
-	transport, err := util.NewTCPTransport(config.Server, msgChan, config.ClusterConfig.MemberID, config.ClusterConfig.ClusterID)
+	transport, err := util.NewTCPTransport(config.Server, msgChan, config.Cluster.MemberID, config.ClusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to connect to server: %v\n", err)
 		os.Exit(1)
@@ -34,14 +34,14 @@ func main() {
 
 	util.EnableRawMode()
 	transport.Send(util.Message{
-		SenderID:   config.ClusterConfig.MemberID,
-		SenderName: config.ClusterConfig.Name(),
+		SenderID:   config.Cluster.MemberID,
+		SenderName: config.Name,
 		Type:       util.MemberAuthMsg,
-		ClusterID:  config.ClusterConfig.ClusterID,
+		ClusterID:  config.ClusterID,
 	})
 
 	// Initialize cluster protocol session.
-	session := cluster_protocol.NewSession(transport, config.ClusterConfig, msgChan)
+	session := cluster_protocol.NewSession(transport, config, msgChan)
 	session.Init()
 	go session.MessageHandler()
 

@@ -1,9 +1,10 @@
 {
   "server": "localhost:9000",
+  "name": "Charlie",
+  "clusterID": 0,
   "cluster": {
-    "clusterID": 0,
     "memberID": 2,
-    "names": ["Alice", "Bob", "Charlie", "Server1"],
+    "nMembers": 4,
     "publicKeys": "../.keys/cluster1_public_keys.json",
     "secretKey": "../.keys/clients/client3/secret.json"
   }

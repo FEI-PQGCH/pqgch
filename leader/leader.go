@@ -63,7 +63,7 @@ func main() {
 	}
 
 	// Load config.
-	config, err := util.GetConfig[util.LeaderConfig](*path)
+	config, err := util.GetConfig[util.BaseConfig](*path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
@@ -71,7 +71,7 @@ func main() {
 
 	// Initialize TCP transport.
 	msgChan := make(chan util.Message)
-	transport, err := util.NewTCPTransport(config.Server, msgChan, config.ClusterConfig.MemberID, config.ClusterConfig.ClusterID)
+	transport, err := util.NewTCPTransport(config.Server, msgChan, config.Cluster.MemberID, config.ClusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to connect to server: %v\n", err)
 		os.Exit(1)
@@ -79,10 +79,10 @@ func main() {
 
 	util.EnableRawMode()
 	transport.Send(util.Message{
-		SenderID:   config.ClusterConfig.MemberID,
-		SenderName: config.Name(),
+		SenderID:   config.Cluster.MemberID,
+		SenderName: config.Name,
 		Type:       util.LeaderAuthMsg,
-		ClusterID:  config.ClusterConfig.ClusterID,
+		ClusterID:  config.ClusterID,
 	})
 
 	msgsCluster, msgsLeader := demux(msgChan)
@@ -90,7 +90,7 @@ func main() {
 	// Initialize cluster transport and session.
 	clusterSession := cluster_protocol.NewLeaderSession(
 		transport,
-		config.ClusterConfig,
+		config,
 		msgsCluster,
 	)
 
@@ -109,9 +109,9 @@ func main() {
 	go leaderSession.MessageHandler()
 	go clusterSession.MessageHandler()
 
-	if config.ClusterConfig.IsClusterQKDUrl() {
+	if config.Cluster.HasQKDUrl() {
 		go func() {
-			key, keyID := util.RequestKey(config.ClusterConfig.ClusterQKDUrl())
+			key, keyID := util.RequestKey(config.Cluster.QKDUrl())
 
 			msgsCluster <- util.Message{
 				Type:    util.QKDClusterKeyMsg,
@@ -119,9 +119,9 @@ func main() {
 			}
 
 			transport.Send(util.Message{
-				ClusterID:  config.ClusterConfig.ClusterID,
-				SenderID:   config.ClusterConfig.MemberID,
-				SenderName: config.Name(),
+				ClusterID:  config.ClusterID,
+				SenderID:   config.Cluster.MemberID,
+				SenderName: config.Name,
 				Type:       util.QKDIDMemberMsg,
 				Content:    keyID,
 			})
@@ -130,9 +130,9 @@ func main() {
 
 	// If two leaders use QKD, one of them (this one) fetches the key
 	// and sends the key ID to his right neighbor.
-	if config.IsRightQKDUrl() {
+	if config.Leader.HasRightQKDUrl() {
 		go func() {
-			key, keyID := util.RequestKey(config.RightQKDUrl())
+			key, keyID := util.RequestKey(config.Leader.RightQKDUrl())
 
 			msgsLeader <- util.Message{
 				Type:    util.QKDRightKeyMsg,
@@ -140,10 +140,10 @@ func main() {
 			}
 
 			transport.Send(util.Message{
-				ClusterID:  config.ClusterConfig.ClusterID,
-				SenderID:   config.ClusterConfig.MemberID,
-				ReceiverID: config.RightIndex(),
-				SenderName: config.Name(),
+				ClusterID:  config.ClusterID,
+				SenderID:   config.Cluster.MemberID,
+				ReceiverID: config.RightClusterID(),
+				SenderName: config.Name,
 				Type:       util.QKDIDLeaderMsg,
 				Content:    keyID,
 			})

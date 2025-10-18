@@ -132,7 +132,7 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 }
 
 // Encrypt and HMAC the Main Session Key with the Cluster Session Key for transpot to the cluster members.
-func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessionKey [2 * gake.SsLen]byte) (string, error) {
+func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, clusterSessionKey [2 * gake.SsLen]byte) (string, error) {
 	maskingKey, hmacKey, err := splitAndCheckKey(clusterSessionKey)
 	if err != nil {
 		return "", err

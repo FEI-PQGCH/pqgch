@@ -9,27 +9,27 @@ import (
 	"strings"
 )
 
-type ClusterConfig struct {
-	ClusterID  int      `json:"clusterID"`
-	MemberID   int      `json:"memberID,omitempty"`
-	Names      []string `json:"names,omitempty"`
-	PublicKeys string   `json:"publicKeys,omitempty"`
-	SecretKey  string   `json:"secretKey,omitempty"`
-	Crypto     string   `json:"crypto,omitempty"`
+type BaseConfig struct {
+	Server    string         `json:"server"`
+	Name      string         `json:"name"`
+	ClusterID int            `json:"clusterID"`
+	Cluster   *ClusterConfig `json:"cluster,omitempty"`
+	Leader    *LeaderConfig  `json:"leaders,omitempty"`
 }
 
-type MemberConfig struct {
-	ClusterConfig ClusterConfig `json:"cluster"`
-	Server        string        `json:"server"`
+type ClusterConfig struct {
+	NMembers   int    `json:"nMembers"`
+	MemberID   int    `json:"memberID"`
+	PublicKeys string `json:"publicKeys,omitempty"`
+	SecretKey  string `json:"secretKey,omitempty"`
+	Crypto     string `json:"crypto,omitempty"`
 }
 
 type LeaderConfig struct {
-	ClusterConfig ClusterConfig `json:"cluster"`
-	Server        string        `json:"server"`
-	LeaderNames   []string      `json:"leaderNames"`
-	SecretKey     string        `json:"secretKey"`
-	LeftCrypto    string        `json:"leftCrypto"`
-	RightCrypto   string        `json:"rightCrypto"`
+	NClusters   int    `json:"nClusters"`
+	LeftCrypto  string `json:"leftCrypto"`
+	RightCrypto string `json:"rightCrypto"`
+	SecretKey   string `json:"secretKey"`
 }
 
 func GetConfig[T any](path string) (T, error) {
@@ -46,6 +46,14 @@ func GetConfig[T any](path string) (T, error) {
 	}
 
 	return config, nil
+}
+
+func (c *BaseConfig) HasCluster() bool {
+	return c.Cluster != nil
+}
+
+func (c *BaseConfig) RightClusterID() int {
+	return (c.ClusterID + 1) % c.Leader.NClusters
 }
 
 func (c *ClusterConfig) GetPublicKeys() [][gake.PkLen]byte {
@@ -78,48 +86,26 @@ func (c *ClusterConfig) IsClusterQKDPath() bool {
 	return strings.HasPrefix(strings.ToLower(c.Crypto), "path ")
 }
 
-func (c *ClusterConfig) clusterQKDPath() string {
-	return strings.TrimSpace(c.Crypto[5:])
-}
-
 func (c *ClusterConfig) ClusterQKDKeyFromFile() ([2 * gake.SsLen]byte, error) {
 	var key [2 * gake.SsLen]byte
-	raw := openAndDecodeKey(c.clusterQKDPath(), 2*gake.SsLen)
+	raw := openAndDecodeKey(strings.TrimSpace(c.Crypto[5:]), 2*gake.SsLen)
 	copy(key[:], raw)
 	return key, nil
 }
 
-func (c *ClusterConfig) Name() string {
-	if c == nil {
-		return ""
-	}
-	return c.Names[c.MemberID]
+func (c *ClusterConfig) RightMemberID() int {
+	return (c.MemberID + 1) % c.NMembers
 }
 
-func (c *ClusterConfig) RightIndex() int {
-	return (c.MemberID + 1) % len(c.Names)
-}
-
-func (c *ClusterConfig) IsClusterQKDUrl() bool {
+func (c *ClusterConfig) HasQKDUrl() bool {
 	if c == nil {
 		return false
 	}
 	return strings.HasPrefix(strings.ToLower(c.Crypto), "url ")
 }
 
-func (c *ClusterConfig) ClusterQKDUrl() string {
+func (c *ClusterConfig) QKDUrl() string {
 	return strings.TrimSpace(c.Crypto[4:])
-}
-
-func (c *ClusterConfig) GetIndex() int {
-	if c == nil {
-		return -1
-	}
-	return c.MemberID
-}
-
-func (c *ClusterConfig) HasCluster() bool {
-	return len(c.Crypto) != 0 || len(c.PublicKeys) != 0 || len(c.SecretKey) != 0
 }
 
 func (c *LeaderConfig) GetSecretKey() []byte {
@@ -127,23 +113,19 @@ func (c *LeaderConfig) GetSecretKey() []byte {
 	return raw
 }
 
-func (c *LeaderConfig) RightIndex() int {
-	return (c.ClusterConfig.ClusterID + 1) % len(c.LeaderNames)
-}
-
-func (c *LeaderConfig) IsLeftQKDUrl() bool {
+func (c *LeaderConfig) HasLeftQKDUrl() bool {
 	return strings.HasPrefix(strings.ToLower(c.LeftCrypto), "url ")
 }
 
-func (c *LeaderConfig) IsLeftQKDPath() bool {
+func (c *LeaderConfig) HasLeftQKDPath() bool {
 	return strings.HasPrefix(strings.ToLower(c.LeftCrypto), "path ")
 }
 
-func (c *LeaderConfig) IsRightQKDUrl() bool {
+func (c *LeaderConfig) HasRightQKDUrl() bool {
 	return strings.HasPrefix(strings.ToLower(c.RightCrypto), "url ")
 }
 
-func (c *LeaderConfig) IsRightQKDPath() bool {
+func (c *LeaderConfig) HasRightQKDPath() bool {
 	return strings.HasPrefix(strings.ToLower(c.RightCrypto), "path ")
 }
 
@@ -181,13 +163,6 @@ func (c *LeaderConfig) RightQKDKey() [gake.SsLen]byte {
 	var out [gake.SsLen]byte
 	copy(out[:], raw)
 	return out
-}
-
-func (c *LeaderConfig) Name() string {
-	if c == nil {
-		return ""
-	}
-	return c.LeaderNames[c.ClusterConfig.ClusterID]
 }
 
 func openAndDecodeKey(path string, expectLen int) []byte {
