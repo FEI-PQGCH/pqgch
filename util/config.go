@@ -13,24 +13,55 @@ import (
 type BaseConfig struct {
 	Server    string         `json:"server"`
 	Name      string         `json:"name"`
-	ClusterID int            `json:"clusterID"`
+	ClusterID *int           `json:"clusterID"`
 	Cluster   *ClusterConfig `json:"cluster,omitempty"`
 	Leader    *LeaderConfig  `json:"leaders,omitempty"`
 }
 
 type ClusterConfig struct {
-	NMembers   int    `json:"nMembers"`
-	MemberID   int    `json:"memberID"`
+	NMembers   *int   `json:"nMembers"`
+	MemberID   *int   `json:"memberID"`
 	PublicKeys string `json:"publicKeys,omitempty"`
 	SecretKey  string `json:"secretKey,omitempty"`
 	Crypto     string `json:"crypto,omitempty"`
 }
 
 type LeaderConfig struct {
-	NClusters   int    `json:"nClusters"`
+	NClusters   *int   `json:"nClusters"`
 	LeftCrypto  string `json:"leftCrypto"`
 	RightCrypto string `json:"rightCrypto"`
 	SecretKey   string `json:"secretKey"`
+}
+
+func (c *BaseConfig) validate() []string {
+	var errs []string
+
+	if strings.TrimSpace(c.Server) == "" {
+		errs = append(errs, "missing required field: server")
+	}
+	if strings.TrimSpace(c.Name) == "" {
+		errs = append(errs, "missing required field: name")
+	}
+	if c.ClusterID == nil || *c.ClusterID < 0 {
+		errs = append(errs, "clusterID must be set and >= 0")
+	}
+
+	if len(errs) > 0 {
+		return errs
+	}
+
+	if c.Cluster != nil {
+		if err := c.Cluster.validate(); err != nil {
+			errs = append(errs, err...)
+		}
+	}
+	if c.Leader != nil {
+		if err := c.Leader.validate(); err != nil {
+			errs = append(errs, err...)
+		}
+	}
+
+	return errs
 }
 
 func exactlyOne(bools ...bool) bool {
@@ -46,48 +77,18 @@ func exactlyOne(bools ...bool) bool {
 	return count == 1
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func (c *BaseConfig) Validate() error {
+func (c *ClusterConfig) validate() []string {
 	var errs []string
 
-	if strings.TrimSpace(c.Server) == "" {
-		errs = append(errs, "missing required field: server")
+	if c.NMembers == nil || *c.NMembers <= 0 {
+		errs = append(errs, "nMembers must be set and > 0")
 	}
-	if strings.TrimSpace(c.Name) == "" {
-		errs = append(errs, "missing required field: name")
-	}
-	if c.ClusterID < 0 {
-		errs = append(errs, "clusterID must be ≥ 0")
-	}
-
-	if c.Cluster != nil {
-		if err := c.Cluster.Validate(); err != nil {
-			errs = append(errs, prefixErrLines("cluster", err)...)
-		}
-	}
-	if c.Leader != nil {
-		if err := c.Leader.Validate(); err != nil {
-			errs = append(errs, prefixErrLines("leaders", err)...)
-		}
+	if c.MemberID == nil || *c.MemberID < 0 {
+		errs = append(errs, "memberID must be set and >= 0")
 	}
 
 	if len(errs) > 0 {
-		return logError(errs)
-	}
-	return nil
-}
-
-func (c *ClusterConfig) Validate() error {
-	var errs []string
-
-	if c.NMembers <= 0 {
-		errs = append(errs, "nMembers must be > 0")
+		return errs
 	}
 
 	hasCrypto := strings.TrimSpace(c.Crypto) != ""
@@ -115,17 +116,16 @@ func (c *ClusterConfig) Validate() error {
 				errs = append(errs, fmt.Sprintf("QKD key at path is invalid: %v", err))
 			}
 		case strings.HasPrefix(low, "url "):
-			errs = append(errs, "crypto must not be URL; only 'path <file>' is allowed for clusters")
 		default:
-			errs = append(errs, "crypto must start with 'path ' and point to a JSON-wrapped QKD key")
+			errs = append(errs, "crypto must start with 'path ' and point to a JSON-wrapped QKD key or with 'url ' and contain an URL to the ETSI server")
 		}
 	}
 
 	if !hasCrypto {
 		if !hasPK || !hasSK {
-			errs = append(errs, "classical mode requires both: publicKeys and secretKey")
+			errs = append(errs, "Kyber-GAKE mode requires both: publicKeys and secretKey")
 		} else {
-			if err := validatePublicKeysFile(c.PublicKeys, c.NMembers); err != nil {
+			if err := validatePublicKeysFile(c.PublicKeys, *c.NMembers); err != nil {
 				errs = append(errs, fmt.Sprintf("publicKeys file invalid: %v", err))
 			}
 			if err := validateJSONKeyLen(c.SecretKey, gake.SkLen); err != nil {
@@ -134,17 +134,14 @@ func (c *ClusterConfig) Validate() error {
 		}
 	}
 
-	if len(errs) > 0 {
-		return logError(errs)
-	}
-	return nil
+	return errs
 }
 
-func (c *LeaderConfig) Validate() error {
+func (c *LeaderConfig) validate() []string {
 	var errs []string
 
-	if c.NClusters <= 0 {
-		errs = append(errs, "nClusters must be > 0")
+	if c.NClusters == nil || *c.NClusters <= 0 {
+		errs = append(errs, "nClusters must be set and > 0")
 	}
 	if strings.TrimSpace(c.SecretKey) == "" {
 		errs = append(errs, "missing required field: secretKey")
@@ -152,60 +149,47 @@ func (c *LeaderConfig) Validate() error {
 		errs = append(errs, fmt.Sprintf("secretKey file invalid: %v", err))
 	}
 
-	checkPKFile := func(label, v string) {
-		vtrim := strings.TrimSpace(v)
-		if vtrim == "" {
-			errs = append(errs, fmt.Sprintf("missing required field: %s (must be PK file path)", label))
+	if len(errs) > 0 {
+		return errs
+	}
+
+	checkPKFile := func(key, value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			errs = append(errs, fmt.Sprintf("missing required field: %s (must be PK file path, QKD secret key file path or an URL to the ETSI server)", key))
 			return
 		}
-		low := strings.ToLower(vtrim)
-		if strings.HasPrefix(low, "url ") || strings.HasPrefix(low, "path ") {
-			errs = append(errs, fmt.Sprintf("%s must be a PK file path (no 'url ' or 'path ' allowed for leaders)", label))
+
+		low := strings.ToLower(value)
+
+		if strings.HasPrefix(low, "path ") {
+			p := strings.TrimSpace(value[5:])
+			if err := validateJSONKeyLen(p, gake.SsLen); err != nil {
+				errs = append(errs, fmt.Sprintf("QKD key at path is invalid: %v", err))
+			}
 			return
 		}
-		if err := validateJSONKeyLen(vtrim, gake.PkLen); err != nil {
-			errs = append(errs, fmt.Sprintf("%s public key file invalid: %v", label, err))
+		if strings.HasPrefix(low, "url ") {
+			return
+		}
+		if err := validateJSONKeyLen(value, gake.PkLen); err != nil {
+			errs = append(errs, fmt.Sprintf("%s public key file invalid: %v", key, err))
 		}
 	}
 
 	checkPKFile("leftCrypto", c.LeftCrypto)
 	checkPKFile("rightCrypto", c.RightCrypto)
 
-	if len(errs) > 0 {
-		return logError(errs)
-	}
-	return nil
+	return errs
 }
 
 func logError(lines []string) error {
-	seen := map[string]struct{}{}
 	var buf strings.Builder
-	buf.WriteString("Invalid configuration:\n")
+	buf.WriteString("invalid configuration:\n")
 	for _, l := range lines {
-		if _, ok := seen[l]; ok {
-			continue
-		}
-		seen[l] = struct{}{}
-		buf.WriteString("  • ")
-		buf.WriteString(l)
-		buf.WriteByte('\n')
+		buf.WriteString("- " + l + "\n")
 	}
 	return errors.New(strings.TrimRight(buf.String(), "\n"))
-}
-
-func prefixErrLines(prefix string, err error) []string {
-	if err == nil {
-		return nil
-	}
-	out := []string{}
-	for _, l := range strings.Split(err.Error(), "\n") {
-		l = strings.TrimSpace(l)
-		if l == "" || strings.HasPrefix(l, "Invalid configuration:") {
-			continue
-		}
-		out = append(out, fmt.Sprintf("%s: %s", prefix, strings.TrimPrefix(l, "• ")))
-	}
-	return out
 }
 
 func validateJSONKeyLen(path string, expectLen int) error {
@@ -219,37 +203,13 @@ func validateJSONKeyLen(path string, expectLen int) error {
 	return nil
 }
 
-func validatePublicKeysFile(path string, wantAtLeast int) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("cannot read publicKeys file %q: %w", path, err)
-	}
-	var blob struct {
-		PublicKeys []string `json:"publicKeys"`
-	}
-	if err := json.Unmarshal(data, &blob); err != nil {
-		return fmt.Errorf("invalid JSON in %q: %w", path, err)
-	}
-	if len(blob.PublicKeys) == 0 {
-		return fmt.Errorf("publicKeys array is empty in %q", path)
-	}
-	if wantAtLeast > 0 && len(blob.PublicKeys) < wantAtLeast {
-		return fmt.Errorf("publicKeys count (%d) is less than nMembers (%d)", len(blob.PublicKeys), wantAtLeast)
-	}
-	for i, s := range blob.PublicKeys {
-		raw, err := base64.StdEncoding.DecodeString(s)
-		if err != nil {
-			return fmt.Errorf("publicKeys[%d] is not valid base64", i)
-		}
-		if len(raw) != gake.PkLen {
-			return fmt.Errorf("publicKeys[%d] has wrong length: expected %d, got %d", i, gake.PkLen, len(raw))
-		}
-	}
-	return nil
+func validatePublicKeysFile(path string, n int) error {
+	_, err := getPublicKeys(path, n)
+	return err
 }
 
-func GetConfig[T any](path string) (T, error) {
-	var config T
+func GetConfig(path string) (BaseConfig, error) {
+	var config BaseConfig
 
 	configFile, err := os.Open(path)
 	if err != nil {
@@ -261,11 +221,11 @@ func GetConfig[T any](path string) (T, error) {
 		return config, fmt.Errorf("invalid JSON in %q: %w", path, err)
 	}
 
-	if validator, ok := any(&config).(interface{ Validate() error }); ok {
-		if err := validator.Validate(); err != nil {
-			return config, err
-		}
+	errs := config.validate()
+	if len(errs) > 0 {
+		return config, logError(errs)
 	}
+
 	return config, nil
 }
 
@@ -274,36 +234,22 @@ func (c *BaseConfig) HasCluster() bool {
 }
 
 func (c *BaseConfig) RightClusterID() int {
-	return (c.ClusterID + 1) % c.Leader.NClusters
+	return (*c.ClusterID + 1) % *c.Leader.NClusters
 }
 
 func (c *BaseConfig) GetMemberID() int {
-	memberID := 0
 	if c.HasCluster() {
-		memberID = c.Cluster.MemberID
+		return *c.Cluster.MemberID
 	}
-	return memberID
+	return 0
 }
 
 func (c *ClusterConfig) GetPublicKeys() [][gake.PkLen]byte {
-	data, err := os.ReadFile(c.PublicKeys)
+	pks, err := getPublicKeys(c.PublicKeys, *c.NMembers)
 	if err != nil {
-		ExitWithMsg(fmt.Sprintf("couldn't load cluster public keys from %s: %v", c.PublicKeys, err))
+		ExitWithMsg(fmt.Sprintf("failed to load cluster PKs from file %s, error: %v", c.PublicKeys, err))
 	}
-
-	var blob struct {
-		PublicKeys []string `json:"publicKeys"`
-	}
-
-	if err := json.Unmarshal(data, &blob); err != nil {
-		ExitWithMsg(fmt.Sprintf("bad JSON in %s: %v", c.PublicKeys, err))
-	}
-
-	out := make([][gake.PkLen]byte, len(blob.PublicKeys))
-	for i := range blob.PublicKeys {
-		out[i] = decodePublicKey(blob.PublicKeys[i])
-	}
-	return out
+	return pks
 }
 
 func (c *ClusterConfig) GetSecretKey() []byte {
@@ -323,7 +269,7 @@ func (c *ClusterConfig) ClusterQKDKeyFromFile() ([2 * gake.SsLen]byte, error) {
 }
 
 func (c *ClusterConfig) RightMemberID() int {
-	return (c.MemberID + 1) % c.NMembers
+	return (*c.MemberID + 1) % *c.NMembers
 }
 
 func (c *ClusterConfig) HasQKDUrl() bool {
@@ -394,6 +340,38 @@ func (c *LeaderConfig) RightQKDKey() [gake.SsLen]byte {
 	return out
 }
 
+func getPublicKeys(path string, n int) ([][gake.PkLen]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read publicKeys file %q: %w", path, err)
+	}
+	var blob struct {
+		PublicKeys []string `json:"publicKeys"`
+	}
+	if err := json.Unmarshal(data, &blob); err != nil {
+		return nil, fmt.Errorf("invalid JSON in %q: %w", path, err)
+	}
+	if len(blob.PublicKeys) == 0 {
+		return nil, fmt.Errorf("publicKeys array is empty in %q", path)
+	}
+	if len(blob.PublicKeys) != n {
+		return nil, fmt.Errorf("publicKeys count (%d) is not equal to nMembers (%d)", len(blob.PublicKeys), n)
+	}
+
+	out := make([][gake.PkLen]byte, len(blob.PublicKeys))
+	for i, s := range blob.PublicKeys {
+		raw, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			return nil, fmt.Errorf("publicKeys[%d] is not valid base64", i)
+		}
+		if len(raw) != gake.PkLen {
+			return nil, fmt.Errorf("publicKeys[%d] has wrong length: expected %d, got %d", i, gake.PkLen, len(raw))
+		}
+		copy(out[i][:], raw[:])
+	}
+	return out, nil
+}
+
 func openAndDecodeKey(path string, expectLen int) []byte {
 	raw, err := loadJSONKey(path)
 	if err != nil {
@@ -421,11 +399,4 @@ func loadJSONKey(path string) ([]byte, error) {
 		return raw, nil
 	}
 	return nil, fmt.Errorf("key in %q is invalid base64", path)
-}
-
-func decodePublicKey(key string) [gake.PkLen]byte {
-	var decoded [gake.PkLen]byte
-	raw, _ := base64.StdEncoding.DecodeString(key)
-	copy(decoded[:], raw)
-	return decoded
 }

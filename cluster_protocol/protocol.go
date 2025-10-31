@@ -23,10 +23,10 @@ type CryptoSession struct {
 
 func NewCryptoSession(config util.BaseConfig) CryptoSession {
 	return CryptoSession{
-		xs:          make([][gake.SsLen]byte, config.Cluster.NMembers),
-		commitments: make([]gake.Commitment, config.Cluster.NMembers),
-		rs:          make([][gake.CoinLen]byte, config.Cluster.NMembers),
-		pids:        make([]string, config.Cluster.NMembers),
+		xs:          make([][gake.SsLen]byte, *config.Cluster.NMembers),
+		commitments: make([]gake.Commitment, *config.Cluster.NMembers),
+		rs:          make([][gake.CoinLen]byte, *config.Cluster.NMembers),
+		pids:        make([]string, *config.Cluster.NMembers),
 	}
 }
 
@@ -108,7 +108,7 @@ func NewLeaderSession(
 
 		msg := util.Message{
 			SenderID:   s.config.GetMemberID(),
-			ClusterID:  s.config.ClusterID,
+			ClusterID:  *s.config.ClusterID,
 			Type:       util.KeyMsg,
 			Content:    key,
 			SenderName: s.config.Name,
@@ -146,7 +146,7 @@ func (s *Session) Init() {
 		SenderName: s.config.Name,
 		Type:       util.AkeOneMsg,
 		ReceiverID: s.config.Cluster.RightMemberID(),
-		ClusterID:  s.config.ClusterID,
+		ClusterID:  *s.config.ClusterID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendARight),
 	}
 	go s.sender.Send(msg)
@@ -183,7 +183,7 @@ func (s *Session) onAkeOne(msg util.Message) {
 		SenderName: s.config.Name,
 		Type:       util.AkeTwoMsg,
 		ReceiverID: msg.SenderID,
-		ClusterID:  s.config.ClusterID,
+		ClusterID:  *s.config.ClusterID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
 	}
 	s.sender.Send(msg)
@@ -326,7 +326,7 @@ func (s *Session) SendText(text string) {
 		SenderID:   s.config.GetMemberID(),
 		SenderName: s.config.Name,
 		Content:    cipherText,
-		ClusterID:  s.config.ClusterID,
+		ClusterID:  *s.config.ClusterID,
 		Type:       util.TextMsg,
 	}
 	go s.sender.Send(msg)
@@ -375,7 +375,7 @@ func getXiCommitmentCoinMsg(session *CryptoSession, config util.BaseConfig) util
 		SenderID:   config.GetMemberID(),
 		SenderName: config.Name,
 		Type:       util.XiRiCommitmentMsg,
-		ClusterID:  config.ClusterID,
+		ClusterID:  *config.ClusterID,
 		Content:    base64.StdEncoding.EncodeToString(content),
 	}
 
@@ -416,7 +416,7 @@ func (s *Session) tryFinalizeProtocol() {
 		util.LogCrypto(fmt.Sprintf("X%d: %02x", i, x[:4]))
 	}
 
-	ok := util.CheckXs(s.crypto.xs, s.config.Cluster.NMembers)
+	ok := util.CheckXs(s.crypto.xs, *s.config.Cluster.NMembers)
 	if !ok {
 		util.ExitWithMsg("Failed XS check")
 	}
@@ -429,15 +429,15 @@ func (s *Session) tryFinalizeProtocol() {
 	util.LogCrypto("Commitments check: success")
 
 	util.LogCrypto(fmt.Sprintf("Establishing Cluster Session Key for Group: %s", s.crypto.pids))
-	PIDs := make([][gake.PidLen]byte, s.config.Cluster.NMembers)
+	PIDs := make([][gake.PidLen]byte, *s.config.Cluster.NMembers)
 	for i, n := range s.crypto.pids {
 		var byteArr [gake.PidLen]byte
 		copy(byteArr[:], []byte(n))
 		PIDs[i] = byteArr
 	}
 
-	otherLeftKeys := util.ComputeAllLeftKeys(s.config.Cluster.NMembers, s.config.GetMemberID(), s.crypto.keyLeft, s.crypto.xs, PIDs)
-	s.crypto.clusterSessionKey = computeSharedSecret(otherLeftKeys, PIDs, s.config.Cluster.NMembers)
+	otherLeftKeys := util.ComputeAllLeftKeys(*s.config.Cluster.NMembers, s.config.GetMemberID(), s.crypto.keyLeft, s.crypto.xs, PIDs)
+	s.crypto.clusterSessionKey = computeSharedSecret(otherLeftKeys, PIDs, *s.config.Cluster.NMembers)
 	util.LogCrypto(fmt.Sprintf("Cluster Session Key established: %02x...", s.crypto.clusterSessionKey[:4]))
 
 	s.transportMainSessionKey()

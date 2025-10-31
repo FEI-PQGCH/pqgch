@@ -46,7 +46,7 @@ func NewSession(sender util.MessageSender, config util.BaseConfig, clusterSessio
 	s := &Session{
 		receiveChan:        receiveChan,
 		sender:             sender,
-		crypto:             NewCryptoSession(config.Leader.NClusters),
+		crypto:             NewCryptoSession(*config.Leader.NClusters),
 		config:             config,
 		clusterSessionChan: clusterSessionChan,
 	}
@@ -81,7 +81,7 @@ func (s *Session) Init() {
 			Type:       util.LeadAkeOneMsg,
 			ReceiverID: s.config.RightClusterID(),
 			Content:    base64.StdEncoding.EncodeToString(akeSendARight),
-			ClusterID:  s.config.ClusterID,
+			ClusterID:  *s.config.ClusterID,
 		}
 
 		go s.sender.Send(msg)
@@ -116,7 +116,7 @@ func (s *Session) onAkeOne(recv util.Message) {
 		Type:       util.LeadAkeTwoMsg,
 		ReceiverID: recv.ClusterID,
 		Content:    base64.StdEncoding.EncodeToString(akeSendB),
-		ClusterID:  s.config.ClusterID,
+		ClusterID:  *s.config.ClusterID,
 	}
 	s.sender.Send(msg)
 
@@ -242,10 +242,10 @@ func (s *Session) getXiRiCommitmentMsg() util.Message {
 	x := append(xi[:], ri[:]...)
 	commitment := sha256.Sum256(x)
 
-	s.crypto.xs[s.config.ClusterID] = xi
-	s.crypto.commitments[s.config.ClusterID] = commitment
-	s.crypto.rs[s.config.ClusterID] = ri
-	s.crypto.pids[s.config.ClusterID] = s.config.Name
+	s.crypto.xs[*s.config.ClusterID] = xi
+	s.crypto.commitments[*s.config.ClusterID] = commitment
+	s.crypto.rs[*s.config.ClusterID] = ri
+	s.crypto.pids[*s.config.ClusterID] = s.config.Name
 
 	content := append(append(xi[:], commitment[:]...), ri[:]...)
 	msg := util.Message{
@@ -253,7 +253,7 @@ func (s *Session) getXiRiCommitmentMsg() util.Message {
 		SenderName: s.config.Name,
 		Type:       util.LeaderXiRiCommitmentMsg,
 		Content:    base64.StdEncoding.EncodeToString(content),
-		ClusterID:  s.config.ClusterID,
+		ClusterID:  *s.config.ClusterID,
 	}
 
 	return msg
@@ -274,28 +274,28 @@ func (s *Session) tryFinalizeProtocol() {
 	}
 	util.LogCrypto("Received all Xs")
 
-	ok := util.CheckXs(s.crypto.xs, s.config.Leader.NClusters)
+	ok := util.CheckXs(s.crypto.xs, *s.config.Leader.NClusters)
 	if !ok {
 		util.ExitWithMsg("Failed XS check")
 	}
 	util.LogCrypto("Xs check: success")
 
-	ok = checkCommitments(s.config.Leader.NClusters, s.crypto.xs, s.crypto.rs, s.crypto.commitments)
+	ok = checkCommitments(*s.config.Leader.NClusters, s.crypto.xs, s.crypto.rs, s.crypto.commitments)
 	if !ok {
 		util.ExitWithMsg("Failed Commitments check")
 	}
 	util.LogCrypto("Commitments check: success")
 
 	util.LogCrypto(fmt.Sprintf("Establishing Main Session Key for Group: %s", s.crypto.pids))
-	PIDs := make([][gake.PidLen]byte, s.config.Leader.NClusters)
+	PIDs := make([][gake.PidLen]byte, *s.config.Leader.NClusters)
 	for i, n := range s.crypto.pids {
 		var byteArr [gake.PidLen]byte
 		copy(byteArr[:], []byte(n))
 		PIDs[i] = byteArr
 	}
 
-	otherLeftKeys := util.ComputeAllLeftKeys(s.config.Leader.NClusters, s.config.ClusterID, s.crypto.keyLeft, s.crypto.xs, PIDs)
-	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, s.config.Leader.NClusters)
+	otherLeftKeys := util.ComputeAllLeftKeys(*s.config.Leader.NClusters, *s.config.ClusterID, s.crypto.keyLeft, s.crypto.xs, PIDs)
+	sharedSecret := computeSharedSecret(otherLeftKeys, PIDs, *s.config.Leader.NClusters)
 
 	util.LogCrypto(fmt.Sprintf("Main Session Key established: %02x...", sharedSecret[:4]))
 	util.LogCrypto("You can now securely chat!")

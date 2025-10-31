@@ -161,9 +161,9 @@ func generateConfig() {
 		leaderConfig := util.BaseConfig{
 			Server:    server,
 			Name:      leaderName,
-			ClusterID: i,
+			ClusterID: &i,
 			Leader: &util.LeaderConfig{
-				NClusters:   nClusters,
+				NClusters:   &nClusters,
 				LeftCrypto:  leftCryptoPath,
 				RightCrypto: rightCryptoPath,
 				SecretKey:   skPath,
@@ -171,9 +171,10 @@ func generateConfig() {
 		}
 
 		if nMembers > 1 {
+			memberID := nMembers - 1
 			leaderConfig.Cluster = &util.ClusterConfig{
-				NMembers:   nMembers,
-				MemberID:   nMembers - 1,
+				NMembers:   &nMembers,
+				MemberID:   &memberID,
 				PublicKeys: clusterPksPath,
 				SecretKey:  clusterSkPath,
 			}
@@ -193,10 +194,10 @@ func generateConfig() {
 			memberConfig := util.BaseConfig{
 				Server:    server,
 				Name:      memberName,
-				ClusterID: i,
+				ClusterID: &i,
 				Cluster: &util.ClusterConfig{
-					MemberID:   j,
-					NMembers:   nMembers,
+					MemberID:   &j,
+					NMembers:   &nMembers,
 					PublicKeys: pksPath,
 					SecretKey:  skPath,
 				},

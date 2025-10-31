@@ -18,7 +18,7 @@ func main() {
 	}
 
 	// Load config.
-	config, err := util.GetConfig[util.BaseConfig](*path)
+	config, err := util.GetConfig(*path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
@@ -26,7 +26,7 @@ func main() {
 
 	// Initialize TCP transport.
 	msgChan := make(chan util.Message)
-	transport, err := util.NewTCPTransport(config.Server, msgChan, config.GetMemberID(), config.ClusterID)
+	transport, err := util.NewTCPTransport(config.Server, msgChan, config.GetMemberID(), *config.ClusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to connect to server: %v\n", err)
 		os.Exit(1)
@@ -37,7 +37,7 @@ func main() {
 		SenderID:   config.GetMemberID(),
 		SenderName: config.Name,
 		Type:       util.MemberAuthMsg,
-		ClusterID:  config.ClusterID,
+		ClusterID:  *config.ClusterID,
 	})
 
 	// Initialize cluster protocol session.
