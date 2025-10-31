@@ -32,7 +32,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	util.EnableRawMode()
+	// Log in to the routing server.
 	transport.Send(util.Message{
 		SenderID:   config.GetMemberID(),
 		SenderName: config.Name,

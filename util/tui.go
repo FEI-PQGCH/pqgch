@@ -4,9 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
-	"unsafe"
+
+	"golang.org/x/term"
 )
 
 const (
@@ -15,63 +14,6 @@ const (
 	cursorShow    = esc + "?25h"
 	cursorHide    = esc + "?25l"
 )
-
-type winsize struct {
-	rows    uint16
-	cols    uint16
-	xpixels uint16
-	ypixels uint16
-}
-
-func getTerminalWidth() (cols int) {
-	ws := &winsize{}
-	_, _, errno := syscall.Syscall(
-		syscall.SYS_IOCTL,
-		uintptr(syscall.Stdin),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(ws)),
-	)
-	if errno != 0 {
-		panic(errno)
-	}
-	return int(ws.cols)
-}
-
-var oldTermios syscall.Termios
-
-func EnableRawMode() {
-	fd := int(os.Stdin.Fd())
-	var newt syscall.Termios
-
-	syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(fd),
-		uintptr(syscall.TCGETS),
-		uintptr(unsafe.Pointer(&oldTermios)),
-	)
-
-	newt = oldTermios
-	newt.Lflag &^= (syscall.ICANON | syscall.ECHO)
-	newt.Cc[syscall.VMIN] = 1
-	newt.Cc[syscall.VTIME] = 0
-
-	syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(fd),
-		uintptr(syscall.TCSETS),
-		uintptr(unsafe.Pointer(&newt)),
-	)
-
-	fmt.Print(cursorHide)
-}
-
-func disableRawMode() {
-	fd := int(os.Stdin.Fd())
-	syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(fd),
-		uintptr(syscall.TCSETS),
-		uintptr(unsafe.Pointer(&oldTermios)),
-	)
-	fmt.Print(cursorShow)
-}
 
 type Color string
 
@@ -136,12 +78,18 @@ func ExitWithMsg(msg string) {
 }
 
 func exit() {
-	disableRawMode()
+	term.Restore(int(os.Stdin.Fd()), oldState)
+	fmt.Print("\r")
+	fmt.Print(cursorShow)
 	os.Exit(0)
 }
 
 func printPrompt(input string) {
-	terminalWidth := getTerminalWidth()
+	terminalWidth, _, err := term.GetSize(int(os.Stdin.Fd()))
+	if err != nil {
+		terminalWidth = 80
+	}
+
 	promptLen := len(input) + 2
 	start := max(promptLen-terminalWidth, 0)
 	clearLine()
@@ -158,57 +106,61 @@ func clearLine() {
 	fmt.Print("\r" + clearLineCode)
 }
 
-func StartTUI(onLine func(string)) {
-	// Initialization
-	defer disableRawMode()
+var oldState *term.State
 
-	// CTRL-C handler
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sig
-		exit()
-	}()
+func StartTUI(onLine func(string)) {
+	var err error
+	oldState, err = term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	fmt.Print(cursorHide)
+	defer fmt.Print(cursorShow)
 
 	printPrompt("")
-	// Input loop
-	inputReader := bufio.NewReader(os.Stdin)
-	keyboardCh := make(chan rune, 256)
+
+	reader := bufio.NewReader(os.Stdin)
+	chars := make(chan rune, 256)
 	go func() {
 		for {
-			r, _, err := inputReader.ReadRune()
+			r, _, err := reader.ReadRune()
 			if err != nil {
-				close(keyboardCh)
+				close(chars)
 				return
+			}
+			// CTRL-C
+			if r == '\x03' {
+				exit()
 			}
 			// ESC
 			if r == '\x1b' {
-				if inputReader.Buffered() >= 2 {
-					r1, _, _ := inputReader.ReadRune()
-					r2, _, _ := inputReader.ReadRune()
-					// Keyboard arrows
-					if r1 == '[' {
-						switch r2 {
-						case 'A':
-							continue
-						case 'B':
-							continue
-						}
-					}
+				n := reader.Buffered()
+				if n > 0 {
+					reader.Discard(n)
 				} else {
 					exit()
 				}
 				continue
 			}
-			keyboardCh <- r
+			chars <- r
 		}
 	}()
 
+	// Input loop
 	input := []rune{}
 	for {
 		select {
-		case key := <-keyboardCh:
-			switch key {
+		case log := <-logChan:
+			clearLine()
+			fmt.Fprintln(os.Stderr, log)
+			printPrompt(string(input))
+		case msg := <-msgChan:
+			clearLine()
+			fmt.Fprintln(os.Stdout, msg)
+			printPrompt(string(input))
+		case r := <-chars:
+			switch r {
 			case '\r', '\n':
 				if len(input) == 0 {
 					printPrompt("")
@@ -216,33 +168,21 @@ func StartTUI(onLine func(string)) {
 				}
 				clearLine()
 				log := "You: " + string(input)
-				fmt.Fprintln(os.Stdout, colorize(log, ColorGreen)) // ✅ user messages to stdout
+				fmt.Fprintln(os.Stdout, colorize(log, ColorGreen))
+
 				onLine(string(input))
+
 				input = []rune{}
 				printPrompt("")
-				continue
 			case 127:
 				if len(input) > 0 {
 					input = input[:len(input)-1]
 				}
 				printPrompt(string(input))
-				continue
 			default:
-				input = append(input, key)
+				input = append(input, r)
 				printPrompt(string(input))
-				continue
 			}
-
-		case log := <-logChan:
-			clearLine()
-			fmt.Fprintln(os.Stderr, log)
-			printPrompt(string(input))
-
-		case msg := <-msgChan:
-			clearLine()
-			fmt.Fprintln(os.Stdout, msg)
-			printPrompt(string(input))
 		}
 	}
-
 }

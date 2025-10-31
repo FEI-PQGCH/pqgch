@@ -64,6 +64,16 @@ const (
 	MainSessionKeyMsg // Internal message used for transport from leader_protocol to cluster_protocol.
 )
 
+func (m *Message) IsClusterType() bool {
+	switch m.Type {
+	case AkeOneMsg, AkeTwoMsg, XiRiCommitmentMsg, KeyMsg,
+		MainSessionKeyMsg, QKDClusterKeyMsg, TextMsg:
+		return true
+	default:
+		return false
+	}
+}
+
 func (m Message) Send(conn net.Conn) error {
 	msgData, err := json.Marshal(m)
 	if err != nil {

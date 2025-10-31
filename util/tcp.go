@@ -82,6 +82,6 @@ func (t *TCPTransport) Send(msg Message) {
 
 	_, err = t.conn.Write(msgData)
 	if err != nil {
-		ExitWithMsg(fmt.Sprintf("failed to send message: %v\nexiting...", err))
+		ExitWithMsg(fmt.Sprintf("failed to send message: %v", err))
 	}
 }

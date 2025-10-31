@@ -9,7 +9,8 @@ import (
 	"pqgch/util"
 )
 
-func demux(in <-chan util.Message) (chan util.Message, chan util.Message) {
+// Demultiplex received messages into their corresponding sessions.
+func demuxMessages(in <-chan util.Message) (chan util.Message, chan util.Message) {
 	cluster := make(chan util.Message)
 	leader := make(chan util.Message)
 
@@ -17,35 +18,10 @@ func demux(in <-chan util.Message) (chan util.Message, chan util.Message) {
 		defer close(cluster)
 		defer close(leader)
 		for msg := range in {
-			switch msg.Type {
-			case util.AkeOneMsg:
-				fallthrough
-			case util.AkeTwoMsg:
-				fallthrough
-			case util.XiRiCommitmentMsg:
-				fallthrough
-			case util.KeyMsg:
-				fallthrough
-			case util.MainSessionKeyMsg:
-				fallthrough
-			case util.QKDClusterKeyMsg:
-				fallthrough
-			case util.TextMsg:
+			if msg.IsClusterType() {
 				cluster <- msg
-			case util.LeadAkeOneMsg:
-				fallthrough
-			case util.LeadAkeTwoMsg:
-				fallthrough
-			case util.LeaderXiRiCommitmentMsg:
-				fallthrough
-			case util.QKDLeftKeyMsg:
-				fallthrough
-			case util.QKDRightKeyMsg:
-				fallthrough
-			case util.QKDIDLeaderMsg:
+			} else {
 				leader <- msg
-			default:
-				util.LogError("Unknown message type encountered")
 			}
 		}
 	}()
@@ -54,7 +30,7 @@ func demux(in <-chan util.Message) (chan util.Message, chan util.Message) {
 }
 
 func main() {
-	// Parse command line flag.
+	// Parse command line flag for configuration filename.
 	path := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *path == "" {
@@ -77,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	util.EnableRawMode()
+	// Log in to the routing server.
 	transport.Send(util.Message{
 		SenderID:   config.GetMemberID(),
 		SenderName: config.Name,
@@ -85,7 +61,8 @@ func main() {
 		ClusterID:  config.ClusterID,
 	})
 
-	msgsCluster, msgsLeader := demux(msgChan)
+	// Create channels for both sessions.
+	msgsCluster, msgsLeader := demuxMessages(msgChan)
 
 	// Initialize cluster transport and session.
 	clusterSession := cluster_protocol.NewLeaderSession(
@@ -150,7 +127,7 @@ func main() {
 		}()
 	}
 
-	// Run the TUI event loop; on ENTER send text via cluster session.
+	// Start Terminal User Interface.
 	util.StartTUI(func(line string) {
 		clusterSession.SendText(line)
 	})
