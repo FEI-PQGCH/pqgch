@@ -17,7 +17,7 @@ clean:
 
 mock:
 	@echo "[Make]: Running ETSI API mock server..."
-	@cd qkd && CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go
+	@cd mock_etsi && CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go
 
 config:
 	@CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run util/cmd/main.go -m 3

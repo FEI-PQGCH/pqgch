@@ -1,5 +1,5 @@
 {
-  "name": "Ubuntu 20.04",
+  "name": "Ubuntu 22.04",
   "dockerFile": "Dockerfile",
   "customizations": {
     "vscode": {
@@ -8,6 +8,5 @@
       },
       "extensions": ["golang.go"]
     }
-  },
-  "forwardPorts": [9000, 9001, 9002, 9003, 9004]
+  }
 }
