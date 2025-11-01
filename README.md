@@ -115,7 +115,7 @@ Here are some examples:
 
 - Cluster member using Kyber KEM for intra-cluster GAKE:
 
-```json
+```javascript
 {
   "server": "localhost:9000",
   "name": "Alice",
@@ -131,7 +131,7 @@ Here are some examples:
 
 - Cluster member using QKD through a file:
 
-```json
+```javascript
 {
   "server": "localhost:9000",
   "name": "Alice",
@@ -146,7 +146,7 @@ Here are some examples:
 
 - Cluster member using QKD through ETSI API (using the mock ETSI server you can start with `make mock`):
 
-```json
+```javascript
 {
   "server": "localhost:9000",
   "name": "Alice",
@@ -187,7 +187,7 @@ Here are some examples:
 
 - Cluster leader using Kyber KEM both for intra-cluster GAKE and extra-cluster GAKE:
 
-```json
+```javascript
 {
   "server": "localhost:9000",
   "name": "Leader1",
@@ -209,7 +209,7 @@ Here are some examples:
 
 - Cluster leader using QKD for intra-cluster GAKE and for 2-AKE with the left neighbor, Kyber KEM for 2-AKE with the right neighbor:
 
-```json
+```javascript
 {
   "server": "localhost:9000",
   "name": "Leader1",
