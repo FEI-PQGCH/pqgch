@@ -1,16 +1,10 @@
 {
-  "leader": {
-    "addr": "localhost:9000",
-    "name": "Server1"
-  },
-  "clusterConfig": {
-    "names": [
-      "Alice",
-      "Bob",
-      "Charlie",
-      "Server1"
-    ],
-    "index": 0,
+  "server": "localhost:9000",
+  "name": "Alice",
+  "clusterID": 0,
+  "cluster": {
+    "memberID": 0,
+    "nMembers": 4,
     "publicKeys": "../.keys/cluster1_public_keys.json",
     "secretKey": "../.keys/clients/client1/secret.json"
   }

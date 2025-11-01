@@ -13,36 +13,35 @@ func main() {
 	path := flag.String("config", "", "path to configuration file")
 	flag.Parse()
 	if *path == "" {
-		fmt.Println("Configuration file missing. Please provide it using the -config flag")
+		fmt.Fprintf(os.Stderr, "configuration file missing, please provide it using the -config flag\n")
 		os.Exit(1)
 	}
 
 	// Load config.
-	config, err := util.GetConfig[util.UserConfig](*path)
+	config, err := util.GetConfig(*path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config from : %v\n", err)
+		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Initialize TCP transport.
 	msgChan := make(chan util.Message)
-	transport, err := util.NewTCPTransport(config.Leader.Addr, msgChan)
+	transport, err := util.NewTCPTransport(config.Server, msgChan, config.GetMemberID(), *config.ClusterID)
 	if err != nil {
-		fmt.Printf("Unable to connect to server: %v\n", err)
+		fmt.Fprintf(os.Stderr, "unable to connect to server: %v\n", err)
 		os.Exit(1)
 	}
 
-	util.EnableRawMode()
+	// Log in to the routing server.
 	transport.Send(util.Message{
-		ID:         util.UniqueID(),
-		SenderID:   config.Index,
-		SenderName: config.Name(),
-		Type:       util.LoginMsg,
-		ClusterID:  config.ClusterConfig.Index,
+		SenderID:   config.GetMemberID(),
+		SenderName: config.Name,
+		Type:       util.MemberAuthMsg,
+		ClusterID:  *config.ClusterID,
 	})
 
 	// Initialize cluster protocol session.
-	session := cluster_protocol.NewSession(transport, config.ClusterConfig, msgChan)
+	session := cluster_protocol.NewSession(transport, config, msgChan)
 	session.Init()
 	go session.MessageHandler()
 

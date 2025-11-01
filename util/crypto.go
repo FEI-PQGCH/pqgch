@@ -132,10 +132,10 @@ func DecryptAesGcm(encryptedText string, key []byte) (string, error) {
 }
 
 // Encrypt and HMAC the Main Session Key with the Cluster Session Key for transpot to the cluster members.
-func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessionKey [2 * gake.SsLen]byte) (Message, error) {
+func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, clusterSessionKey [2 * gake.SsLen]byte) (string, error) {
 	maskingKey, hmacKey, err := splitAndCheckKey(clusterSessionKey)
 	if err != nil {
-		return Message{}, err
+		return "", err
 	}
 
 	ciphertext := make([]byte, gake.SsLen)
@@ -147,14 +147,9 @@ func EncryptAndHMAC(mainSessionKey [gake.SsLen]byte, sender string, clusterSessi
 	mac.Write(ciphertext)
 	tag := mac.Sum(nil)
 	ciphertext = append(ciphertext, tag...)
-	msg := Message{
-		ID:         UniqueID(),
-		SenderID:   -1,
-		SenderName: sender,
-		Type:       KeyMsg,
-		Content:    base64.StdEncoding.EncodeToString(ciphertext),
-	}
-	return msg, nil
+	encoded := base64.StdEncoding.EncodeToString(ciphertext)
+
+	return encoded, nil
 }
 
 // Decrypt and check HMAC of the received Main Session Key ciphertext using the Cluster Session Key.

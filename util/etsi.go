@@ -66,7 +66,7 @@ func parseResponse(resp *http.Response) (string, string, error) {
 	return response.Keys[0].Key, response.Keys[0].KeyID, nil
 }
 
-func RequestKey(url string, isLeader bool) (Message, Message) {
+func RequestKey(url string) (string, string) {
 	var key, keyID string
 	for {
 		var err error
@@ -79,30 +79,10 @@ func RequestKey(url string, isLeader bool) (Message, Message) {
 		break
 	}
 
-	// Process the received key.
-	var msgType int
-	if isLeader {
-		msgType = QKDRightKeyMsg
-	} else {
-		msgType = QKDClusterKeyMsg
-	}
-
-	keyMsg := Message{
-		ID:      UniqueID(),
-		Type:    msgType,
-		Content: key,
-	}
-
-	IDMsg := Message{
-		ID:      UniqueID(),
-		Type:    QKDIDMsg,
-		Content: keyID,
-	}
-
-	return keyMsg, IDMsg
+	return key, keyID
 }
 
-func RequestKeyByID(url, id string, isLeader bool) Message {
+func RequestKeyByID(url, id string) string {
 	var key string
 	for {
 		var err error
@@ -115,18 +95,5 @@ func RequestKeyByID(url, id string, isLeader bool) Message {
 		break
 	}
 
-	// Process the received key.
-	var msgType int
-	if isLeader {
-		msgType = QKDLeftKeyMsg
-	} else {
-		msgType = QKDClusterKeyMsg
-	}
-
-	msg := Message{
-		ID:      UniqueID(),
-		Type:    msgType,
-		Content: key,
-	}
-	return msg
+	return key
 }

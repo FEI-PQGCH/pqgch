@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -77,11 +78,20 @@ func handleDecKeys(w http.ResponseWriter, r *http.Request, _ string) {
 	http.Error(w, "key corresponding to this key_ID not found", http.StatusBadRequest)
 }
 
+func uniqueID() string {
+	bytes := make([]byte, 16)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(bytes)
+}
+
 func getKeys(n, size int) []util.Key {
 	var keys []util.Key
 	// Generate n keys (should be just 1).
 	for range n {
-		id := util.UniqueID()
+		id := uniqueID()
 		key := make([]byte, size/8)
 		rand.Read(key)
 		encoded := base64.StdEncoding.EncodeToString(key)

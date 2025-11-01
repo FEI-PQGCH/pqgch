@@ -1,29 +1,17 @@
 {
-  "clusterConfig": {
-    "names": [
-      "User1",
-      "Server2"
-    ],
-    "index": 1,
+  "server": "localhost:9000",
+  "name": "Server2",
+  "clusterID": 1,
+  "cluster": {
+    "memberID": 1,
+    "nMembers": 2,
     "publicKeys": "../.keys/cluster2_public_keys.json",
     "secretKey": "../.keys/leaders/leader2/secret_cluster.json"
   },
-  "leftCrypto": "../.keys/leaders/leader1/public_leader.json",
-  "rightCrypto": "../.keys/leaders/leader3/public_leader.json",
-  "servers": [
-    {
-      "addr": "localhost:9000",
-      "  name": "Server1"
-    },
-    {
-      "addr": "localhost:9001",
-      "name": "Server2"
-    },
-    {
-      "addr": "localhost:9002",
-      "name": "Server3"
-    }
-  ],
-  "index": 1,
-  "secretKey": "../.keys/leaders/leader2/secret_leader.json"
+  "leaders": {
+    "nClusters": 3,
+    "leftCrypto": "../.keys/leaders/leader1/public_leader.json",
+    "rightCrypto": "../.keys/leaders/leader3/public_leader.json",
+    "secretKey": "../.keys/leaders/leader2/secret_leader.json"
+  }
 }

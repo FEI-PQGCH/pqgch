@@ -10,17 +10,17 @@ c:
 	@echo "[Make]: Building client binary (KYBER_K=$(KYBER_K))..."
 	@cd client && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go build -o ../client_pqgch
 
-s:
-	@echo "[Make]: Building server binary (KYBER_K=$(KYBER_K))..."
-	@cd server && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go build -o ../server_pqgch
+l:
+	@echo "[Make]: Building leader binary (KYBER_K=$(KYBER_K))..."
+	@cd leader && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go build -o ../leader_pqgch
 
 c%:
 	@echo "[Make]: Running client$* (KYBER_K=$(KYBER_K))…"
 	@cd client && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/c$*conf.json"
 
-s%:
-	@echo "[Make]: Running server$* (KYBER_K=$(KYBER_K))…"
-	@cd server && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/s$*conf.json"
+l%:
+	@echo "[Make]: Running leader$* (KYBER_K=$(KYBER_K))…"
+	@cd leader && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/s$*conf.json"
 
 c%.clean:
 	@cd client && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/c$*conf.json" 2>/dev/null
@@ -29,8 +29,11 @@ s%.clean:
 	@cd server && CC=$(CC) CGO_CFLAGS="$(CGO_CFLAGS)" go run *.go -config="../.config/s$*conf.json" 2>/dev/null
 
 mock:
-	@echo "[Make]: Running QKD mock server..."
+	@echo "[Make]: Running ETSI API mock server..."
 	@cd qkd && CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run *.go
+
+config:
+	@CC=$(CC) CGO_CFLAGS_ALLOW=$(CGO_CFLAGS_ALLOW) go run util/cmd/main.go -m 3
 
 gen_2ake:
 	@echo "[Make]: Generating 2-AKE shared secret..."
