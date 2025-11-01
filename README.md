@@ -42,6 +42,8 @@ The prerequisites for building the application are:
 openssl libssl-dev make gcc curl go
 ```
 
+The minimum version of Go is 1.22.
+
 After installing the dependencies, you can use:
 
 ```
