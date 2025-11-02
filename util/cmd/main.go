@@ -15,65 +15,6 @@ import (
 	"strings"
 )
 
-func main() {
-	count := flag.Int("c", 1, "number of keypairs to generate")
-	mode := flag.Int("m", 0, "mode for generation - KEM keypair (0), QKD shared secret (1), 2-AKE shared secret (2), whole configuration (3)")
-	flag.Parse()
-
-	switch *mode {
-	// Generate shared secret
-	case 0:
-		key := make([]byte, 2*gake.SsLen)
-		_, err := rand.Read(key)
-		if err != nil {
-			panic(err)
-		}
-
-		encodedKey := base64.StdEncoding.EncodeToString(key)
-		fmt.Printf("{\n\"key\": \"%s\"\n}\n", encodedKey)
-	// Generate KEM keypairs.
-	case 1:
-		keyPairs := genKemKeypairs(*count)
-
-		if *count == 1 {
-			fmt.Println("printing public key")
-			fmt.Printf("{\n\"key\": \"%s\"\n}\n", keyPairs[0].pk)
-
-			fmt.Println("printing secret key")
-			fmt.Printf("{\n\"key\": \"%s\"\n}\n", keyPairs[0].sk)
-		} else {
-			fmt.Printf("\nprinting public keys 0..%d\n\n", *count-1)
-			fmt.Println("{\"publicKeys\": [")
-			for i := range *count {
-				fmt.Printf("\"%s\"", keyPairs[i].pk)
-				if i < *count-1 {
-					fmt.Println(",")
-				}
-			}
-			fmt.Println("\n]\n}")
-
-			fmt.Printf("\nprinting secret keys 0..%d\n", *count-1)
-			for i := range *count {
-				fmt.Printf("{\n\"key\": \"%s\"\n}\n", keyPairs[i].sk)
-			}
-		}
-	// Generate 2-AKE shared secret.
-	case 2:
-		key := make([]byte, gake.SsLen)
-		_, err := rand.Read(key)
-		if err != nil {
-			panic(err)
-		}
-
-		encodedKey := base64.StdEncoding.EncodeToString(key)
-		fmt.Printf("{\n\"key\": \"%s\"\n}\n", encodedKey)
-	// Generate whole configuration.
-	case 3:
-		generateConfig()
-	}
-
-}
-
 type KeyPair struct {
 	pk string
 	sk string
@@ -102,6 +43,66 @@ var (
 	clusterSkPath   = "cluster_sk.json"
 )
 
+func main() {
+	count := flag.Int("c", 1, "number of keypairs to generate")
+	mode := flag.Int("m", 0, "mode for generation - KEM keypair (0), QKD shared secret (1), 2-AKE shared secret (2), whole configuration (3)")
+	flag.Parse()
+
+	switch *mode {
+	case 0:
+		generateKey(2 * gake.SsLen)
+	case 1:
+		generateKeyPairs(*count)
+	case 2:
+		generateKey(gake.SsLen)
+	case 3:
+		generateConfig()
+	}
+
+}
+
+func generateKey(n int) {
+	key := make([]byte, n)
+	_, _ = rand.Read(key)
+	encodedKey := base64.StdEncoding.EncodeToString(key)
+	writeJSON(map[string]string{
+		"key": encodedKey,
+	})
+}
+
+func generateKeyPairs(n int) {
+	keyPairs := genKemKeypairs(n)
+
+	if n == 1 {
+		fmt.Println("printing public key")
+		writeJSON(map[string]string{
+			"key": keyPairs[0].pk,
+		})
+
+		fmt.Println("printing secret key")
+		writeJSON(map[string]string{
+			"key": keyPairs[0].sk,
+		})
+		return
+	}
+
+	fmt.Printf("\nprinting public keys 0..%d\n\n", n-1)
+	var clusterPks []string
+	for i := range n {
+		clusterPks = append(clusterPks, keyPairs[i].pk)
+	}
+	writeJSON(map[string][]string{
+		"publicKeys": clusterPks,
+	})
+
+	fmt.Printf("\nprinting secret keys 0..%d\n\n", n-1)
+	for i := range n {
+		writeJSON(map[string]string{
+			"key": keyPairs[i].sk,
+		})
+	}
+}
+
 func generateConfig() {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -125,7 +126,7 @@ func generateConfig() {
 
 	for i := range nClusters {
 		fmt.Printf("\ncluster %d:\n", i+1)
-		fmt.Print("number of members in this cluster? ")
+		fmt.Print("number of members in this cluster (including leader)? ")
 		nMembersStr, _ := reader.ReadString('\n')
 		nMembers, err := strconv.Atoi(strings.TrimSpace(nMembersStr))
 		if nMembers <= 0 || err != nil {
@@ -142,21 +143,21 @@ func generateConfig() {
 		leftIndex := (i - 1 + nClusters) % nClusters
 		rightIndex := (i + 1 + nClusters) % nClusters
 
-		writeKey(skFilePath, leaderKeypairs[i].sk)
-		writeKey(leftPkFilePath, leaderKeypairs[leftIndex].pk)
-		writeKey(rightPkFilePath, leaderKeypairs[rightIndex].pk)
+		writeJSONToFile(skFilePath, map[string]string{
+			"key": leaderKeypairs[i].sk,
+		})
+		writeJSONToFile(leftPkFilePath, map[string]string{
+			"key": leaderKeypairs[leftIndex].pk,
+		})
+		writeJSONToFile(rightPkFilePath, map[string]string{
+			"key": leaderKeypairs[rightIndex].pk,
+		})
 
 		clusterKeyPairs := genKemKeypairs(nMembers)
 		var clusterPks []string
 		for _, keyPair := range clusterKeyPairs {
 			clusterPks = append(clusterPks, keyPair.pk)
 		}
-		clusterPksFilePath := filepath.Join(prefix, leaderName, clusterPksPath)
-		writeJSON(clusterPksFilePath, map[string][]string{
-			"publicKeys": clusterPks,
-		})
-		clusterSkFilePath := filepath.Join(prefix, leaderName, clusterSkPath)
-		writeKey(clusterSkFilePath, clusterKeyPairs[nMembers-1].sk)
 
 		leaderConfig := util.BaseConfig{
 			Server:    server,
@@ -171,6 +172,15 @@ func generateConfig() {
 		}
 
 		if nMembers > 1 {
+			clusterPksFilePath := filepath.Join(prefix, leaderName, clusterPksPath)
+			writeJSONToFile(clusterPksFilePath, map[string][]string{
+				"publicKeys": clusterPks,
+			})
+			clusterSkFilePath := filepath.Join(prefix, leaderName, clusterSkPath)
+			writeJSONToFile(clusterSkFilePath, map[string]string{
+				"key": clusterKeyPairs[nMembers-1].sk,
+			})
+
 			memberID := nMembers - 1
 			leaderConfig.Cluster = &util.ClusterConfig{
 				NMembers:   &nMembers,
@@ -180,16 +190,18 @@ func generateConfig() {
 			}
 		}
 		leaderConfigFilePath := filepath.Join(prefix, leaderName, configPath)
-		writeJSON(leaderConfigFilePath, leaderConfig)
+		writeJSONToFile(leaderConfigFilePath, leaderConfig)
 
 		for j := range nMembers - 1 {
 			memberName := fmt.Sprintf("member%d_cluster%d", j+1, i+1)
 			clusterPksFilePath := filepath.Join(prefix, memberName, pksPath)
-			writeJSON(clusterPksFilePath, map[string][]string{
+			writeJSONToFile(clusterPksFilePath, map[string][]string{
 				"publicKeys": clusterPks,
 			})
 			clusterSkFilePath := filepath.Join(prefix, memberName, skPath)
-			writeKey(clusterSkFilePath, clusterKeyPairs[j].sk)
+			writeJSONToFile(clusterSkFilePath, map[string]string{
+				"key": clusterKeyPairs[j].sk,
+			})
 
 			memberConfig := util.BaseConfig{
 				Server:    server,
@@ -204,23 +216,20 @@ func generateConfig() {
 			}
 
 			memberConfigPath := filepath.Join(prefix, memberName, configPath)
-			writeJSON(memberConfigPath, memberConfig)
+			writeJSONToFile(memberConfigPath, memberConfig)
 		}
 	}
 
 	fmt.Println("\nall configs generated successfully to: " + prefix)
 }
 
-func writeKey(path, content string) {
-	os.MkdirAll(filepath.Dir(path), os.ModePerm)
-	data, _ := json.MarshalIndent(map[string]string{
-		"key": content,
-	}, "", "  ")
-	os.WriteFile(path, data, 0666)
-}
-
-func writeJSON(path string, v any) {
+func writeJSONToFile(path string, v any) {
 	os.MkdirAll(filepath.Dir(path), os.ModePerm)
 	data, _ := json.MarshalIndent(v, "", "  ")
 	os.WriteFile(path, data, 0666)
+}
+
+func writeJSON(v any) {
+	data, _ := json.MarshalIndent(v, "", "  ")
+	fmt.Println(string(data))
 }
