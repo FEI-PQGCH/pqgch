@@ -107,7 +107,7 @@ func (s *Session) onAkeOne(recv util.Message) {
 		akeSendA,
 		s.config.Leader.GetSecretKey(),
 		s.config.Leader.LeftPublicKey())
-	util.LogCrypto("Established 2-AKE shared key with left neighbor")
+	util.LogCrypto("Established Leader 2-AKE shared key with left neighbor")
 
 	msg := util.Message{
 		SenderID:   s.config.GetMemberID(),
@@ -136,7 +136,7 @@ func (s *Session) onAkeTwo(recv util.Message) {
 
 	s.crypto.keyRight = gake.KexAkeSharedA(akeSendB, s.crypto.tkRight, s.crypto.eskaRight, s.config.Leader.GetSecretKey())
 
-	util.LogCrypto("Established 2-AKE shared key with right neighbor")
+	util.LogCrypto("Established Leader 2-AKE shared key with right neighbor")
 
 	msg := s.checkLeftRightKeys()
 	if !msg.IsEmpty() {
@@ -224,7 +224,7 @@ func (s *Session) handleMessage(recv util.Message) {
 // Also, try finalizing the protocol now, since the Xi we computed could have been the last one we needed.
 func (s *Session) checkLeftRightKeys() util.Message {
 	if s.crypto.keyRight != [gake.SsLen]byte{} && s.crypto.keyLeft != [gake.SsLen]byte{} {
-		util.LogCrypto("Established 2-AKE shared keys with both neighbors")
+		util.LogCrypto("Established Leader 2-AKE shared keys with both neighbors")
 		msg := s.getXiRiCommitmentMsg()
 		s.tryFinalizeProtocol()
 		return msg
