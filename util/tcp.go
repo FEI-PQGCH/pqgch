@@ -55,7 +55,6 @@ func (t *TCPTransport) listen() {
 	for reader.HasMessage() {
 		msg := reader.GetMessage()
 		if msg.Type == Pong {
-			//LogInfo("Pong!")
 			continue
 		}
 		if msg.Type == Error {

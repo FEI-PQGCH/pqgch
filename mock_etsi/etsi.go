@@ -31,7 +31,7 @@ func keysHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	saeID := parts[0] // TODO: ignored for now.
+	saeID := parts[0] // Ignore for mock server.
 	action := parts[1]
 
 	// We only allow GET requests for simplicity.

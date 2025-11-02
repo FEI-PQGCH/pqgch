@@ -42,18 +42,18 @@ func (m Message) TypeName() string {
 
 // All message types used in the application.
 const (
-	MemberAuthMsg = iota
-	LeaderAuthMsg
-	TextMsg                 // Main Session Key encrypted text message.
-	AkeOneMsg               // First message of the 2-AKE protocol.
-	AkeTwoMsg               // Second message of the 2-AKE protocol.
-	XiRiCommitmentMsg       // Message containing the Xi, Ri and Commitment values.
-	KeyMsg                  // Message containg the encrypted Main Session Key. This key is encrypted using the Cluster Session Key.
-	LeadAkeOneMsg           // Same as AkeOneMsg, but for leaders.
-	LeadAkeTwoMsg           // Same as AkeTwoMsg, but for leaders.
-	LeaderXiRiCommitmentMsg // Same as XiRiCommitmentMsg, but for leaders.
-	QKDIDLeaderMsg          // Message containg the QKD ID for retrieving the second copy of the key.
-	QKDIDMemberMsg
+	MemberAuthMsg           = iota // Cluster member login message.
+	LeaderAuthMsg                  // Leader login message.
+	TextMsg                        // Main Session Key encrypted text message.
+	AkeOneMsg                      // First message of the 2-AKE protocol.
+	AkeTwoMsg                      // Second message of the 2-AKE protocol.
+	XiRiCommitmentMsg              // Message containing the Xi, Ri and Commitment values.
+	KeyMsg                         // Message containg the encrypted Main Session Key. This key is encrypted using the Cluster Session Key.
+	LeadAkeOneMsg                  // Same as AkeOneMsg, but for leaders.
+	LeadAkeTwoMsg                  // Same as AkeTwoMsg, but for leaders.
+	LeaderXiRiCommitmentMsg        // Same as XiRiCommitmentMsg, but for leaders.
+	QKDIDLeaderMsg                 // Message containg the QKD ID for retrieving the second copy of the key.
+	QKDIDMemberMsg                 // As above.
 	Ping
 	Pong
 	Error
