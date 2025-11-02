@@ -28,7 +28,7 @@ func main() {
 	msgChan := make(chan util.Message)
 	transport, err := util.NewTCPTransport(config.Server, msgChan, config.GetMemberID(), *config.ClusterID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to connect to server: %v\n", err)
+		fmt.Fprintf(os.Stderr, "unable to connect to routing server (is it running?): %v\n", err)
 		os.Exit(1)
 	}
 
