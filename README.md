@@ -14,9 +14,13 @@ It uses Kyber-GAKE for secure, quantum-resistant group key establishment among c
    4. [Running using Dev Containers in VS Code](#running-using-dev-containers-in-vs-code)
 
 2. [Configuration Files Explained](#configuration-files-explained)
+
    1. [Cluster Member Configuration](#cluster-member-configuration)
    2. [Cluster Leader Configuration](#cluster-leader-configuration)
-3. [Mock ETSI QKD API Server](#mock-etsi-qkd-api-server)
+
+3. [Directory Structure](#directory-structure)
+
+4. [Mock ETSI QKD API Server](#mock-etsi-qkd-api-server)
 
 ## Running the application
 
@@ -229,6 +233,25 @@ Here are some examples:
   }
 }
 ```
+
+## Directory Structure
+
+The project is structured as follows:
+
+- `cluster_member` - cluster member program code (entry point)
+- `cluster_protocol` - intra-cluster GAKE implementation (cluster session key establishment)
+- `gake` - Go wrapper around the C implementation of Kyber-GAKE
+- `leader` - leader program code (entry point)
+- `leader_protocol` - extra-cluster GAKE implementation (main session key establishment)
+- `mock_etsi` - mock ETSI server for testing purposes
+- `util`
+  - `cmd` - utility programs
+  - `config.go` - configuration loading and parsing
+  - `crypto.go` - shared crypto functions
+  - `etsi.go` - ETSI requests
+  - `message.go` - message and message types definition
+  - `tcp.go` - TCP transport wrapper
+  - `tui.go` - terminal user interface
 
 ## Mock ETSI QKD API server
 
