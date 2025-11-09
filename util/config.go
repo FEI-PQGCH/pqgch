@@ -33,7 +33,12 @@ type LeaderConfig struct {
 	SecretKey   string `json:"secretKey"`
 }
 
-func (c *BaseConfig) validate() []string {
+const (
+	pathQKDPrefix = "path "
+	urlQKDPrefix  = "url "
+)
+
+func (c *BaseConfig) validate(isLeader bool) []string {
 	var errs []string
 
 	if strings.TrimSpace(c.Server) == "" {
@@ -44,6 +49,12 @@ func (c *BaseConfig) validate() []string {
 	}
 	if c.ClusterID == nil || *c.ClusterID < 0 {
 		errs = append(errs, "clusterID must be set and >= 0")
+	}
+	if isLeader && c.Leader == nil {
+		errs = append(errs, "missing required field: leaders")
+	}
+	if !isLeader && c.Cluster == nil {
+		errs = append(errs, "missing required field: cluster")
 	}
 
 	if len(errs) > 0 {
@@ -77,6 +88,10 @@ func exactlyOne(bools ...bool) bool {
 	return count == 1
 }
 
+func isEmpty(s string) bool {
+	return strings.TrimSpace(s) == ""
+}
+
 func (c *ClusterConfig) validate() []string {
 	var errs []string
 
@@ -91,9 +106,9 @@ func (c *ClusterConfig) validate() []string {
 		return errs
 	}
 
-	hasCrypto := strings.TrimSpace(c.Crypto) != ""
-	hasPK := strings.TrimSpace(c.PublicKeys) != ""
-	hasSK := strings.TrimSpace(c.SecretKey) != ""
+	hasCrypto := !isEmpty(c.Crypto)
+	hasPK := !isEmpty(c.PublicKeys)
+	hasSK := !isEmpty(c.SecretKey)
 	hasPair := hasPK && hasSK
 
 	if !exactlyOne(hasCrypto, hasPair) {
@@ -110,12 +125,12 @@ func (c *ClusterConfig) validate() []string {
 		crypto := strings.TrimSpace(c.Crypto)
 		low := strings.ToLower(crypto)
 		switch {
-		case strings.HasPrefix(low, "path "):
+		case strings.HasPrefix(low, pathQKDPrefix):
 			p := strings.TrimSpace(crypto[5:])
 			if err := validateJSONKeyLen(p, 2*gake.SsLen); err != nil {
 				errs = append(errs, fmt.Sprintf("QKD key at path is invalid: %v", err))
 			}
-		case strings.HasPrefix(low, "url "):
+		case strings.HasPrefix(low, urlQKDPrefix):
 		default:
 			errs = append(errs, "crypto must start with 'path ' and point to a JSON-wrapped QKD key or with 'url ' and contain an URL to the ETSI server")
 		}
@@ -136,6 +151,50 @@ func (c *ClusterConfig) validate() []string {
 
 	return errs
 }
+func isQKD(value string) bool {
+	low := strings.ToLower(value)
+	if strings.HasPrefix(low, pathQKDPrefix) || strings.HasPrefix(low, urlQKDPrefix) {
+		return true
+	}
+	return false
+}
+
+func validateCrypto(key, value string) []string {
+	var errs []string
+
+	low := strings.ToLower(value)
+	if strings.HasPrefix(low, pathQKDPrefix) {
+		p := strings.TrimSpace(value[5:])
+		if err := validateJSONKeyLen(p, gake.SsLen); err != nil {
+			errs = append(errs, fmt.Sprintf("QKD key at path is invalid: %v", err))
+		}
+		return errs
+	}
+	if strings.HasPrefix(low, urlQKDPrefix) {
+		return errs
+	}
+	if err := validateJSONKeyLen(value, gake.PkLen); err != nil {
+		errs = append(errs, fmt.Sprintf("%s public key file invalid: %v", key, err))
+	}
+
+	return errs
+}
+
+func validateSK(sk string) []string {
+	var errs []string
+
+	if isEmpty(sk) {
+		errs = append(errs, "missing required field: secretKey")
+	} else if err := validateJSONKeyLen(sk, gake.SkLen); err != nil {
+		errs = append(errs, fmt.Sprintf("secretKey file invalid: %v", err))
+	}
+
+	return errs
+}
+
+func missingCryptoMsg(key string) string {
+	return fmt.Sprintf("missing required field: %s (must be PK file path, QKD secret key file path or an URL to the ETSI server)", key)
+}
 
 func (c *LeaderConfig) validate() []string {
 	var errs []string
@@ -143,47 +202,28 @@ func (c *LeaderConfig) validate() []string {
 	if c.NClusters == nil || *c.NClusters <= 0 {
 		errs = append(errs, "nClusters must be set and > 0")
 	}
-	if strings.TrimSpace(c.SecretKey) == "" {
-		errs = append(errs, "missing required field: secretKey")
-	} else if err := validateJSONKeyLen(c.SecretKey, gake.SkLen); err != nil {
-		errs = append(errs, fmt.Sprintf("secretKey file invalid: %v", err))
+	if isEmpty(c.LeftCrypto) {
+		errs = append(errs, missingCryptoMsg("leftCrypto"))
+	}
+	if isEmpty(c.RightCrypto) {
+		errs = append(errs, missingCryptoMsg("rightCrypto"))
 	}
 
-	if len(errs) > 0 {
-		return errs
-	}
+	hasBothCrypto := !isEmpty(c.LeftCrypto) && !isEmpty(c.RightCrypto)
+	if hasBothCrypto {
+		errs = append(errs, validateCrypto("leftCrypto", c.LeftCrypto)...)
+		errs = append(errs, validateCrypto("rightCrypto", c.RightCrypto)...)
 
-	checkPKFile := func(key, value string) {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			errs = append(errs, fmt.Sprintf("missing required field: %s (must be PK file path, QKD secret key file path or an URL to the ETSI server)", key))
-			return
-		}
-
-		low := strings.ToLower(value)
-
-		if strings.HasPrefix(low, "path ") {
-			p := strings.TrimSpace(value[5:])
-			if err := validateJSONKeyLen(p, gake.SsLen); err != nil {
-				errs = append(errs, fmt.Sprintf("QKD key at path is invalid: %v", err))
-			}
-			return
-		}
-		if strings.HasPrefix(low, "url ") {
-			return
-		}
-		if err := validateJSONKeyLen(value, gake.PkLen); err != nil {
-			errs = append(errs, fmt.Sprintf("%s public key file invalid: %v", key, err))
+		atleastOneNotQKD := !isQKD(c.LeftCrypto) || !isQKD(c.RightCrypto)
+		if atleastOneNotQKD {
+			errs = append(errs, validateSK(c.SecretKey)...)
 		}
 	}
-
-	checkPKFile("leftCrypto", c.LeftCrypto)
-	checkPKFile("rightCrypto", c.RightCrypto)
 
 	return errs
 }
 
-func logError(lines []string) error {
+func formatErrors(lines []string) error {
 	var buf strings.Builder
 	buf.WriteString("invalid configuration:\n")
 	for _, l := range lines {
@@ -208,7 +248,7 @@ func validatePublicKeysFile(path string, n int) error {
 	return err
 }
 
-func GetConfig(path string) (BaseConfig, error) {
+func GetConfig(path string, isLeader bool) (BaseConfig, error) {
 	var config BaseConfig
 
 	configFile, err := os.Open(path)
@@ -221,9 +261,9 @@ func GetConfig(path string) (BaseConfig, error) {
 		return config, fmt.Errorf("invalid JSON in %q: %w", path, err)
 	}
 
-	errs := config.validate()
+	errs := config.validate(isLeader)
 	if len(errs) > 0 {
-		return config, logError(errs)
+		return config, formatErrors(errs)
 	}
 
 	return config, nil
@@ -258,7 +298,7 @@ func (c *ClusterConfig) GetSecretKey() []byte {
 }
 
 func (c *ClusterConfig) IsClusterQKDPath() bool {
-	return strings.HasPrefix(strings.ToLower(c.Crypto), "path ")
+	return strings.HasPrefix(strings.ToLower(c.Crypto), pathQKDPrefix)
 }
 
 func (c *ClusterConfig) ClusterQKDKeyFromFile() ([2 * gake.SsLen]byte, error) {
@@ -276,7 +316,7 @@ func (c *ClusterConfig) HasQKDUrl() bool {
 	if c == nil {
 		return false
 	}
-	return strings.HasPrefix(strings.ToLower(c.Crypto), "url ")
+	return strings.HasPrefix(strings.ToLower(c.Crypto), urlQKDPrefix)
 }
 
 func (c *ClusterConfig) QKDUrl() string {
@@ -289,19 +329,19 @@ func (c *LeaderConfig) GetSecretKey() []byte {
 }
 
 func (c *LeaderConfig) HasLeftQKDUrl() bool {
-	return strings.HasPrefix(strings.ToLower(c.LeftCrypto), "url ")
+	return strings.HasPrefix(strings.ToLower(c.LeftCrypto), urlQKDPrefix)
 }
 
 func (c *LeaderConfig) HasLeftQKDPath() bool {
-	return strings.HasPrefix(strings.ToLower(c.LeftCrypto), "path ")
+	return strings.HasPrefix(strings.ToLower(c.LeftCrypto), pathQKDPrefix)
 }
 
 func (c *LeaderConfig) HasRightQKDUrl() bool {
-	return strings.HasPrefix(strings.ToLower(c.RightCrypto), "url ")
+	return strings.HasPrefix(strings.ToLower(c.RightCrypto), urlQKDPrefix)
 }
 
 func (c *LeaderConfig) HasRightQKDPath() bool {
-	return strings.HasPrefix(strings.ToLower(c.RightCrypto), "path ")
+	return strings.HasPrefix(strings.ToLower(c.RightCrypto), pathQKDPrefix)
 }
 
 func (c *LeaderConfig) LeftQKDUrl() string {

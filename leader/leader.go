@@ -39,7 +39,7 @@ func main() {
 	}
 
 	// Load config.
-	config, err := util.GetConfig(*path)
+	config, err := util.GetConfig(*path, true)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
